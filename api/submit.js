@@ -1,6 +1,6 @@
 'use strict';
 // POST { id, token, log } -> rejoue le journal d'ordres avec le moteur du jeu, enregistre le chrono vérifié
-const { handler, HttpError, UUID_RE, COURSES, CLASSES, LIMITS, acceptedDays, sha256, safeEq, thinTrace } = require('./_lib/util');
+const { handler, HttpError, UUID_RE, LIMITS, acceptedDays, sha256, safeEq, thinTrace } = require('./_lib/util');
 const { db } = require('./_lib/db');
 const { loadEngine } = require('./_lib/engine');
 
@@ -9,11 +9,12 @@ module.exports = handler(['POST'], async (req) => {
   if (!UUID_RE.test(String(b.id || ''))) throw new HttpError(400, 'identifiant invalide');
   if (!log || typeof log !== 'object' || !Array.isArray(log.ev)) throw new HttpError(400, 'journal invalide');
   if (JSON.stringify(log).length > LIMITS.maxLogBytes || log.ev.length > LIMITS.maxEvents) throw new HttpError(413, 'journal trop volumineux');
-  if (!COURSES.includes(log.course) || !CLASSES.includes(log.cls)) throw new HttpError(400, 'parcours invalide');
   if (!acceptedDays().includes(log.day)) throw new HttpError(400, 'défi d\'un autre jour : journal refusé');
 
   const E = loadEngine();
   if (log.eng !== E.version) throw new HttpError(409, 'version du jeu différente : recharge la page');
+  const pick = E.dailyPick(log.day); // 2 parcours × 2 classes tirés par la date, identiques côté jeu
+  if (!pick.courses.includes(log.course) || !pick.classes.includes(log.cls)) throw new HttpError(400, 'parcours ou classe hors du défi du jour');
 
   const p = await db().getPlayer(b.id);
   if (!p || !safeEq(p.token_hash, sha256(b.token))) throw new HttpError(401, 'profil inconnu');

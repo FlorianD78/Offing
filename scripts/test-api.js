@@ -3,7 +3,7 @@
 process.env.NODE_ENV = 'test';
 const assert = require('assert');
 const path = require('path');
-const fx = require('./fixtures/iroise-imoca.json');
+const fx = require('./fixtures/daily-ref.json');
 process.env.TEST_DAY = fx.log.day;
 process.env.CRON_SECRET = 'test-secret';
 
@@ -46,13 +46,20 @@ async function call(file, { method = 'GET', body, query = {}, headers = {} } = {
 
   // fantômes : premier essai = top 10, ensuite les plus proches hors soi
   const C = (await call('register.js', { method: 'POST', body: { name: 'Chloé' } })).json;
-  r = await call('ghosts.js', { query: { course: 'iroise', cls: 'imoca', player: C.id } });
+  r = await call('ghosts.js', { query: { course: fx.log.course, cls: fx.log.cls, player: C.id } });
   assert.equal(r.json.mine, null); assert.equal(r.json.ghosts.length, 2); assert.match(r.hdr['cache-control'], /s-maxage/);
-  r = await call('ghosts.js', { query: { course: 'iroise', cls: 'imoca', player: A.id } });
+  r = await call('ghosts.js', { query: { course: fx.log.course, cls: fx.log.cls, player: A.id } });
   assert.equal(r.json.ghosts.length, 1); assert.equal(r.json.ghosts[0].name, 'Bob'); assert.ok(r.json.ghosts[0].trace.length > 10);
-  r = await call('leaderboard.js', { query: { course: 'iroise', cls: 'imoca', player: B.id } });
+  r = await call('leaderboard.js', { query: { course: fx.log.course, cls: fx.log.cls, player: B.id } });
   assert.equal(r.json.top.length, 2); assert.equal(r.json.me.rank, 1);
   r = await call('leaderboard.js', { query: { course: 'nope', cls: 'imoca' } }); assert.equal(r.status, 400);
+  // fantôme du n°1 (analyse de course) et hors tirage du jour
+  r = await call('ghosts.js', { query: { course: fx.log.course, cls: fx.log.cls, player: A.id, mode: 'top' } }); assert.equal(r.json.ghosts.length, 2);
+  const other = ['imoca', 'c40', 'mini', 'proto'].find(c => !require('../api/_lib/engine').loadEngine().dailyPick(fx.log.day).classes.includes(c));
+  r = await call('submit.js', { method: 'POST', body: { id: A.id, token: A.token, log: { ...fx.log, cls: other } } }); assert.equal(r.status, 400);
+  // code de récupération
+  r = await call('me.js', { method: 'POST', body: { id: A.id, token: A.token } }); assert.equal(r.json.name, 'Flo');
+  r = await call('me.js', { method: 'POST', body: { id: A.id, token: 'f'.repeat(64) } }); assert.equal(r.status, 401);
   r = await call('cron.js'); assert.equal(r.status, 401);
   r = await call('cron.js', { headers: { authorization: 'Bearer test-secret' } }); assert.equal(r.status, 200);
   console.log('✅ register / submit / ghosts / leaderboard / cron OK');

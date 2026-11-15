@@ -3,7 +3,7 @@
 // Si la physique ou la météo change : incrémenter ENGINE_VER dans public/index.html et régénérer la fixture.
 const path = require('path');
 const { loadEngine } = require('../api/_lib/engine');
-const fx = require('./fixtures/iroise-imoca.json');
+const fx = require('./fixtures/daily-ref.json');
 
 const t0 = Date.now();
 const E = loadEngine(path.join(__dirname, '..', 'public', 'index.html'));
