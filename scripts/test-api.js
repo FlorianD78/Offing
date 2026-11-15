@@ -1,0 +1,59 @@
+'use strict';
+// Tests des fonctions /api avec une base en mémoire (pas besoin de Supabase).
+process.env.NODE_ENV = 'test';
+const assert = require('assert');
+const path = require('path');
+const fx = require('./fixtures/iroise-imoca.json');
+process.env.TEST_DAY = fx.log.day;
+process.env.CRON_SECRET = 'test-secret';
+
+const { setDb } = require('../api/_lib/db');
+const { loadEngine } = require('../api/_lib/engine');
+loadEngine(path.join(__dirname, '..', 'public', 'index.html'));
+
+setDb(require('./memdb').memDb());
+
+// ---- appel d'une fonction comme Vercel ----
+async function call(file, { method = 'GET', body, query = {}, headers = {} } = {}) {
+  const fn = require(`../api/${file}`);
+  let status = 200, json; const hdr = {};
+  const res = { headersSent: false, setHeader: (k, v) => { hdr[k] = v; }, status(s) { status = s; return this; }, json(j) { json = j; this.headersSent = true; return this; } };
+  await fn({ method, body, query, headers: { 'x-forwarded-for': '1.2.3.4', ...headers } }, res);
+  return { status, json, hdr };
+}
+
+(async () => {
+  let r = await call('health.js'); assert.equal(r.status, 200); assert.equal(r.json.engine, fx.log.eng);
+  r = await call('register.js', { method: 'POST', body: { name: 'x' } }); assert.equal(r.status, 400);
+  const A = (await call('register.js', { method: 'POST', body: { name: 'Flo' } })).json; assert.ok(A.token);
+  r = await call('register.js', { method: 'POST', body: { name: 'flo' } }); assert.equal(r.status, 409, 'pseudo unique (casse ignorée)');
+  const B = (await call('register.js', { method: 'POST', body: { name: 'Bob' } })).json;
+  r = await call('register.js', { method: 'POST', body: { id: A.id, token: 'faux', name: 'Pirate' } }); assert.equal(r.status, 401);
+
+  // envoi valide
+  let t = Date.now(); r = await call('submit.js', { method: 'POST', body: { id: A.id, token: A.token, log: fx.log } });
+  assert.equal(r.status, 200, JSON.stringify(r.json)); assert.equal(r.json.T, fx.expectT); assert.equal(r.json.rank, 1); assert.ok(r.json.improved);
+  console.log(`✅ submit : ${r.json.T} s vérifié en ${Date.now() - t} ms, rang ${r.json.rank}/${r.json.total}`);
+  // mauvais jeton, autre jour, autre version, journal falsifié
+  r = await call('submit.js', { method: 'POST', body: { id: A.id, token: B.token, log: fx.log } }); assert.equal(r.status, 401);
+  r = await call('submit.js', { method: 'POST', body: { id: A.id, token: A.token, log: { ...fx.log, day: '2020-01-01' } } }); assert.equal(r.status, 400);
+  r = await call('submit.js', { method: 'POST', body: { id: A.id, token: A.token, log: { ...fx.log, eng: 999 } } }); assert.equal(r.status, 409);
+  r = await call('submit.js', { method: 'POST', body: { id: A.id, token: A.token, log: { ...fx.log, ev: [] } } });
+  assert.equal(r.status, 422, 'sans ordres le bateau ne finit pas'); console.log('✅ journal falsifié refusé :', r.json.error);
+  // un chrono client mensonger est ignoré : seul le rejeu compte
+  r = await call('submit.js', { method: 'POST', body: { id: B.id, token: B.token, log: { ...fx.log, T: 10 } } });
+  assert.equal(r.json.T, fx.expectT); assert.equal(r.json.total, 2);
+
+  // fantômes : premier essai = top 10, ensuite les plus proches hors soi
+  const C = (await call('register.js', { method: 'POST', body: { name: 'Chloé' } })).json;
+  r = await call('ghosts.js', { query: { course: 'iroise', cls: 'imoca', player: C.id } });
+  assert.equal(r.json.mine, null); assert.equal(r.json.ghosts.length, 2); assert.match(r.hdr['cache-control'], /s-maxage/);
+  r = await call('ghosts.js', { query: { course: 'iroise', cls: 'imoca', player: A.id } });
+  assert.equal(r.json.ghosts.length, 1); assert.equal(r.json.ghosts[0].name, 'Bob'); assert.ok(r.json.ghosts[0].trace.length > 10);
+  r = await call('leaderboard.js', { query: { course: 'iroise', cls: 'imoca', player: B.id } });
+  assert.equal(r.json.top.length, 2); assert.equal(r.json.me.rank, 1);
+  r = await call('leaderboard.js', { query: { course: 'nope', cls: 'imoca' } }); assert.equal(r.status, 400);
+  r = await call('cron.js'); assert.equal(r.status, 401);
+  r = await call('cron.js', { headers: { authorization: 'Bearer test-secret' } }); assert.equal(r.status, 200);
+  console.log('✅ register / submit / ghosts / leaderboard / cron OK');
+})().catch(e => { console.error('❌', e); process.exit(1); });

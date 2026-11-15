@@ -1,0 +1,18 @@
+{
+  "name": "offing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jeu de course au large 3D dans le navigateur — Défi du jour avec classement vérifié par rejeu (Vercel + Supabase)",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "test": "node scripts/check-engine.js && node scripts/test-api.js",
+    "dev": "vercel dev",
+    "local": "node scripts/local-server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0"
+  }
+}

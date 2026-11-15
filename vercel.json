@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": null,
+  "outputDirectory": "public",
+  "functions": {
+    "api/*.js": { "includeFiles": "public/index.html", "maxDuration": 60, "memory": 1024 }
+  },
+  "crons": [{ "path": "/api/cron", "schedule": "17 3 * * *" }],
+  "headers": [
+    { "source": "/", "headers": [{ "key": "cache-control", "value": "public, max-age=0, must-revalidate" }] },
+    { "source": "/(.*)", "headers": [
+      { "key": "x-content-type-options", "value": "nosniff" },
+      { "key": "referrer-policy", "value": "strict-origin-when-cross-origin" }
+    ] }
+  ]
+}
