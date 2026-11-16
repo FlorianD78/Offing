@@ -1,4 +1,4 @@
-"""Convertit les STL de l'IMOCA (maquette en mm) en modèles allégés du jeu : public/models/imoca-hi.bin et imoca-lo.bin.
+"""Convertit les STL de l'IMOCA (maquette en mm) en modèles allégés du jeu : public/models/imoca-hi.json et imoca-lo.json (binaire OFM1 en base64).
 Usage : pip install numpy scipy fast-simplification ; puis, dans le dossier des STL :
   python3 tools/stl_to_model.py      (attend coque_pont.stl et apendice.stl dans le dossier courant)
 Format OFM1 : en-tête JSON + positions quantifiées sur 16 bits + index + UV des bordés (lu par parseModelBin dans index.html).
@@ -91,10 +91,11 @@ def write(path, parts, meta):
             pad = (-len(x)) % 4; blobs.append(x + b'\0' * pad); off += len(x) + pad
         head['parts'].append(e)
     hj = json.dumps(head, separators=(',', ':')).encode(); hj += b' ' * ((-len(hj)) % 4)
-    with open(path, 'wb') as fh: fh.write(struct.pack('<4sI', b'OFM1', len(hj))); fh.write(hj); [fh.write(x) for x in blobs]
+    import base64; raw = struct.pack('<4sI', b'OFM1', len(hj)) + hj + b''.join(blobs)
+    with open(path, 'w') as fh: json.dump({'format': 'OFM1', 'b64': base64.b64encode(raw).decode()}, fh)
 
 for lvl, T in [('hi', dict(hull=32000, keel=2500, foil=2500, rud=700)), ('lo', dict(hull=7000, keel=500, foil=600, rud=200))]:
     hp, sheer = hull_parts(T['hull']); kp, kpiv = keel_part(T['keel']); fp, froot = foil_part(T['foil']); rp = rudder_part(T['rud'])
     meta = {'keelPivot': kpiv.round(4).tolist(), 'foilRoot': froot.round(4).tolist(), 'deckY': float(((sheer.max() - ZWL) * S).round(3)), 'bowY': round((79 - ZWL) * S, 3), 'scale': [SX, S], 'zwl': ZWL}
-    write(ff'public/models/imoca-{lvl}.bin', hp + [kp, fp, rp], meta)
+    write(ff'public/models/imoca-{lvl}.json', hp + [kp, fp, rp], meta)
     print(lvl, {p['name']: len(p['f']) for p in hp + [kp, fp, rp]}, meta)

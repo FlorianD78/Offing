@@ -1034,8 +1034,10 @@ function applyImocaModel(V) {
 }
 function loadImocaModels() {
   if (typeof fetch !== 'function') return;
-  const get = (lvl, url) => fetch(url).then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(b => { IMOCA_MODEL[lvl] = parseModelBin(b); IMOCA_VIS.forEach(applyImocaModel); }).catch(() => {});
-  get('lo', 'models/imoca-lo.bin').then(() => get('hi', 'models/imoca-hi.bin'));
+  // binaire OFM1 encodé en base64 dans un JSON (servi tel quel par Vercel comme par l'hébergement d'artifacts)
+  const b64 = t => { const bin = atob(t), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
+  const get = (lvl, url) => fetch(url).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(j => { IMOCA_MODEL[lvl] = parseModelBin(b64(j.b64)); IMOCA_VIS.forEach(applyImocaModel); }).catch(() => {});
+  get('lo', 'models/imoca-lo.json').then(() => get('hi', 'models/imoca-hi.json'));
 }
 function makeBoat(hull, accent, name, isPlayer) {
   useHull('imoca');

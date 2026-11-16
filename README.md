@@ -56,7 +56,7 @@ Pour vérifier : `https://offing.vercel.app/api/health` (ou le domaine attribué
 
 ## Modèles 3D
 
-`public/models/imoca-hi.bin` (joueur) et `imoca-lo.bin` (bots, qualité basse) contiennent l'IMOCA importé des STL : coque, pont, quille, foils, safrans. Le mât, la bôme et les voiles restent générés par le jeu. Pour régénérer après une modification des STL : `python3 tools/stl_to_model.py` (voir l'en-tête du script). Si le fichier ne se charge pas, le jeu garde le modèle paramétrique.
+`public/models/imoca-hi.json` (joueur) et `imoca-lo.json` (bots, qualité basse) contiennent l'IMOCA importé des STL : coque, pont, quille, foils, safrans. Le mât, la bôme et les voiles restent générés par le jeu. Pour régénérer après une modification des STL : `python3 tools/stl_to_model.py` (voir l'en-tête du script). Si le fichier ne se charge pas, le jeu garde le modèle paramétrique.
 
 ## En local
 
