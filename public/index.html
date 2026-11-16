@@ -783,6 +783,7 @@ function applyGfx(level) {
   if (GFX.oceanA !== P.oceanA) { const old = ocean.geometry; ocean.geometry = makeOceanGeo(P.oceanA, P.oceanK); old.dispose(); GFX.oceanA = P.oceanA; }
   GFX.parts = P.parts; GFX.fogK = P.fogK;
   if (typeof pGeo !== 'undefined') pGeo.setDrawRange(0, Math.round(NP * P.parts) * 2);
+  if (typeof IMOCA_VIS !== 'undefined') IMOCA_VIS.forEach(applyImocaModel);
   if (typeof resize === 'function') resize();
 }
 
@@ -1002,6 +1003,40 @@ function makeBowWave() {
 const GLOW_TEX = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
   gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.18, 'rgba(255,255,255,0.85)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.18)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
 const VANE_GEO = new THREE.BoxGeometry(0.05, 0.05, 1.5), VANE_FIN = new THREE.BoxGeometry(0.02, 0.32, 0.36);
+/* ----- Modèle 3D IMOCA importé (maillage STL allégé : coque, pont, quille, foils, safrans ; 2 niveaux de détail) ----- */
+const IMOCA_MODEL = { hi: null, lo: null }, IMOCA_VIS = [];
+function parseModelBin(buf) {
+  const dv = new DataView(buf); if (String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)) !== 'OFM1') throw new Error('format');
+  const hl = dv.getUint32(4, true), head = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, hl))), base = 8 + hl, out = { meta: head.meta, geo: {} };
+  for (const p of head.parts) {
+    let o = base + p.off; const pad = n => n + ((4 - n % 4) % 4);
+    const q = new Uint16Array(buf, o, p.nv * 3); o += pad(p.nv * 6);
+    const idx = p.i32 ? new Uint32Array(buf, o, p.ni) : new Uint16Array(buf, o, p.ni); o += pad(p.ni * (p.i32 ? 4 : 2));
+    const pos = new Float32Array(p.nv * 3); for (let i = 0; i < p.nv * 3; i++) { const c = i % 3; pos[i] = p.min[c] + q[i] / 65535 * (p.max[c] - p.min[c]); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(new THREE.BufferAttribute(idx.slice(), 1));
+    if (p.uv) { const u = new Uint16Array(buf, o, p.nv * 2), uv = new Float32Array(p.nv * 2); for (let i = 0; i < p.nv * 2; i++) uv[i] = u[i] / 65535; g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); }
+    g.computeVertexNormals(); g.computeBoundingSphere(); out.geo[p.name] = g;
+  }
+  return out;
+}
+function applyImocaModel(V) {
+  const M = (V.isPlayer && GFX.level !== 'low' ? IMOCA_MODEL.hi : IMOCA_MODEL.lo) || IMOCA_MODEL.hi || IMOCA_MODEL.lo; if (!M || V.stl === M) return;
+  if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
+  V.param.forEach(o => o.visible = false); const G = M.geo, list = [], m3 = (geo, mat, parent = V.root) => { if (!geo) return null; const m = new THREE.Mesh(geo, mat); parent.add(m); list.push(m); return m; };
+  m3(G.hull_deck, MAT.deck); m3(G.hull_roof, MAT.roof); m3(G.hull_topS, V.mats.livS); m3(G.hull_topP, V.mats.livP); m3(G.hull_bottom, MAT.bottom); m3(G.hull_ends, V.mats.hullMat);
+  V.keel.position.set(...M.meta.keelPivot); m3(G.keel, V.mats.accMat, V.keel);
+  m3(G.foil, MAT.foil, V.foilS); m3(G.foil, MAT.foil, V.foilP);
+  [1, -1].forEach(k => { const r = m3(G.rudder, MAT.bottom); r.scale.x = k; });
+  V.foilPos = [...M.meta.foilRoot, 1.5, 1.1]; V.sprit.position.y = M.meta.bowY - 0.1;
+  if (V.isPlayer) list.forEach(o => { o.castShadow = true; o.receiveShadow = true; });
+  if (V.ghost) list.forEach(o => { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; });
+  V.stlMeshes = list; V.stl = M;
+}
+function loadImocaModels() {
+  if (typeof fetch !== 'function') return;
+  const get = (lvl, url) => fetch(url).then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(b => { IMOCA_MODEL[lvl] = parseModelBin(b); IMOCA_VIS.forEach(applyImocaModel); }).catch(() => {});
+  get('lo', 'models/imoca-lo.bin').then(() => get('hi', 'models/imoca-hi.bin'));
+}
 function makeBoat(hull, accent, name, isPlayer) {
   useHull('imoca');
   const root = new THREE.Group(); root.rotation.order = 'YXZ';
@@ -1009,22 +1044,23 @@ function makeBoat(hull, accent, name, isPlayer) {
   const hullMat = new THREE.MeshStandardMaterial({ color: hull, roughness: 0.28, metalness: 0.25, side: THREE.DoubleSide });
   const accMat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.35, side: THREE.DoubleSide });
   const liv = m => new THREE.MeshStandardMaterial({ map: hullTexture(hull, accent, num, m, isPlayer ? 1024 : 512), roughness: 0.25, metalness: 0.2, side: THREE.DoubleSide });
-  const add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); root.add(m); return m; };
-  add(HULL.deck, MAT.deck); add(HULL.topS, liv(false)); add(HULL.topP, liv(true)); add(HULL.strS, accMat); add(HULL.strP, accMat); add(HULL.bottom, MAT.bottom); add(HULL.ends, hullMat);
+  const param = [], add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); root.add(m); param.push(m); return m; };
+  const livS = liv(false), livP = liv(true);
+  add(HULL.deck, MAT.deck); add(HULL.topS, livS); add(HULL.topP, livP); add(HULL.strS, accMat); add(HULL.strP, accMat); add(HULL.bottom, MAT.bottom); add(HULL.ends, hullMat);
   add(COACH_GEO, MAT.roof); add(WIN_GEO, MAT.glass);
   // cockpit : colonne de moulin à café, winches sur les hiloires et sur le rouf
   add(PED_GEO, MAT.winch, 0, 0.98, 6.3); const hd = add(HANDLE_GEO, MAT.dark, 0, 1.42, 6.3);
   [[1.62, 1.2, 4.3], [1.62, 1.2, 6.5], [-1.62, 1.2, 4.3], [-1.62, 1.2, 6.5], [0.95, 1.86, 3.9], [-0.95, 1.86, 3.9]].forEach(p => add(WINCH_GEO, MAT.winch, p[0], p[1], p[2]));
-  root.add(new THREE.LineSegments(RAIL_GEO, MAT.rail));
+  const rail = new THREE.LineSegments(RAIL_GEO, MAT.rail); root.add(rail); param.push(rail);
   // safrans jumeaux légèrement inclinés vers l'extérieur, avec plans porteurs
-  [1, -1].forEach(k => { const g = new THREE.Group(); g.position.set(k * 1.95, -0.1, 8.55); g.scale.x = k; g.add(new THREE.Mesh(RUDDER_GEO, MAT.bottom)); g.add(new THREE.Mesh(ELEV_GEO, MAT.bottom)); root.add(g); });
+  [1, -1].forEach(k => { const g = new THREE.Group(); g.position.set(k * 1.95, -0.1, 8.55); g.scale.x = k; g.add(new THREE.Mesh(RUDDER_GEO, MAT.bottom)); g.add(new THREE.Mesh(ELEV_GEO, MAT.bottom)); root.add(g); param.push(g); });
   const keel = new THREE.Group(); keel.position.set(0, -0.55, 0.4); root.add(keel);
-  const fin = new THREE.Mesh(KEEL_FIN, accMat); keel.add(fin);
-  const bulb = new THREE.Mesh(BULB_GEO, accMat); bulb.scale.set(0.95, 0.95, 4.2); bulb.position.set(0, -4.45, 0.35); keel.add(bulb);
+  const fin = new THREE.Mesh(KEEL_FIN, accMat); keel.add(fin); param.push(fin);
+  const bulb = new THREE.Mesh(BULB_GEO, accMat); bulb.scale.set(0.95, 0.95, 4.2); bulb.position.set(0, -4.45, 0.35); keel.add(bulb); param.push(bulb);
   const mast = add(MAST_GEO, MAT.dark, 0, 1.21 + 14.25, -0.5); mast.scale.set(1, 1, 1.9);
   [[10.5, 3.4, 1.8], [20, 1.6, 1.0]].forEach(([y, w, sw]) => [1, -1].forEach(k => { const L = Math.hypot(w, sw), s2 = add(SPREAD_GEO, MAT.dark, k * w / 2, y, -0.5 + sw / 2); s2.scale.x = L; s2.rotation.y = -k * Math.atan2(sw, w); }));
   root.add(new THREE.LineSegments(RIG_GEO, MAT.rig));
-  const sprit = add(SPRIT_GEO, accMat, 0, 1.55, -10.9); sprit.rotation.x = Math.PI / 2;
+  const sprit = add(SPRIT_GEO, accMat, 0, 1.55, -10.9); sprit.rotation.x = Math.PI / 2; param.pop(); // le bout-dehors reste avec le modèle importé
   const boomPivot = new THREE.Group(); boomPivot.position.set(0, 3.1, -0.12); root.add(boomPivot);
   const boom = new THREE.Mesh(BOOM_GEO, MAT.dark); boom.rotation.x = Math.PI / 2; boom.position.z = 4.3; boomPivot.add(boom);
   const sm = (kind, base) => { const tx = sailTexture(kind, base, accent, num, res); return new THREE.MeshStandardMaterial({ map: tx, emissiveMap: tx, emissive: 0xffffff, emissiveIntensity: 0, roughness: kind === 'main' ? 0.5 : 0.62, metalness: kind === 'main' ? 0.12 : 0.02, side: THREE.DoubleSide }); };
@@ -1035,7 +1071,7 @@ function makeBoat(hull, accent, name, isPlayer) {
   const sheetGeo = new THREE.BufferGeometry(); sheetGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
   const sheets = new THREE.LineSegments(sheetGeo, MAT.sheet); sheets.frustumCulled = false; root.add(sheets);
   const bowWave = makeBowWave(); root.add(bowWave);
-  const foils = [1, -1].map(k => { const g = new THREE.Group(); g.scale.x = k; g.add(new THREE.Mesh(FOIL_GEO, MAT.foil)); root.add(g); return g; });
+  const foils = [1, -1].map(k => { const g = new THREE.Group(); g.scale.x = k; const fm = new THREE.Mesh(FOIL_GEO, MAT.foil); g.add(fm); param.push(fm); root.add(g); return g; });
   const label = makeLabel(name, hexCss(isPlayer ? accent : hull), isPlayer ? 160 : 256); label.position.set(0, 36, 0); root.add(label);
   // feux de navigation : tricolore en tête de mât, feux de côté à l'étrave, feu de poupe
   const navMats = [];
@@ -1046,7 +1082,8 @@ function makeBoat(hull, accent, name, isPlayer) {
   const vArm = new THREE.Mesh(VANE_GEO, MAT.dark); vane.add(vArm); const vFin = new THREE.Mesh(VANE_FIN, accMat); vFin.position.set(0, 0.18, 0.72); vane.add(vFin);
   if (isPlayer) root.traverse(o => { if (o.isMesh && o.material && o.material.isMeshStandardMaterial) { o.castShadow = true; o.receiveShadow = true; } });
   scene.add(root);
-  return { root, boomPivot, mainMesh, heads, sheets, bowWave, keel, mast, hd, foilS: foils[0], foilP: foils[1], wake: makeWake(), navMats, vane, awa: 0, cd: CD_IMOCA };
+  const V = { root, boomPivot, mainMesh, heads, sheets, bowWave, keel, mast, hd, foilS: foils[0], foilP: foils[1], wake: makeWake(), navMats, vane, awa: 0, cd: CD_IMOCA, param, mats: { livS, livP, hullMat, accMat }, sprit, isPlayer };
+  applyImocaModel(V); IMOCA_VIS.push(V); return V;
 }
 
 
@@ -2466,7 +2503,7 @@ const GCOL = ['#d9f2ff', '#ffe8a3', '#c9ffd9', '#ffd0e6', '#d6d0ff', '#bff4ff', 
 const ghostKey = () => 'gl3d_ghost_' + COURSE.id + '_' + CLS.id;
 function ghostPool() {
   let P = GHOST.pools[CLS.id]; if (P) return P; P = GHOST.pools[CLS.id] = [];
-  for (let i = 0; i < 4; i++) { const v = makeBoatOf(CLS.id, { hull: 0xdfe9f2, acc: 0x9fd8ff, name: '👻' }); v.root.traverse(o => { if (o.material && !o.isSprite) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; } o.castShadow = false; }); v.wake.visible = false; v.bowWave.visible = false; v.root.visible = false; P.push(v); }
+  for (let i = 0; i < 4; i++) { const v = makeBoatOf(CLS.id, { hull: 0xdfe9f2, acc: 0x9fd8ff, name: '👻' }); v.root.traverse(o => { if (o.material && !o.isSprite) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; } o.castShadow = false; }); v.ghost = true; if (v.stlMeshes) { v.stl = null; applyImocaModel(v); } v.wake.visible = false; v.bowWave.visible = false; v.root.visible = false; P.push(v); }
   return P;
 }
 const hideGhosts = () => Object.values(GHOST.pools).forEach(P => P.forEach(v => { v.root.visible = false; v.wake.visible = false; }));
@@ -2808,7 +2845,8 @@ function updateBoatVisual(b, rdt) {
   }
   // vague d'étrave le long de la coque
   const bw = v.bowWave.material.uniforms; bw.uH.value = clamp((b.dspd - 3 * cd.k) * 0.075, 0, 1.7) * cd.bw * (1 - Math.min(0.65, b.lift * 0.7)); bw.uStr.value = clamp((b.dspd - 2 * cd.k) / (9 * cd.k + 2), 0, 1); bw.uOdo.value = b.odo; bw.uTime.value = realT;
-  if (cd.foils) { const k = cd.k; v.foilS.position.set((2.3 - 2.1 * (1 - b.foilS)) * k, (0.3 + 2.0 * (1 - b.foilS)) * k, -1.7 * k); v.foilP.position.set((-2.3 + 2.1 * (1 - b.foilP)) * k, (0.3 + 2.0 * (1 - b.foilP)) * k, -1.7 * k); }
+  if (v.foilPos) { const F = v.foilPos; v.foilS.position.set(F[0] - F[3] * (1 - b.foilS), F[1] + F[4] * (1 - b.foilS), F[2]); v.foilP.position.set(-(F[0] - F[3] * (1 - b.foilP)), F[1] + F[4] * (1 - b.foilP), F[2]); }
+  else if (cd.foils) { const k = cd.k; v.foilS.position.set((2.3 - 2.1 * (1 - b.foilS)) * k, (0.3 + 2.0 * (1 - b.foilS)) * k, -1.7 * k); v.foilP.position.set((-2.3 + 2.1 * (1 - b.foilP)) * k, (0.3 + 2.0 * (1 - b.foilP)) * k, -1.7 * k); }
   if (b.isGhost) return;
   updateWake(b, px, pz, fx, fz, rx, rz);
   if (Math.hypot(px - camera.position.x, pz - camera.position.z) < 1500) boatSpray(b, px, pz, fx, fz, rx, rz, hb * damp + b.lift, rdt);
@@ -3040,7 +3078,7 @@ function frame(now) {
 }
 resize(); { let c0 = 'imoca'; try { c0 = localStorage.getItem('gl3d_cls') || 'imoca'; } catch (e) {} setClass(c0); } setupMode('race', 'transat');
 { let pref = null; try { pref = localStorage.getItem('gl3d_mobile'); } catch (e) {} const auto = matchMedia('(pointer: coarse)').matches && Math.min(innerWidth, innerHeight) < 620; if (pref === '1' || (pref === null && auto)) setMobile(true, true); }
-applyGfx(SETTINGS.gfx); applyStaticLang(); sailLabels(); document.documentElement.lang = LANG; showMenu(); netInit(); computeProjection(); updateHUD(); drawMap(); drawPolar();
+loadImocaModels(); applyGfx(SETTINGS.gfx); applyStaticLang(); sailLabels(); document.documentElement.lang = LANG; showMenu(); netInit(); computeProjection(); updateHUD(); drawMap(); drawPolar();
 requestAnimationFrame(frame);
 // Rejeu côté serveur (fonction Vercel) : même moteur, état de départ officiel recalculé, ordres du joueur
 window.__ENGINE = {
