@@ -682,6 +682,11 @@ function waveH(x, z) {
   h += fftH(0, x, z) + fftH(1, x, z) * attS; // mer du vent (FFT)
   return h * att;
 }
+function seaLow(x, z) {
+  const att = 1 - smooth(1200, 6000, Math.hypot(x, z)); let h = 0;
+  for (let i = 0; i < WAVES.length; i++) { const w = WAVES[i]; if (w.type) continue; h += w.amp * swellAmp * Math.sin((w.dx * x + w.dz * z) * w.k + w.om * realT + w.ph + wavePh[i]); }
+  return (h + fftH(0, x, z)) * att;
+}
 function makeOceanGeo(A = 288, K = 1.032) {
   const radii = [0]; let r = 0, n0 = Math.round(80 * 288 / A);
   for (let i = 1; i <= n0 * A / 288; i++) { r = i * 1.6 * 288 / A; radii.push(r); }
@@ -784,7 +789,7 @@ function updateHullContact() {
   const list = [player].concat(active.filter(b => b !== player && b.vis && b.vis.root.visible).map(b => [b, b.vis.root.position.lengthSq()]).filter(x => x[1] < 1500 * 1500).sort((a, b) => a[1] - b[1]).slice(0, 3).map(x => x[0]));
   let n = 0; const fp0 = hullFootprint(player.vis);
   list.forEach(b => { const V = b.vis; if (!V || !V.root.visible) return; const fp = hullFootprint(V); _fw.set(0, 0, -1).applyQuaternion(V.root.quaternion); _fw.y = 0; _fw.normalize();
-    oceanU.uBA.value[n].set(V.root.position.x, V.root.position.z, _fw.x, _fw.z); oceanU.uBB.value[n].set((b.dspd || b.spd || 0) * 0.5144, fp.L, fp.bow, waveH(V.root.position.x, V.root.position.z)); n++; });
+    oceanU.uBA.value[n].set(V.root.position.x, V.root.position.z, _fw.x, _fw.z); oceanU.uBB.value[n].set((b.dspd || b.spd || 0) * 0.5144, fp.L, fp.bow, b.mz ? b.mz.y : waveH(V.root.position.x, V.root.position.z)); n++; });
   oceanU.uNB.value = GFX.shore === false ? 0 : n; fp0.hb.forEach((h, j) => { oceanU.uHB.value[j] = h; });
 }
 
@@ -3008,7 +3013,10 @@ function updateBoatVisual(b, rdt) {
   const v = b.vis; let px = 0, pz = 0;
   if (!b.isPlayer) { [px, pz] = rel(b.lat, b.lon); const far = Math.hypot(px, pz) > 20000 || (!active.includes(b) && !b.isGhost); v.root.visible = !far; v.wake.visible = !far && !b.isGhost; if (far) return; }
   const h = b.dispHdg * D2R, fx = Math.sin(h), fz = -Math.cos(h), rx = Math.cos(h), rz = Math.sin(h);
-  const hb = waveH(px + fx * 8, pz + fz * 8), hs = waveH(px - fx * 8, pz - fz * 8), hr = waveH(px + rx * 3, pz + rz * 3), hl = waveH(px - rx * 3, pz - rz * 3);
+  // mer « vue par la coque » : houle + grandes vagues seulement, moyennée sur 3×3 points de la carène (le clapot ne fait pas bouger plusieurs tonnes)
+  const fp = v.fp || (v.root.visible ? hullFootprint(v) : null), l = (fp ? fp.L : 18 * v.cd.k) * 0.38, w = (fp ? Math.max(...fp.hb) : 2.6 * v.cd.k) * 0.75;
+  let hb = 0, hs = 0, hr = 0, hl = 0, hm = 0;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const q = seaLow(px + fx * l * i + rx * w * j, pz + fz * l * i + rz * w * j); hm += q / 9; if (i > 0) hb += q / 3; if (i < 0) hs += q / 3; if (j > 0) hr += q / 3; if (j < 0) hl += q / 3; }
   const twa = norm180((b.twd || 0) - b.dispHdg), a = Math.abs(twa), side = twa >= 0 ? 1 : -1;
   const lee = side > 0 ? b.foilP : b.foilS, boost = lee * foilBoost(a, b.tws || 10) * Math.min(1, b.spd / 12);
   const cd = v.cd, hf = a < 45 ? 1 : Math.max(0.2, 1 - (a - 45) / 110);
@@ -3022,8 +3030,15 @@ function updateBoatVisual(b, rdt) {
   b.heel += (heelT - b.heel) * Math.min(1, rdt * 1.5); b.lift += (boost * 2.3 * (cd ? cd.k : 1) - b.lift) * Math.min(1, rdt * 0.8);
   b.cant += ((a < 25 || !cd.cant ? 0 : side * 0.6) - b.cant) * Math.min(1, rdt * 1.2);
   const damp = 1 - Math.min(0.6, b.lift / 1.5);
-  v.root.position.set(px, (hb + hs + hr + hl) / 4 * damp + b.lift - 0.1, pz);
-  v.root.rotation.set(Math.atan2(hb - hs, 16 * cd.k) * damp * (cd === CD_IMOCA ? 1 : 0.55) + b.lift * 0.025 - (b.surfF - 1) * 0.12, -h, Math.atan2(hr - hl, 6) * damp + b.heel * D2R);
+  // inertie : pilonnement, tangage et roulis suivent la mer via un ressort amorti (période propre ≈ 1,4 s en Mini, 2,2 s en IMOCA)
+  const M = b.mz || (b.mz = { y: hm, vy: 0, p: 0, vp: 0, r: 0, vr: 0 }), Tn = 1.6 * Math.sqrt((fp ? fp.L : 18) / 9), om = 2 * Math.PI / Tn, ze = 0.6;
+  const tP = Math.atan2(hb - hs, 2 * l) * (cd === CD_IMOCA ? 1 : 0.8), tR = Math.atan2(hr - hl, 2 * w) * 0.7;
+  for (let k = 0, n = Math.ceil(rdt / 0.02), dt = rdt / Math.max(1, n); k < n; k++) {
+    M.vy += (om * om * (hm - M.y) - 2 * ze * om * M.vy) * dt; M.y += M.vy * dt;
+    M.vp += (om * om * (tP - M.p) - 2 * ze * om * M.vp) * dt; M.p += M.vp * dt;
+    M.vr += (om * om * 0.8 * (tR - M.r) - 2 * ze * om * M.vr) * dt; M.r += M.vr * dt; }
+  v.root.position.set(px, M.y * damp + b.lift - 0.1, pz);
+  v.root.rotation.set(M.p * damp + b.lift * 0.025 - (b.surfF - 1) * 0.12, -h, M.r * damp + b.heel * D2R);
   v.keel.rotation.z = b.cant;
   // réglages : faseyement si trop choqué, face au vent, pendant un virement ou un changement de voile
   const tr = b.trim, ease = tr - topt(a), turning = isTurnMan(b.man) && b.man.t / b.man.dur < 0.3;
