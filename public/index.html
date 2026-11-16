@@ -93,6 +93,27 @@ body.mobile #shoreWarn{top:100px;font-size:12px}
 #pause{position:fixed;top:45%;left:50%;transform:translate(-50%,-50%);font-size:34px;font-weight:800;letter-spacing:.2em;color:#fff;text-shadow:0 2px 12px #000;display:none;pointer-events:none}
 #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,12,20,.6);z-index:40;padding:16px}
 #overlay.hide{display:none}
+#overlay.mm{justify-content:flex-start;align-items:stretch;padding:0;background:linear-gradient(90deg,rgba(3,12,22,.94) 0,rgba(3,12,22,.8) 30%,rgba(3,12,22,.25) 58%,rgba(3,12,22,0) 75%),linear-gradient(0deg,rgba(3,12,22,.5),transparent 40%)}
+#overlay.mm .card{background:none;border:0;box-shadow:none;max-width:520px;max-height:none;height:100%;border-radius:0;padding:0;overflow:visible}
+.mmwrap{height:100%;display:flex;flex-direction:column;padding:6vh 48px 22px;box-sizing:border-box;overflow:auto}
+.logo{font-size:68px;font-weight:800;letter-spacing:.16em;line-height:1;color:#fff;text-shadow:0 6px 30px rgba(0,0,0,.4)}.logo span{color:#7fd1ff}.logo.sm{font-size:30px;margin-bottom:18px}
+.mmtag{margin:8px 0 22px!important;color:#a9c3d6!important;font-style:italic;letter-spacing:.06em}
+.mmprof{font-size:13px;color:#dbe9f5;margin-bottom:22px;max-width:320px}.mmprof .bar{height:4px;background:rgba(255,255,255,.12);border-radius:3px;margin-top:6px;overflow:hidden}.mmprof .bar i{display:block;height:100%;background:linear-gradient(90deg,#4ea8de,#7fd1ff)}
+.mmnav{display:flex;flex-direction:column;gap:4px}
+.mmnav button{display:block;width:100%;text-align:left;background:none!important;border:0!important;border-left:3px solid transparent!important;border-radius:0 10px 10px 0;padding:11px 16px;color:#fff;transition:all .15s}
+.mmnav button b{font-size:20px;font-weight:700;letter-spacing:.02em}.mmnav button small{display:block;font-size:12.5px;color:#a9c3d6;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mmnav button:hover,.mmnav button:focus-visible{border-left-color:#7fd1ff!important;background:linear-gradient(90deg,rgba(127,209,255,.16),transparent)!important;padding-left:22px}
+.mmfoot{margin-top:auto;padding-top:20px;display:flex;align-items:center;gap:14px;font-size:11.5px;color:#7fa3bd}
+.mmside{position:fixed;right:32px;bottom:32px;width:360px;border-radius:16px;padding:14px;background:rgba(8,22,36,.82);border:1px solid rgba(255,209,102,.4);backdrop-filter:blur(6px);display:flex;flex-direction:column;gap:8px}
+.mmside h3{margin:0;font-size:14px;color:#ffd166}.mmside button{padding:10px;background:#1f8fd6;border-color:#55b8f7}
+body.inmenu > *:not(canvas):not(#overlay):not(#loader):not(script){visibility:hidden!important}
+#loader{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:#04101c}#loader.hide{display:none}
+.ldbg{position:absolute;inset:-30px;background-size:cover;background-position:center;filter:blur(14px) brightness(.45) saturate(1.2);transform:scale(1.05)}
+.ldbox{position:relative;width:min(560px,90vw);text-align:center}.ldbox h2{margin:0 0 6px;font-size:26px}.ldbox p{color:#a9c3d6}
+.ldbar{height:6px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden;margin:22px 0 10px}.ldbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#4ea8de,#7fd1ff,#ffd166);transition:width .25s}
+#ldStep{font-size:13px;color:#dbe9f5;min-height:18px}#ldTip{margin-top:26px;font-size:14px;font-style:italic}
+@media (max-width:900px){.mmside{display:none}#overlay.mm{background:rgba(3,12,22,.82)}#overlay.mm .card{max-width:none}.mmwrap{padding:5vh 22px 18px}.logo{font-size:48px}}
+body.mobile .mmside{display:none}body.mobile #overlay.mm{background:rgba(3,12,22,.82)}body.mobile #overlay.mm .card{max-width:none}body.mobile .mmwrap{padding:4vh 18px 14px}body.mobile .logo{font-size:44px}
 .card.wide{max-width:1000px}
 .mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.mhead .tag{margin:-2px 0 8px!important;color:#7fa3bd!important;font-style:italic}
 .mtools{display:flex;gap:6px}.mtools button{padding:6px 10px;font-size:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#dbe9f5}.mtools button.on{background:rgba(78,168,222,.3);border-color:#4ea8de}
@@ -319,6 +340,7 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
 <div id="shoreWarn"></div><div id="toast"></div>
 <div id="pause">PAUSE</div>
 <div id="overlay"><div class="card" id="card"></div></div>
+<div id="loader" class="hide"><div class="ldbg" id="ldBg"></div><div class="ldbox"><div class="logo sm">OFF<span>ING</span></div><h2 id="ldTitle"></h2><p id="ldSub"></p><div class="ldbar"><i id="ldBar"></i></div><div id="ldStep"></div><p id="ldTip"></p></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -656,7 +678,8 @@ const wavePh = WAVES.map(() => 0);
 function waveH(x, z) {
   const d = Math.hypot(x, z), att = 1 - smooth(1200, 6000, d), attS = 1 - smooth(150, 500, d);
   let h = 0;
-  for (let i = 0; i < WAVES.length; i++) { const w = WAVES[i], a = w.amp * (w.type ? seaAmp : swellAmp) * (i >= 3 ? attS : 1); h += a * Math.sin((w.dx * x + w.dz * z) * w.k + w.om * realT + w.ph + wavePh[i]); }
+  for (let i = 0; i < WAVES.length; i++) { const w = WAVES[i], a = w.amp * (w.type ? 0 : swellAmp) * (i >= 3 ? attS : 1); h += a * Math.sin((w.dx * x + w.dz * z) * w.k + w.om * realT + w.ph + wavePh[i]); }
+  h += fftH(0, x, z) + fftH(1, x, z) * attS; // mer du vent (FFT)
   return h * att;
 }
 function makeOceanGeo(A = 288, K = 1.032) {
@@ -667,6 +690,104 @@ function makeOceanGeo(A = 288, K = 1.032) {
   const idx = []; for (let i = 0; i < radii.length - 1; i++) for (let j = 0; j < A; j++) { const a = i * (A + 1) + j, b = a + 1, c = a + A + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g;
 }
+/* ----- Mer du vent par FFT : spectre de Phillips piloté par le vent, 2 cascades 64×64 (256 m et 37 m), calcul CPU, textures demi-flottants.
+   Canaux : R = déplacement x, G = hauteur, B = déplacement z, A = écume (jacobien + rémanence). Purement visuel : la physique n'en dépend pas. ----- */
+const FFT_N = 64, FFT_G = 9.81;
+const OCN = { L: [256, 37], lambda: 1.1, hs: 1, U: -1, dir: -99, tex: [], h0r: [], h0i: [], w: [], kx: [], kz: [], kk: [], H: [], DX: [], DZ: [], foam: new Float32Array(FFT_N * FFT_N), ok: true, t: 0 };
+const FFT_BR = new Uint16Array(FFT_N), FFT_C = new Float32Array(FFT_N / 2), FFT_S = new Float32Array(FFT_N / 2);
+(() => { const bits = Math.log2(FFT_N); for (let i = 0; i < FFT_N; i++) { let r = 0; for (let b = 0; b < bits; b++) r |= ((i >> b) & 1) << (bits - 1 - b); FFT_BR[i] = r; }
+  for (let i = 0; i < FFT_N / 2; i++) { FFT_C[i] = Math.cos(2 * Math.PI * i / FFT_N); FFT_S[i] = Math.sin(2 * Math.PI * i / FFT_N); } })();
+// FFT inverse complexe en place (exposant +), pas strided
+function fft1(re, im, off, st) {
+  const N = FFT_N;
+  for (let i = 0; i < N; i++) { const j = FFT_BR[i]; if (j > i) { const a = off + i * st, b = off + j * st; let t = re[a]; re[a] = re[b]; re[b] = t; t = im[a]; im[a] = im[b]; im[b] = t; } }
+  for (let size = 2; size <= N; size <<= 1) { const h = size >> 1, step = N / size;
+    for (let i = 0; i < N; i += size) for (let k = 0; k < h; k++) { const c = FFT_C[k * step], s = FFT_S[k * step], a = off + (i + k) * st, b = off + (i + k + h) * st;
+      const tr = re[b] * c - im[b] * s, ti = re[b] * s + im[b] * c; re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti; } }
+}
+function fft2(re, im) { for (let r = 0; r < FFT_N; r++) fft1(re, im, r * FFT_N, 1); for (let c = 0; c < FFT_N; c++) fft1(re, im, c, FFT_N); }
+const _f32 = new Float32Array(1), _u32 = new Uint32Array(_f32.buffer);
+function toHalf(v) { _f32[0] = v; const x = _u32[0], s = (x >>> 16) & 0x8000, e = ((x >>> 23) & 0xff) - 112; if (e <= 0) return s; if (e >= 31) return s | 0x7bff; return s | (e << 10) | ((x & 0x7fffff) >>> 13); }
+// gaussiennes déterministes (même mer pour tous à chaque changement de vent)
+const oGauss = i => { const u1 = Math.max(1e-6, hrand(0x5ea, i * 2)), u2 = hrand(0x5ea, i * 2 + 1), r = Math.sqrt(-2 * Math.log(u1)); return [r * Math.cos(2 * Math.PI * u2), r * Math.sin(2 * Math.PI * u2)]; };
+const OCN_RE = new Float32Array(FFT_N * FFT_N), OCN_IM = new Float32Array(FFT_N * FFT_N), OCN_RE2 = new Float32Array(FFT_N * FFT_N), OCN_IM2 = new Float32Array(FFT_N * FFT_N);
+(() => { const N = FFT_N;
+  for (let c = 0; c < 2; c++) { const L = OCN.L[c], kx = new Float32Array(N * N), kz = new Float32Array(N * N), kk = new Float32Array(N * N), w = new Float32Array(N * N);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const o = j * N + i, mx = i < N / 2 ? i : i - N, mz = j < N / 2 ? j : j - N; kx[o] = 2 * Math.PI * mx / L; kz[o] = 2 * Math.PI * mz / L; kk[o] = Math.hypot(kx[o], kz[o]); w[o] = Math.sqrt(FFT_G * kk[o]); }
+    OCN.kx[c] = kx; OCN.kz[c] = kz; OCN.kk[c] = kk; OCN.w[c] = w; OCN.h0r[c] = new Float32Array(N * N); OCN.h0i[c] = new Float32Array(N * N);
+    OCN.H[c] = new Float32Array(N * N); OCN.DX[c] = new Float32Array(N * N); OCN.DZ[c] = new Float32Array(N * N);
+    const t = new THREE.DataTexture(new Uint16Array(N * N * 4), N, N, THREE.RGBAFormat, THREE.HalfFloatType);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; OCN.tex[c] = t; } })();
+// spectre de Phillips (vent U m/s vers la direction dir, radians, repère du monde x/z), normalisé sur la hauteur significative visée
+function oceanSpectrum(U, dir, hs) {
+  const N = FFT_N, Lw = Math.max(0.5, U * U / FFT_G), wx = Math.sin(dir), wz = -Math.cos(dir), l = Lw / 900, kcut = Math.PI * N / OCN.L[0];
+  let varSum = 0;
+  for (let c = 0; c < 2; c++) { const dk = 2 * Math.PI / OCN.L[c], kx = OCN.kx[c], kz = OCN.kz[c], kk = OCN.kk[c], hr = OCN.h0r[c], hi = OCN.h0i[c];
+    for (let o = 0; o < N * N; o++) { const k = kk[o];
+      if (k < 1e-6 || (c === 1 && k <= kcut * 0.98)) { hr[o] = hi[o] = 0; continue; }
+      const d = (kx[o] * wx + kz[o] * wz) / k, dirF = d * d * (d < 0 ? 0.12 : 1), P = Math.exp(-1 / (k * Lw * k * Lw)) / (k * k * k * k) * dirF * Math.exp(-k * k * l * l);
+      const a = Math.sqrt(P / 2) * dk, g = oGauss(c * 9000 + o); hr[o] = g[0] * a; hi[o] = g[1] * a; varSum += 2 * a * a * (g[0] * g[0] + g[1] * g[1]); } }
+  const s = varSum > 0 ? (hs / 4) / Math.sqrt(varSum) : 0;
+  for (let c = 0; c < 2; c++) { const hr = OCN.h0r[c], hi = OCN.h0i[c]; for (let o = 0; o < N * N; o++) { hr[o] *= s; hi[o] *= s; } }
+  OCN.U = U; OCN.dir = dir; OCN.hs = hs;
+}
+function oceanFFTUpdate(rdt, force) {
+  const N = FFT_N, tws = player.tws || 10, U = Math.max(2, tws * 0.5144), dir = ((player.twd || 0) + 180) * D2R, hs = 1.5 * seaAmp;
+  if (force || Math.abs(U - OCN.U) > 0.6 || Math.abs(norm180((dir - OCN.dir) * R2D)) > 5 || Math.abs(hs - OCN.hs) > 0.08) oceanSpectrum(U, dir, hs);
+  OCN.t += rdt || 0; const t = OCN.t, lam = OCN.lambda, decay = Math.exp(-(rdt || 0) / 2.2);
+  for (let c = 0; c < (GFX.level === 'low' ? 1 : 2); c++) {
+    const kx = OCN.kx[c], kz = OCN.kz[c], kk = OCN.kk[c], w = OCN.w[c], hr = OCN.h0r[c], hi = OCN.h0i[c];
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const o = j * N + i, m = ((N - j) % N) * N + ((N - i) % N), k = kk[o];
+      if (k < 1e-6) { OCN_RE[o] = OCN_IM[o] = OCN_RE2[o] = OCN_IM2[o] = 0; continue; }
+      const cw = Math.cos(w[o] * t), sw = Math.sin(w[o] * t);
+      // ĥ(k,t) = h0(k) e^{iωt} + conj(h0(-k)) e^{-iωt}
+      const ar = hr[o] * cw - hi[o] * sw + hr[m] * cw - hi[m] * sw, ai = hr[o] * sw + hi[o] * cw - (hr[m] * sw + hi[m] * cw);
+      const ux = kx[o] / k, uz = kz[o] / k;
+      OCN_RE[o] = ar * (1 + ux); OCN_IM[o] = ai * (1 + ux);          // h + i·Dx  (D̂x = -i kx/k ĥ)
+      OCN_RE2[o] = ai * uz; OCN_IM2[o] = -ar * uz;                  // Dz
+    }
+    fft2(OCN_RE, OCN_IM); fft2(OCN_RE2, OCN_IM2);
+    const H = OCN.H[c], DX = OCN.DX[c], DZ = OCN.DZ[c], img = OCN.tex[c].image.data, dx2 = 2 * OCN.L[c] / N, F = OCN.foam;
+    for (let o = 0; o < N * N; o++) { H[o] = OCN_RE[o]; DX[o] = OCN_IM[o] * lam; DZ[o] = OCN_RE2[o] * lam; }
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const o = j * N + i, ip = j * N + ((i + 1) % N), im = j * N + ((i + N - 1) % N), jp = ((j + 1) % N) * N + i, jm = ((j + N - 1) % N) * N + i;
+      let f = 0;
+      if (c === 0) { const J = (1 + (DX[ip] - DX[im]) / dx2) * (1 + (DZ[jp] - DZ[jm]) / dx2) - ((DX[jp] - DX[jm]) / dx2) * ((DZ[ip] - DZ[im]) / dx2);
+        f = F[o] = Math.max(F[o] * decay, clamp((0.92 - J) * 2.4, 0, 1)); }
+      const q = o * 4; img[q] = toHalf(DX[o]); img[q + 1] = toHalf(H[o]); img[q + 2] = toHalf(DZ[o]); img[q + 3] = toHalf(f); }
+    OCN.tex[c].needsUpdate = true;
+  }
+}
+// hauteur FFT au point (x, z) du monde affiché (bilinéaire), pour l'assiette des bateaux, la caméra, les bouées
+function fftH(c, x, z) {
+  const N = FFT_N, L = OCN.L[c], u = (((x + GX) % L) + L) % L / L * N, v = (((z + GZ) % L) + L) % L / L * N, i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j, H = OCN.H[c];
+  const a = H[j * N + i], b = H[j * N + (i + 1) % N], d = H[((j + 1) % N) * N + i], e = H[((j + 1) % N) * N + (i + 1) % N];
+  return (a * (1 - fu) + b * fu) * (1 - fv) + (d * (1 - fu) + e * fu) * fv;
+}
+/* ----- Contact eau / coque : empreinte de flottaison mesurée sur la géométrie de chaque classe (16 demi-largeurs de l'étrave au tableau) ----- */
+function hullFootprint(V) {
+  if (V.fp) return V.fp;
+  const root = V.root, excl = new Set();
+  [V.foilS, V.foilP, V.keel, V.mast, V.boomPivot, V.bowWave, V.hd, V.vane].forEach(o => o && o.traverse(c => excl.add(c)));
+  const qp = root.position.clone(), qq = root.quaternion.clone(); root.position.set(0, 0, 0); root.quaternion.identity(); root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m = new THREE.Matrix4(), v3 = new THREE.Vector3(), sc = root.scale.x, P = [];
+  root.traverseVisible(o => { if (!o.isMesh || excl.has(o) || o.isSprite) return; const pos = o.geometry && o.geometry.attributes.position; if (!pos) return; m.multiplyMatrices(inv, o.matrixWorld);
+    for (let i = 0; i < pos.count; i++) { v3.fromBufferAttribute(pos, i).applyMatrix4(m); if (Math.abs(v3.y * sc) < 0.35) P.push(v3.x * sc, v3.z * sc); } });
+  root.position.copy(qp); root.quaternion.copy(qq); root.updateMatrixWorld(true);
+  let z0 = 1e9, z1 = -1e9; for (let i = 1; i < P.length; i += 2) { z0 = Math.min(z0, P[i]); z1 = Math.max(z1, P[i]); }
+  if (!(z1 > z0)) return (V.fp = { bow: 9, L: 18, hb: new Array(16).fill(2) });
+  const hb = new Array(16).fill(0); for (let i = 0; i < P.length; i += 2) { const j = clamp(Math.round((P[i + 1] - z0) / (z1 - z0) * 15), 0, 15); hb[j] = Math.max(hb[j], Math.abs(P[i])); }
+  for (let j = 1; j < 16; j++) if (!hb[j]) hb[j] = hb[j - 1]; hb[0] = Math.min(hb[0], hb[1] * 0.4);
+  return (V.fp = { bow: -z0, L: z1 - z0, hb });
+}
+const _fw = new THREE.Vector3();
+function updateHullContact() {
+  const list = [player].concat(active.filter(b => b !== player && b.vis && b.vis.root.visible).map(b => [b, b.vis.root.position.lengthSq()]).filter(x => x[1] < 1500 * 1500).sort((a, b) => a[1] - b[1]).slice(0, 3).map(x => x[0]));
+  let n = 0; const fp0 = hullFootprint(player.vis);
+  list.forEach(b => { const V = b.vis; if (!V || !V.root.visible) return; const fp = hullFootprint(V); _fw.set(0, 0, -1).applyQuaternion(V.root.quaternion); _fw.y = 0; _fw.normalize();
+    oceanU.uBA.value[n].set(V.root.position.x, V.root.position.z, _fw.x, _fw.z); oceanU.uBB.value[n].set((b.dspd || b.spd || 0) * 0.5144, fp.L, fp.bow, waveH(V.root.position.x, V.root.position.z)); n++; });
+  oceanU.uNB.value = GFX.shore === false ? 0 : n; fp0.hb.forEach((h, j) => { oceanU.uHB.value[j] = h; });
+}
+
 const NW = WAVES.length;
 const oceanU = {
   uTime: { value: 0 }, uAmp: { value: 1 }, uSwell: { value: 1 }, uPh: { value: WAVES.map(() => 0) }, uG: { value: new THREE.Vector2() },
@@ -674,40 +795,66 @@ const oceanU = {
   uWind: { value: new THREE.Vector3(0, 1, 10) },
   uFog: { value: 0.000095 }, uRain: { value: 0 }, uGustT: { value: 0 },
   uSdf: { value: null }, uSdfC: { value: new THREE.Vector2() }, uSdfS: { value: 9000 }, uSdfOn: { value: 0 },
+  uGerS: { value: 0 }, uFA: { value: OCN.tex[0] }, uFB: { value: OCN.tex[1] }, uFG: { value: new THREE.Vector4() }, uFL: { value: new THREE.Vector2(1 / OCN.L[0], 1 / OCN.L[1]) }, uFOn: { value: 1 }, uHs: { value: 1 },
+  uBA: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uBB: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uHB: { value: new Array(16).fill(1) }, uNB: { value: 0 },
 };
 Object.assign(oceanU, SKYU);
-const WAVE_DECL = `uniform float uTime; uniform float uAmp; uniform float uSwell; uniform float uPh[${NW}]; uniform vec4 uW[${NW}]; uniform vec4 uWp[${NW}];`;
+const WAVE_DECL = `uniform float uTime; uniform float uAmp; uniform float uSwell; uniform float uPh[${NW}]; uniform vec4 uW[${NW}]; uniform vec4 uWp[${NW}];
+  uniform float uGerS; uniform sampler2D uFA; uniform sampler2D uFB; uniform vec4 uFG; uniform vec2 uFL; uniform float uFOn; uniform float uHs;
+  uniform vec4 uBA[4]; uniform vec4 uBB[4]; uniform float uHB[16]; uniform float uNB;
+  float hbAt(float u) { float x = clamp(u, 0.0, 1.0) * 15.0; float r = uHB[0]; for (int j = 0; j < 15; j++) { if (float(j) <= x) r = mix(uHB[j], uHB[j + 1], clamp(x - float(j), 0.0, 1.0)); } return r; }`;
 const oceanMat = new THREE.ShaderMaterial({
   side: THREE.DoubleSide, fog: false, uniforms: oceanU,
   vertexShader: WAVE_DECL + `
-    varying vec3 vWorld; varying float vAtt; varying float vAttS; varying float vCrest;
+    varying vec3 vWorld; varying float vAtt; varying float vAttS; varying float vCrest; varying vec2 vP0;
     void main(){
       vec2 p0 = position.xz; float d = length(p0);
       float att = 1.0 - smoothstep(1200.0, 6000.0, d), attS = 1.0 - smoothstep(150.0, 500.0, d);
       vec3 P = vec3(p0.x, 0.0, p0.y); float crest = 0.0;
       for (int i = 0; i < ${NW}; i++) {
-        float a = uW[i].w * (uWp[i].z > 0.5 ? uAmp : uSwell) * (i >= 3 ? attS : 1.0) * att;
+        float a = uW[i].w * (uWp[i].z > 0.5 ? uGerS : uSwell) * (i >= 3 ? attS : 1.0) * att;
         float th = dot(uW[i].xy, p0) * uW[i].z + uWp[i].x * uTime + uWp[i].y + uPh[i];
         float s = sin(th), c = cos(th);
         P.y += a * s; P.x += uWp[i].w * uW[i].z * a * uW[i].x * c * 6.0; P.z += uWp[i].w * uW[i].z * a * uW[i].y * c * 6.0;
         if (uWp[i].z > 0.5) crest += a * s;
       }
-      vAtt = att; vAttS = attS; vCrest = crest / max(uAmp * 1.1, 0.25);
+      // mer du vent FFT (2 cascades) + vague d'étrave, creux et vague de hanche ; eau aplatie dans l'empreinte des coques
+      vec2 ua = (p0 + uFG.xy) * uFL.x + 0.5 / 64.0, ub = (p0 + uFG.zw) * uFL.y + 0.5 / 64.0;
+      vec4 fa = texture2D(uFA, ua) * uFOn, fb = texture2D(uFB, ub) * uFOn;
+      float attF = 1.0 - smoothstep(250.0, 900.0, d); // au-delà, le maillage est trop lâche : la mer FFT ne passe plus que par les normales
+      P += fa.xyz * attF; crest += fa.y * attF + fb.y * 0.5 * attS;
+      for (int i = 0; i < 4; i++) { if (float(i) >= uNB) break;
+        vec2 d = p0 - uBA[i].xy, f = uBA[i].zw; float L = uBB[i].y, v = uBB[i].x, s = uBB[i].z - dot(d, f), t = dot(d, vec2(-f.y, f.x)), u = s / L;
+        if (u < -0.4 || u > 1.6 || abs(t) > L * 0.7) continue;
+        float ds = abs(t) - hbAt(u), A = min(0.9, 0.011 * v * v), side = exp(-pow(max(ds, 0.0) / (0.9 + 0.08 * v), 2.0));
+        float bw = A * (exp(-pow((u - 0.1) / 0.13, 2.0)) - 0.35 * exp(-pow((u - 0.55) / 0.2, 2.0)) + 0.45 * exp(-pow((u - 1.08) / 0.1, 2.0))) * side;
+        float inside = (1.0 - smoothstep(-0.5, 0.3, ds)) * step(-0.02, u) * step(u, 1.02);
+        P.y += bw * (1.0 - inside); P = mix(P, vec3(p0.x, uBB[i].w - 0.3, p0.y), inside);
+      }
+      vP0 = p0;
+      vAtt = att; vAttS = attS; vCrest = crest / max(uHs * 0.55, 0.25);
       vWorld = P;
       gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.0);
     }`,
   fragmentShader: SKY_FN + WAVE_DECL + `
     uniform float uFog; uniform vec2 uG; uniform vec3 uWind; uniform float uRain; uniform float uGustT;
     uniform sampler2D uSdf; uniform vec2 uSdfC; uniform float uSdfS; uniform float uSdfOn;
-    varying vec3 vWorld; varying float vAtt; varying float vAttS; varying float vCrest;
+    varying vec3 vWorld; varying float vAtt; varying float vAttS; varying float vCrest; varying vec2 vP0;
     void main(){
-      vec2 p = vWorld.xz; float dx = 0.0, dz = 0.0;
+      vec2 p = vWorld.xz; float dx = 0.0, dz = 0.0, foamF = 0.0;
       for (int i = 0; i < ${NW}; i++) {
-        float a = uW[i].w * (uWp[i].z > 0.5 ? uAmp : uSwell) * (i >= 3 ? vAttS : 1.0) * vAtt;
+        float a = uW[i].w * (uWp[i].z > 0.5 ? uGerS : uSwell) * (i >= 3 ? vAttS : 1.0) * vAtt;
         float c = a * uW[i].z * cos(dot(uW[i].xy, p) * uW[i].z + uWp[i].x * uTime + uWp[i].y + uPh[i]);
         dx += c * uW[i].x; dz += c * uW[i].y;
       }
       float camD = length(cameraPosition - vWorld);
+      if (uFOn > 0.5) { // pentes de la mer FFT (différences finies) et écume des crêtes déferlantes
+        float e = 1.0 / 64.0; vec2 ua = (vP0 + uFG.xy) * uFL.x + 0.5 / 64.0, ub = (vP0 + uFG.zw) * uFL.y + 0.5 / 64.0;
+        float kA = (1.0 - smoothstep(900.0, 5000.0, camD)) * vAtt / (2.0 * e / uFL.x), kB = (1.0 - smoothstep(80.0, 450.0, camD)) / (2.0 * e / uFL.y);
+        dx += (texture2D(uFA, ua + vec2(e, 0.0)).y - texture2D(uFA, ua - vec2(e, 0.0)).y) * kA + (texture2D(uFB, ub + vec2(e, 0.0)).y - texture2D(uFB, ub - vec2(e, 0.0)).y) * kB;
+        dz += (texture2D(uFA, ua + vec2(0.0, e)).y - texture2D(uFA, ua - vec2(0.0, e)).y) * kA + (texture2D(uFB, ub + vec2(0.0, e)).y - texture2D(uFB, ub - vec2(0.0, e)).y) * kB;
+        foamF = texture2D(uFA, ua).w;
+      }
       float df = 1.0 - smoothstep(40.0, 700.0, camD);
       vec2 r1 = vec2(0.8,0.6); float c1 = 0.045*cos(dot(r1,p)*1.3 + uTime*3.6 + uPh[2]*7.0)*df;
       vec2 r2 = vec2(-0.5,0.86); float c2 = 0.046*cos(dot(r2,p)*2.1 + uTime*4.5 + uPh[3]*5.0)*df;
@@ -749,12 +896,24 @@ const oceanMat = new THREE.ShaderMaterial({
       // moutons : crêtes de la mer du vent, fragmentés par du bruit ancré dans l'eau
       float wk = smoothstep(0.55, 1.35, uAmp);
       float nz = fbm(wp * 0.11 + vec2(uTime * 0.05, 0.0));
-      float caps = smoothstep(0.62, 0.95, vCrest * 0.75 + nz * 0.55) * wk;
+      float caps = uFOn > 0.5 ? smoothstep(0.12, 0.75, foamF * (0.6 + 0.8 * nz)) * smoothstep(0.3, 0.9, uAmp) : smoothstep(0.62, 0.95, vCrest * 0.75 + nz * 0.55) * wk;
       // stries d'écume dans le sens du vent par mer forte
       vec2 q = vec2(dot(wp, wd), dot(wp, vec2(-wd.y, wd.x)));
       float streak = smoothstep(0.62, 0.9, fbm(vec2(q.x * 0.012, q.y * 0.18))) * smoothstep(22.0, 34.0, uWind.z) * 0.6;
       float foam = clamp(caps * (1.0 + gust * 0.6) + streak * (0.4 + 0.6 * clamp(vCrest, 0.0, 1.0)), 0.0, 1.0) * vAtt * (0.4 + 0.6 * df);
       col = mix(col, vec3(0.9, 0.95, 0.98) * (light * 0.95 + 0.05) + vec3(0.5) * uFlash, foam * 0.85);
+      // contact eau/coque : liseré d'écume le long de la flottaison, bras de Kelvin depuis l'étrave, sillage turbulent derrière le tableau
+      if (uNB > 0.5) { float hf = 0.0, nn = fbm(wp * 0.8 + vec2(uTime * 0.35, -uTime * 0.2));
+        for (int i = 0; i < 4; i++) { if (float(i) >= uNB) break;
+          vec2 d = vWorld.xz - uBA[i].xy, f = uBA[i].zw; float L = uBB[i].y, v = uBB[i].x, s = uBB[i].z - dot(d, f), at = abs(dot(d, vec2(-f.y, f.x))), u = s / L;
+          float sv = smoothstep(0.4, 3.5, v); if (sv <= 0.0 || u < -0.3 || u > 9.0) continue;
+          float ds = at - hbAt(u);
+          if (u < 1.05) hf += exp(-max(ds, 0.0) / (0.3 + 0.05 * v)) * step(-0.15, ds) * (0.45 + 0.55 * (1.0 - smoothstep(0.0, 0.5, u))) * sv * (0.6 + 0.6 * nn);
+          float th = atan(at, max(s, 0.01)), thk = min(0.34, 0.42 / max(v / sqrt(9.81 * L), 0.01));
+          if (s > 0.0 && ds > 0.0) hf += exp(-pow((th - thk) * s / (0.5 + 0.05 * s), 2.0)) * exp(-s / (4.0 * L)) * sv * smoothstep(0.0, 0.3, u) * (0.35 + 0.65 * nn) * 0.55;
+          float s2 = s - L; if (s2 > 0.0) { float w = uHB[15] * 1.05 + 0.07 * s2; hf += (1.0 - smoothstep(w * 0.5, w, at)) * exp(-s2 / (3.5 * L)) * sv * (0.4 + 0.7 * nn); }
+        }
+        hf = clamp(hf, 0.0, 1.0); col += vec3(0.02, 0.09, 0.1) * light * clamp(hf * 2.0, 0.0, 1.0); col = mix(col, vec3(0.92, 0.96, 1.0) * (light * 0.95 + 0.05), hf * 0.85); }
       // hauts-fonds : eau turquoise puis sableuse près des côtes, ressac blanc sur la ligne d'échouement
       if (uSdfOn > 0.5) {
         vec2 su = (vWorld.xz - uSdfC) / uSdfS + 0.5;
@@ -1004,7 +1163,7 @@ const GLOW_TEX = (() => { const c = document.createElement('canvas'); c.width = 
   gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.18, 'rgba(255,255,255,0.85)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.18)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
 const VANE_GEO = new THREE.BoxGeometry(0.05, 0.05, 1.5), VANE_FIN = new THREE.BoxGeometry(0.02, 0.32, 0.36);
 /* ----- Modèle 3D IMOCA importé (maillage STL allégé : coque, pont, quille, foils, safrans ; 2 niveaux de détail) ----- */
-const IMOCA_MODEL = { hi: null, lo: null }, IMOCA_VIS = [];
+const IMOCA_MODEL = { hi: null, lo: null }, IMOCA_VIS = []; let MODELS_P = Promise.resolve();
 function parseModelBin(buf) {
   const dv = new DataView(buf); if (String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)) !== 'OFM1') throw new Error('format');
   const hl = dv.getUint32(4, true), head = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, hl))), base = 8 + hl, out = { meta: head.meta, geo: {} };
@@ -1030,14 +1189,14 @@ function applyImocaModel(V) {
   V.foilPos = [...M.meta.foilRoot, 1.5, 1.1]; V.sprit.position.y = M.meta.bowY - 0.1;
   if (V.isPlayer) list.forEach(o => { o.castShadow = true; o.receiveShadow = true; });
   if (V.ghost) list.forEach(o => { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; });
-  V.stlMeshes = list; V.stl = M;
+  V.stlMeshes = list; V.stl = M; V.fp = null;
 }
 function loadImocaModels() {
   if (typeof fetch !== 'function') return;
   // binaire OFM1 encodé en base64 dans un JSON (servi tel quel par Vercel comme par l'hébergement d'artifacts)
   const b64 = t => { const bin = atob(t), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
   const get = (lvl, url) => fetch(url).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(j => { IMOCA_MODEL[lvl] = parseModelBin(b64(j.b64)); IMOCA_VIS.forEach(applyImocaModel); }).catch(() => {});
-  get('lo', 'models/imoca-lo.json').then(() => get('hi', 'models/imoca-hi.json'));
+  return get('lo', 'models/imoca-lo.json').then(() => get('hi', 'models/imoca-hi.json'));
 }
 function makeBoat(hull, accent, name, isPlayer) {
   useHull('imoca');
@@ -2410,16 +2569,23 @@ function showMenu(view = 'home') {
   const day = parisDay(), pick = dailyPick(day), dayTxt = new Date(day + 'T12:00:00').toLocaleDateString(LOC(), { weekday: 'long', day: 'numeric', month: 'long' });
   const coastCard = c => `<div class="c"><img src="${courseThumb(c)}" alt=""><b>${cN(c)}</b><span>${cZ(c)} · ${c.nm} nm · ${estTxt(c)}</span>${recTxt(c.id)}<button data-coast="${c.id}">${T('Prendre le départ', 'Start')}</button></div>`;
   let html = HEAD;
-  if (view === 'home') html += `${careerBadge()}${RESUME}
-    <div class="tiles">
-      <div class="tile daily"><h2>🌐 ${T('Défi du jour', 'Daily challenge')}</h2><p>${dayTxt} · ${T('même météo pour tous jusqu\'à minuit, chrono vérifié par rejeu, fantômes du classement.', 'same weather for everyone until midnight, replay-verified times, leaderboard ghosts.')}</p>
-        <div class="dprev">${pick.courses.map(id => `<div><img src="${courseThumb(COURSES[id])}" alt=""><b>${cN(COURSES[id])}</b><span>${cZ(COURSES[id])}</span></div>`).join('')}</div>
-        <div class="chips">${pick.classes.map(id => `<span class="chip">${clsName(id)}</span>`).join('')}</div>
-        <button id="goMulti" data-default>${T('Relever les défis du jour', 'Take on today\'s challenges')}</button></div>
-      <div class="tile"><h2>🧭 Solo</h2><p>${T(`Transat, Mini Transat, Fastnet, ${COASTAL.length} parcours côtiers à météo aléatoire contre 5 bots, navigation libre. 4 classes.`, `Transat, Mini Transat, Fastnet, ${COASTAL.length} coastal courses with random weather against 5 bots, free sailing. 4 classes.`)}</p><button id="goSolo">${T('Jouer en solo', 'Play solo')}</button></div>
-      <div class="tile"><h2>⚙ ${T('Réglages', 'Settings')}</h2><p>${T('Langue, qualité graphique, halo des bouées, hauts-fonds, interface téléphone, profil en ligne.', 'Language, graphics quality, mark halos, shallows, phone layout, online profile.')}</p><button id="goSet2" class="sec">${T('Ouvrir les réglages', 'Open settings')}</button></div>
-    </div>
-    <details class="ctl"><summary>${T('Commandes', 'Controls')}</summary>${CONTROLS}</details>${FOOT}`;
+  $('overlay').classList.toggle('mm', view === 'home'); MENU_CINE = view === 'home';
+  if (view === 'home') { const PR = loadProfile(), LV = levelOf(PR.pts), dc = pick.courses.map(id => cN(COURSES[id])).join(' · '), dl = pick.classes.map(clsName).join(' · ');
+    html = `<div class="mmwrap"><div class="logo">OFF<span>ING</span></div><p class="mmtag">Same wind. Your race.</p>
+    <div class="mmprof">${NET.me ? `🌐 <b>${esc(NET.me.name)}</b> · ` : ''}⭐ ${nf(PR.pts)} pts · ${lvlName(LV.name)}<div class="bar"><i style="width:${Math.round(LV.prog * 100)}%"></i></div></div>
+    <nav class="mmnav">
+      ${running ? `<button id="resume"><b>▶ ${T('Reprendre la course', 'Resume race')}</b><small>${MODE === 'race' ? cN(COURSE) : T('Navigation libre', 'Free sailing')} · ${CLS.name}</small></button>` : sv ? `<button id="goLoad"><b>💾 ${T('Continuer', 'Continue')}</b><small>${svCourse} · ${sv.mode === 'race' ? fmtRace(sv.gameT) : fmtClock(sv.gameT)}</small></button>` : ''}
+      <button id="goMulti" data-default><b>🌐 ${T('Défi du jour', 'Daily challenge')}</b><small>${dc} — ${dl}</small></button>
+      <button id="goSolo"><b>🧭 Solo</b><small>${T(`Transat, Mini Transat, Fastnet, ${COASTAL.length} côtiers, entraînement`, `Transat, Mini Transat, Fastnet, ${COASTAL.length} coastal courses, training`)}</small></button>
+      <button id="goBoards"><b>🏆 ${T('Classements', 'Leaderboards')}</b><small>${NET.ok ? T('Les 4 classements du jour en ligne', 'Today\'s 4 online leaderboards') : T('Tes essais et fantômes du jour', 'Your attempts and ghosts today')}</small></button>
+      <button id="goSet"><b>⚙ ${T('Réglages', 'Settings')}</b><small>${T('Langue, graphismes, son, profil en ligne', 'Language, graphics, sound, online profile')}</small></button>
+      <button id="goHelp"><b>📖 ${T('Aide & commandes', 'Help & controls')}</b><small>${T('Manœuvres, voiles, foils, routeur', 'Manoeuvres, sails, foils, router')}</small></button>
+    </nav>
+    <div class="mmfoot"><span class="mtools"><button data-lang="fr" class="${LANG === 'fr' ? 'on' : ''}">FR</button><button data-lang="en" class="${LANG === 'en' ? 'on' : ''}">EN</button></span><span>${T('Géographie et météo simplifiées, modèle de jeu.', 'Simplified geography and weather, game model.')}</span></div></div>
+    <aside class="mmside"><h3>🌐 ${T('Défi du jour', 'Daily challenge')} · ${dayTxt}</h3>
+      <div class="dprev">${pick.courses.map(id => `<div><img src="${courseThumb(COURSES[id])}" alt=""><b>${cN(COURSES[id])}</b><span>${cZ(COURSES[id])}</span></div>`).join('')}</div>
+      <div class="chips">${pick.classes.map(id => `<span class="chip">${clsName(id)}</span>`).join('')}</div>
+      <button id="goMulti2">${T('Relever les défis', 'Take the challenges')} →</button></aside>`; }
   else if (view === 'multi') html += `${BACK}
     <h3>🌐 ${T('Défi du jour', 'Daily challenge')} — ${dayTxt}</h3>
     <p>${T('Deux parcours et deux classes par jour, tirés au sort. Même météo, mêmes prévisions et même hasard pour tous jusqu\'à minuit. Ton premier essai sur chaque défi rapporte les points de place ; ensuite, seul un nouveau record du jour rapporte un bonus. Pas encore de fantôme ? Tu cours contre les bots.', 'Two courses and two classes per day, drawn at random. Same weather, same forecasts and same luck for everyone until midnight. Your first attempt on each challenge earns placing points; after that only a new daily record earns a bonus. No ghosts yet? You race the bots.')}</p>
@@ -2451,8 +2617,8 @@ function showMenu(view = 'home') {
   $('card').innerHTML = html; $('card').classList.add('wide');
   const on = (id, f) => { if ($(id)) $(id).onclick = f; };
   $('card').querySelectorAll('[data-lang]').forEach(b => b.onclick = () => { setLang(b.dataset.lang); showMenu(view); });
-  on('goSet', () => showMenu('settings')); on('goSet2', () => showMenu('settings'));
-  on('back', () => showMenu('home')); on('goSolo', () => showMenu('solo')); on('goMulti', () => showMenu('multi')); on('goHelp', () => showHelp(true));
+  on('goSet', () => showMenu('settings')); on('goSet2', () => showMenu('settings')); on('goBoards', () => showMenu('multi')); on('goMulti2', () => showMenu('multi'));
+  on('back', () => showMenu('home')); on('goSolo', () => showMenu('solo')); on('goMulti', () => showMenu('multi')); on('goHelp', () => showHelp(view));
   on('mobToggle', () => { setMobile(!isMobile()); showMenu(view); }); on('sndToggle', () => { setSound(!AUD.on); showMenu(view); });
   $('card').querySelectorAll('[data-set]').forEach(b => b.onclick = () => { const k = b.dataset.set, v = b.dataset.val; SETTINGS[k] = v === 'true' ? true : v === 'false' ? false : v; saveSettings();
     if (k === 'lang') setLang(v); else applyGfx(SETTINGS.gfx); showMenu(view); });
@@ -2462,17 +2628,56 @@ function showMenu(view = 'home') {
   $('card').querySelectorAll('[data-daily]').forEach(bt => bt.onclick = () => { const cl = bt.dataset.dcls; if (cl && CLS.id !== cl) setClass(cl); startDaily(bt.dataset.daily); });
   $('card').querySelectorAll('[data-board]').forEach(bt => bt.onclick = () => showBoard(bt.dataset.board, bt.dataset.dcls));
   bindNetBlock(); bindRecovery();
-  $('card').querySelectorAll('[data-coast]').forEach(bt => bt.onclick = () => { const c = COURSES[bt.dataset.coast]; solo(); initAudio(); setupMode('race', c.id); start(T(`Départ : ${cN(c)} ! ${c.marks.length - 1} marque${c.marks.length > 2 ? 's' : ''} à virer, ≈ ${c.nm} nm.`, `Start: ${cN(c)}! ${c.marks.length - 1} mark${c.marks.length > 2 ? 's' : ''} to round, ≈ ${c.nm} nm.`)); });
-  on('goMiniT', () => { solo(); initAudio(); setupMode('race', 'minitransat'); start(T('Départ de la Mini Transat ! Étape 1 : Les Sables → La Palma (≈ 1 350 nm).', 'Mini Transat start! Leg 1: Les Sables → La Palma (≈ 1,350 nm).')); });
-  on('goRace', () => { solo(); initAudio(); setupMode('race', 'transat'); start(T('Départ de la transat ! Le routage vers l\'arrivée se calcule (ligne rose sur la carte).', 'Transat start! Routing to the finish is being computed (pink line on the map).')); });
-  on('goFast', () => { solo(); initAudio(); setupMode('race', 'fastnet'); start(T('Départ du Fastnet ! Cap à l\'ouest dans la Manche, le phare du Fastnet est à ≈ 300 nm.', 'Fastnet start! Head west down the Channel, the Fastnet lighthouse is ≈ 300 nm away.')); });
-  on('goTrain', () => { solo(); initAudio(); setupMode('train'); start(T('Navigation libre : valide les bouées, teste manœuvres, routeur, voiles et foils', 'Free sailing: round the buoys, try manoeuvres, router, sails and foils')); });
-  if ($('goLoad')) $('goLoad').onclick = () => { initAudio(); restoreGame(sv); start(T('Partie reprise', 'Game resumed')); };
+  $('card').querySelectorAll('[data-coast]').forEach(bt => bt.onclick = () => { const c = COURSES[bt.dataset.coast]; solo(); initAudio(); launch(ldInfo(c), () => setupMode('race', c.id), T(`Départ : ${cN(c)} ! ${c.marks.length - 1} marque${c.marks.length > 2 ? 's' : ''} à virer, ≈ ${c.nm} nm.`, `Start: ${cN(c)}! ${c.marks.length - 1} mark${c.marks.length > 2 ? 's' : ''} to round, ≈ ${c.nm} nm.`)); });
+  on('goMiniT', () => { solo(); initAudio(); launch(ldInfo(COURSES.minitransat), () => setupMode('race', 'minitransat'), T('Départ de la Mini Transat ! Étape 1 : Les Sables → La Palma (≈ 1 350 nm).', 'Mini Transat start! Leg 1: Les Sables → La Palma (≈ 1,350 nm).')); });
+  on('goRace', () => { solo(); initAudio(); launch(ldInfo(COURSES.transat), () => setupMode('race', 'transat'), T('Départ de la transat ! Le routage vers l\'arrivée se calcule (ligne rose sur la carte).', 'Transat start! Routing to the finish is being computed (pink line on the map).')); });
+  on('goFast', () => { solo(); initAudio(); launch(ldInfo(COURSES.fastnet), () => setupMode('race', 'fastnet'), T('Départ du Fastnet ! Cap à l\'ouest dans la Manche, le phare du Fastnet est à ≈ 300 nm.', 'Fastnet start! Head west down the Channel, the Fastnet lighthouse is ≈ 300 nm away.')); });
+  on('goTrain', () => { solo(); initAudio(); launch({ t: T('Navigation libre', 'Free sailing'), s: CLS.name + T(' · archipel d\'entraînement', ' · training archipelago') }, () => setupMode('train'), T('Navigation libre : valide les bouées, teste manœuvres, routeur, voiles et foils', 'Free sailing: round the buoys, try manoeuvres, router, sails and foils')); });
+  if ($('goLoad')) $('goLoad').onclick = () => { initAudio(); launch({ t: T('Reprise de la partie', 'Resuming game'), s: svCourse }, () => restoreGame(sv), T('Partie reprise', 'Game resumed')); };
   if ($('resume')) $('resume').onclick = () => { initAudio(); $('overlay').classList.add('hide'); paused = false; };
   $('overlay').classList.remove('hide');
 }
 
-function start(msg) { $('overlay').classList.add('hide'); running = true; paused = false; toast(msg, 5000); if (MODE === 'race' && GHOST.list.length && GHOST.on) setTimeout(() => toast(DAILY.on ? `👻 ${GHOST.list.length} fantôme${GHOST.list.length > 1 ? 's' : ''} en course (tes essais du jour) — touche Y pour masquer` : `👻 Ton fantôme (record ${fmtDur(GHOST.list[0].T)}) est en course — touche Y pour le masquer`, 4000), 5200); }
+/* ----- Écran de chargement : prépare tout avant le départ (parcours, modèles, météo, routage, côtes, vagues, shaders) ----- */
+let LAUNCHING = false, MENU_CINE = false;
+// menu principal : interface de course masquée, seule la scène 3D reste en fond
+if (typeof MutationObserver !== 'undefined') new MutationObserver(() => { const o = $('overlay'); document.body.classList.toggle('inmenu', o.classList.contains('mm') && !o.classList.contains('hide')); }).observe($('overlay'), { attributes: true, attributeFilter: ['class'] });
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => r())), ldSleep = ms => new Promise(r => setTimeout(r, ms));
+const LD_TIPS = [
+  ['Lis les isochrones : la route la plus courte est rarement la plus rapide.', 'Read the isochrones: the shortest route is rarely the fastest.'],
+  ['Une manœuvre coûte du temps : enchaîne-les au bon moment, pas trop souvent.', 'Every manoeuvre costs time: pick your moments, don\'t overdo them.'],
+  ['Le halo autour d\'une bouée montre la zone où elle est validée.', 'The glow around a mark shows the zone where it counts as rounded.'],
+  ['Près des côtes, l\'eau turquoise et le ressac annoncent l\'échouement.', 'Near land, turquoise water and surf warn you before you run aground.'],
+  ['Baisse le foil sous le vent ; un foil au vent freine le bateau.', 'Lower the leeward foil; a windward foil slows the boat down.'],
+  ['Chaque nouvelle prévision recalcule la route : c\'est le moment de revoir ta stratégie.', 'Each new forecast recomputes the route: time to rethink your strategy.'],
+  ['En Mini et en Class40, prends un ris avant le départ au lof sous spi.', 'In a Mini or Class40, reef before broaching under spinnaker.'],
+  ['Défi du jour : même météo pour tout le monde, seul ton routage fait la différence.', 'Daily challenge: same weather for everyone, only your routing makes the difference.'],
+];
+function ldInfo(c, daily) { return { t: (daily ? T('Défi du jour · ', 'Daily challenge · ') : '') + cN(c), s: CLS.name + (c.coastal ? ` · ${cZ(c)} · ${c.nm} nm` : ''), img: c.box ? courseThumb(c, 640, 360) : null }; }
+async function launch(info, prep, msg) {
+  if (LAUNCHING) return; LAUNCHING = true; MENU_CINE = false;
+  const tip = LD_TIPS[Math.floor(Math.random() * LD_TIPS.length)], step = (t, p) => { $('ldStep').textContent = t; $('ldBar').style.width = Math.round(p * 100) + '%'; };
+  $('ldTitle').textContent = info.t; $('ldSub').textContent = info.s || ''; $('ldBg').style.backgroundImage = info.img ? `url(${info.img})` : ''; $('ldTip').textContent = '💡 ' + T(tip[0], tip[1]);
+  $('loader').classList.remove('hide'); $('overlay').classList.add('hide'); step(T('Préparation du parcours…', 'Preparing the course…'), 0.04);
+  let m = msg;
+  try {
+    await nextFrame(); await nextFrame();
+    const r = await prep(); if (m === undefined) m = r;
+    step(T('Modèles 3D…', '3D models…'), 0.2); await nextFrame();
+    if (CLS.id === 'imoca') await Promise.race([MODELS_P, ldSleep(6000)]);
+    IMOCA_VIS.forEach(applyImocaModel); if (player.vis) player.vis.fp = null;
+    step(T('Météo et prévisions…', 'Weather and forecasts…'), 0.3); await nextFrame(); try { drawMap(); } catch (e) {}
+    const t0 = performance.now();
+    while (ROUTE.busy && performance.now() - t0 < 15000) { const t1 = performance.now(); while (ROUTE.busy && performance.now() - t1 < 40) runJobs();
+      step(T(`Calcul du routage… ${ROUTE.steps} isochrones`, `Routing… ${ROUTE.steps} isochrones`), 0.35 + 0.45 * Math.min(1, ROUTE.steps / 70)); await nextFrame(); }
+    step(T('Côtes, hauts-fonds et vagues…', 'Coasts, shallows and waves…'), 0.84); await nextFrame(); SDF.valid = false; computeShoreField(); oceanFFTUpdate(0, true);
+    step(T('Préparation des shaders…', 'Compiling shaders…'), 0.93); await nextFrame(); try { updateCamera(); renderer.compile(scene, camera); } catch (e) {}
+    step(T('Prêt !', 'Ready!'), 1); await nextFrame(); await ldSleep(300);
+  } catch (e) { console.error(e); }
+  finally { LAUNCHING = false; }
+  $('loader').classList.add('hide'); start(m || '');
+}
+function start(msg) { MENU_CINE = false; $('overlay').classList.add('hide'); $('overlay').classList.remove('mm'); running = true; paused = false; toast(msg, 5000); if (MODE === 'race' && GHOST.list.length && GHOST.on) setTimeout(() => toast(DAILY.on ? `👻 ${GHOST.list.length} fantôme${GHOST.list.length > 1 ? 's' : ''} en course (tes essais du jour) — touche Y pour masquer` : `👻 Ton fantôme (record ${fmtDur(GHOST.list[0].T)}) est en course — touche Y pour le masquer`, 4000), 5200); }
 const HELP_EN = () => `<h1>Help</h1>
     <h3>Manoeuvres</h3><p>The skipper does <b>one manoeuvre at a time</b>; the next ones wait in a queue (3 max). Durations are in race time and depend on the class: a <b>tack</b> or <b>gybe</b> costs speed for a few minutes, a <b>sail change</b> several minutes, moving the <b>foils</b> a few minutes. The helm is locked during a tack or gybe.</p>
     <h3>Forecasts</h3><p>Maps and the router use a <b>forecast</b> published every 6 to 9 min of real play (every 1 h 30 of race time in the daily challenge). It is reliable at short range and drifts further out. Each new run recomputes the route: time to review your strategy.</p>
@@ -2483,7 +2688,7 @@ const HELP_EN = () => `<h1>Help</h1>
     <h3>Controls</h3>${CONTROLS}`;
 function showHelp(fromMenu) {
   if (finishedShown && !fromMenu) return; if (running) paused = true;
-  if (LANG === 'en') { $('card').innerHTML = HELP_EN() + `<div class="go"><button id="hClose" data-default>${fromMenu ? '← Menu' : '▶ Resume'}</button></div>`; $('overlay').classList.remove('hide'); $('hClose').onclick = () => { if (fromMenu) return showMenu('solo'); $('overlay').classList.add('hide'); paused = false; }; return; }
+  if (LANG === 'en') { $('card').innerHTML = HELP_EN() + `<div class="go"><button id="hClose" data-default>${fromMenu ? '← Menu' : '▶ Resume'}</button></div>`; $('overlay').classList.remove('hide'); $('hClose').onclick = () => { if (fromMenu) return showMenu(typeof fromMenu === 'string' ? fromMenu : 'solo'); $('overlay').classList.add('hide'); paused = false; }; return; }
   $('card').innerHTML = `<h1>Aide</h1>
     <h3>Manœuvres</h3><p>Le skipper fait <b>une manœuvre à la fois</b>, les suivantes attendent dans une file (3 au plus). Durées en temps de course : <b>virement</b> 5 min (jusqu'à −55 %), <b>empannage</b> 6 min, <b>changement de voile</b> 10 min (−38 %), <b>foils</b> 4 min (−8 %). Pendant un virement ou un empannage la barre est bloquée. Passer le vent sans manœuvre demandée = manœuvre « non préparée », qui coûte quand même.</p>
     <h3>Prévisions météo</h3><p>Les cartes et le routeur utilisent une <b>prévision</b>, publiée toutes les 6 à 9 min de jeu réel (compteur dans le panneau). Elle est fiable à courte échéance puis s'écarte de la réalité : dépressions décalées, en avance ou en retard, vent ±12 % à 4-5 jours. À chaque nouveau run, le routage est recalculé : c'est le moment de revoir ta stratégie.</p>
@@ -2496,7 +2701,7 @@ function showHelp(fromMenu) {
     <h3>Commandes</h3>${CONTROLS}
     <div class="go"><button id="hClose" data-default>${fromMenu ? '← Menu' : '▶ Reprendre'}</button></div>`;
   $('overlay').classList.remove('hide');
-  $('hClose').onclick = () => { if (fromMenu) return showMenu('solo'); $('overlay').classList.add('hide'); paused = false; };
+  $('hClose').onclick = () => { if (fromMenu) return showMenu(typeof fromMenu === 'string' ? fromMenu : 'solo'); $('overlay').classList.add('hide'); paused = false; };
 }
 /* ----- Fantômes : en solo ton record ; en défi du jour jusqu'à 10 traces (tes essais du jour, plus tard le classement en ligne) ----- */
 const GHOST = { on: true, list: [], pools: {} };
@@ -2672,7 +2877,8 @@ const dailyKey = () => `gl3d_daily_${DAILY.day}_${COURSE.id}_${CLS.id}`;
 function dailyLoad(key) { try { const d = JSON.parse(localStorage.getItem(key || dailyKey())); if (d && d.runs) return d; } catch (e) {} return { n: 0, runs: [], pts: false }; }
 function dailySave(d) { try { localStorage.setItem(dailyKey(), JSON.stringify(d)); } catch (e) { d.runs.forEach((r, i) => { if (i > 4) r.trace = r.trace.filter((p, j) => j % 3 === 0); }); try { localStorage.setItem(dailyKey(), JSON.stringify(d)); } catch (e2) {} } }
 function dailyCleanup() { try { const keep = 'gl3d_daily_' + DAILY.day; for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith('gl3d_daily_') && !k.startsWith(keep)) localStorage.removeItem(k); } } catch (e) {} }
-async function startDaily(id) {
+function startDaily(id) { return launch(ldInfo(COURSES[id], true), () => startDailyPrep(id)); }
+async function startDailyPrep(id) {
   DAILY.on = true; DAILY.day = parisDay(); DAILY.seed = hash32(DAILY.day + '|' + id); DAILY.net = null; dailyCleanup();
   initAudio();
   if (NET.ok) { const m = $('card').querySelector(`[data-daily="${id}"]`); if (m) { m.disabled = true; m.textContent = 'Chargement des fantômes…'; }
@@ -2683,7 +2889,7 @@ async function startDaily(id) {
   DAILY.K = 0; DAILY.acc = 0; DAILY.lastCtl = null;
   DAILY.log = { v: 1, eng: ENGINE_VER, day: DAILY.day, course: id, cls: CLS.id, seed: DAILY.seed, dstep: DSTEP, init: snapBoat(player), ev: [] };
   const d = dailyLoad(), ng = DAILY.net && DAILY.net.ghosts && DAILY.net.ghosts.length;
-  start(T(`Défi du jour · ${cN(COURSES[id])} · ${CLS.name} — essai n°${d.n + 1}. Même météo pour tous aujourd'hui. ${withGhosts ? (ng ? (DAILY.net.mine ? 'Fantômes : les 10 joueurs les plus proches de ton meilleur temps.' : 'Fantômes : le top 10 du jour.') : 'Tes essais du jour sont tes adversaires.') : 'Pas encore de fantôme : la flotte de bots te sert d\'adversaire.'}`,
+  return (T(`Défi du jour · ${cN(COURSES[id])} · ${CLS.name} — essai n°${d.n + 1}. Même météo pour tous aujourd'hui. ${withGhosts ? (ng ? (DAILY.net.mine ? 'Fantômes : les 10 joueurs les plus proches de ton meilleur temps.' : 'Fantômes : le top 10 du jour.') : 'Tes essais du jour sont tes adversaires.') : 'Pas encore de fantôme : la flotte de bots te sert d\'adversaire.'}`,
     `Daily challenge · ${cN(COURSES[id])} · ${CLS.name} — attempt #${d.n + 1}. Same weather for everyone today. ${withGhosts ? (ng ? (DAILY.net.mine ? 'Ghosts: the 10 players closest to your best time.' : 'Ghosts: today\'s top 10.') : 'Your own attempts are your rivals.') : 'No ghosts yet: you race the bot fleet.'}`));
 }
 function solo() { DAILY.on = false; DAILY.log = null; DAILY.net = null; }
@@ -2738,7 +2944,7 @@ function renderResults() {
     ${A ? awardHtml(A) + careerBadge() : ''}
     <table>${st.map((b, i) => `<tr class="${b.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="background:${b.color}"></span> ${b.isPlayer ? T('Vous', 'You') : b.name}</td><td style="color:#7fa3bd">${b.strat ? T(b.strat, b.strat.replace('Routage toutes les', 'Routes every').replace(' h', ' h')) : ''}</td><td style="color:#7fa3bd">${b.legT && b.legT.length ? 'E1 ' + fmtDur(b.legT[0]) + (b.finished ? ' · E2 ' + fmtDur(b.finishT - b.legT[0]) : '') : ''}</td><td style="text-align:right">${b.finished ? fmtDur(b.finishT) : T('en mer · ', 'at sea · ') + dtf(b).toFixed(0) + ' nm'}</td></tr>`).join('')}</table>
     <div class="go"><button id="again" data-default>↻ ${T('Rejouer cette course', 'Race again')}</button><button id="anaBtn" class="sec">📈 ${T('Analyse de course', 'Race analysis')}</button><button id="watch" class="sec">${T('Suivre la flotte', 'Watch the fleet')}</button><button id="toMenu" class="sec">Menu</button></div>`;
-  $('again').onclick = () => { setupMode('race', COURSE.id); start(T('Nouveau départ !', 'New start!')); };
+  $('again').onclick = () => launch(ldInfo(COURSE), () => setupMode('race', COURSE.id), T('Nouveau départ !', 'New start!'));
   $('anaBtn').onclick = () => showAnalysis();
   $('watch').onclick = () => { finishedShown = false; $('overlay').classList.add('hide'); };
   $('toMenu').onclick = () => { finishedShown = false; running = false; showMenu(); };
@@ -3033,8 +3239,9 @@ function updateFlecks(rdt, svx, svz) {
 }
 let camFov = 55, camKick = 0;
 function updateCamera() {
-  const ty = 2 + 4 * CLS.k + player.lift, baseAz = cam.mode === 'chase' ? player.dispHdg + 180 : 180, az = (baseAz + cam.az) * D2R, el = cam.elev * D2R;
-  camera.position.set(Math.sin(az) * Math.cos(el) * cam.dist, ty + Math.sin(el) * cam.dist, -Math.cos(az) * Math.cos(el) * cam.dist);
+  const cine = MENU_CINE && !$('overlay').classList.contains('hide'), cDist = cine ? 46 * Math.max(0.6, CLS.k) : cam.dist, cEl = cine ? 7 + 3 * Math.sin(realT * 0.05) : cam.elev, cAz = cine ? (realT * 3.5) % 360 : cam.az;
+  const ty = 2 + 4 * CLS.k + player.lift, baseAz = cam.mode === 'chase' || cine ? player.dispHdg + 180 : 180, az = (baseAz + cAz) * D2R, el = cEl * D2R;
+  camera.position.set(Math.sin(az) * Math.cos(el) * cDist, ty + Math.sin(el) * cDist, -Math.cos(az) * Math.cos(el) * cDist);
   camera.position.y = Math.max(camera.position.y, waveH(camera.position.x, camera.position.z) + 2.5);
   // champ de vision qui s'ouvre avec la vitesse + vibrations (vitesse, mer, claquements)
   const ds = player.dspd || player.spd, spdK = CLS.k >= 1 ? clamp((ds - 8) / 22, 0, 1) : clamp((ds - 4) / 12, 0, 1), near = cam.dist < 250 ? 1 : 0.3;
@@ -3067,6 +3274,7 @@ function frame(now) {
   for (let i = 0; i < NW; i++) { const w = WAVES[i]; wavePh[i] = ((w.dx * GX + w.dz * GZ) * w.k) % (Math.PI * 2); oceanU.uPh.value[i] = wavePh[i]; }
   updateEnv(rdt);
   oceanU.uTime.value = realT; oceanU.uAmp.value = seaAmp; oceanU.uSwell.value = swellAmp; oceanU.uG.value.set(GX % 2048, GZ % 2048);
+  oceanFFTUpdate(rdt); const md = (a, L) => ((a % L) + L) % L; oceanU.uFG.value.set(md(GX, OCN.L[0]), md(GZ, OCN.L[0]), md(GX, OCN.L[1]), md(GZ, OCN.L[1])); oceanU.uHs.value = OCN.hs; updateHullContact();
   const wa = ((player.twd || 0) + 180) * D2R; oceanU.uWind.value.set(Math.sin(wa), -Math.cos(wa), tws);
   boats.forEach(b => { if (active.includes(b)) updateBoatVisual(b, rdt); }); updateGhost(rdt);
   updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(); updateAudio(rdt);
@@ -3080,7 +3288,7 @@ function frame(now) {
 }
 resize(); { let c0 = 'imoca'; try { c0 = localStorage.getItem('gl3d_cls') || 'imoca'; } catch (e) {} setClass(c0); } setupMode('race', 'transat');
 { let pref = null; try { pref = localStorage.getItem('gl3d_mobile'); } catch (e) {} const auto = matchMedia('(pointer: coarse)').matches && Math.min(innerWidth, innerHeight) < 620; if (pref === '1' || (pref === null && auto)) setMobile(true, true); }
-loadImocaModels(); applyGfx(SETTINGS.gfx); applyStaticLang(); sailLabels(); document.documentElement.lang = LANG; showMenu(); netInit(); computeProjection(); updateHUD(); drawMap(); drawPolar();
+MODELS_P = loadImocaModels() || Promise.resolve(); applyGfx(SETTINGS.gfx); applyStaticLang(); sailLabels(); document.documentElement.lang = LANG; showMenu(); netInit(); computeProjection(); updateHUD(); drawMap(); drawPolar();
 requestAnimationFrame(frame);
 // Rejeu côté serveur (fonction Vercel) : même moteur, état de départ officiel recalculé, ordres du joueur
 window.__ENGINE = {
