@@ -444,25 +444,72 @@ function isLand(lat, lon) {
 }
 
 /* ===================== MÉTÉO ===================== */
-function gauss(lat, lon, cLat, cLon, sLat, sLon) { const dy = (lat - cLat) * 60, dx = (lon - cLon) * 60 * Math.cos(((lat + cLat) / 2) * D2R); return Math.exp(-(dy * dy / (2 * sLat * sLat) + dx * dx / (2 * sLon * sLon))); }
+function gauss(lat, lon, cLat, cLon, sLat, sLon) { const dy = (lat - cLat) * 60, dx = (lon - cLon) * 60 * Math.cos(((lat + cLat) / 2) * D2R), q = dy * dy / (2 * sLat * sLat) + dx * dx / (2 * sLon * sLon); return q > 14 ? 0 : Math.exp(-q); }
+// gaussienne allongée selon un axe (relèvement brg en degrés depuis le nord) : sa le long de l'axe, sc en travers (nm)
+function gaussAx(lat, lon, cLat, cLon, sa, sc, brg) {
+  const dy = (lat - cLat) * 60, dx = (lon - cLon) * 60 * Math.cos(((lat + cLat) / 2) * D2R), b = brg * D2R, sb = Math.sin(b), cb = Math.cos(b);
+  const u = dx * sb + dy * cb, v = dx * cb - dy * sb, q = u * u / (2 * sa * sa) + v * v / (2 * sc * sc); return q > 14 ? 0 : Math.exp(-q);
+}
+// point à `dist` nm d'un centre selon un relèvement (approximation locale, suffisante à l'échelle des systèmes)
+const llAt = (lat, lon, brg, dist) => { const b = brg * D2R, la = lat + Math.cos(b) * dist / 60; return [la, lon + Math.sin(b) * dist / (60 * Math.cos(((lat + la) / 2) * D2R))]; };
 let WX_OFF = 0, START_H = 13;
 /* ----- Défi du jour : même météo, mêmes prévisions et même hasard pour tous les joueurs du jour ; simulation à pas fixe, ordres enregistrés ----- */
-const DSTEP = 1, ENGINE_VER = 3; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
+const DSTEP = 1, ENGINE_VER = 4; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
 const DAILY = { on: false, day: '', seed: 0, K: 0, acc: 0, log: null, lastCtl: null };
 let IN_STEP = false;
 function parisDay() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
 function hash32(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function hrand(a, b) { let h = Math.imul((a ^ 0x9e3779b9) >>> 0, 0x85ebca6b) ^ Math.imul((b + 0x7f4a7c15) >>> 0, 0xc2b2ae35); h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; h = Math.imul(h, 0x297a2d39); h ^= h >>> 15; return (h >>> 0) / 4294967296; }
 function highCenter(t) { const d = (t + WX_OFF) / 86400; return [35 + 2.5 * Math.sin(d * 0.7 + 0.5), -33 + 7 * Math.sin(d * 0.45)]; }
-function lowCenters(t) { const d = (t + WX_OFF) / 86400, out = []; for (let i = 0; i < 3; i++) { const ph = (((d * 12 + i * 30) % 90) + 90) % 90; out.push({ lat: 46 + 4 * Math.sin(i * 2.1 + d * 0.3) + ph * 0.1, lon: -72 + ph, depth: 30 * Math.sin(Math.PI * ph / 90) }); } return out; }
+function lowCenters(t) { const d = (t + WX_OFF) / 86400, out = []; for (let i = 0; i < 3; i++) { const ph = (((d * 12 + i * 30) % 90) + 90) % 90; out.push({ i, ph, lat: 46 + 4 * Math.sin(i * 2.1 + d * 0.3) + ph * 0.1, lon: -72 + ph, depth: 24 * Math.sin(Math.PI * ph / 90) }); } return out; }
+/* Systèmes météo à l'instant t (mis en cache : le routage interroge des milliers de points au même instant).
+   - anticyclone des Açores et dépression d'Islande, plus compacts qu'avant ;
+   - 3 dépressions mobiles d'ouest, chacune avec son front froid (talweg étroit vers le SSW) et son front chaud (vers l'ESE) ;
+   - une dorsale entre deux dépressions successives, qui remonte de l'anticyclone vers le NNE ;
+   - une goutte froide (petite dépression isolée, lente) entre Açores et Ibérie, une partie du temps ;
+   - deux ondes tropicales qui traversent les alizés d'est en ouest ; le pot-au-noir reste près de 5° N. */
+const WXC = { t: NaN, s: null };
+function wxSystems(t) {
+  if (t === WXC.t) return WXC.s;
+  const d = (t + WX_OFF) / 86400, lows = lowCenters(t), fronts = [], ridges = [], waves = [];
+  for (const L of lows) {
+    const k = L.depth / 24; if (k < 0.12) continue;
+    const bc = 208 + 12 * Math.sin(d * 0.8 + L.i * 1.7), lc = 650 * (0.45 + 0.55 * k), bw = 112 + 10 * Math.sin(d * 0.6 + L.i), lw = 340 * k;
+    const cc = llAt(L.lat, L.lon, bc, lc * 0.55), cw = llAt(L.lat, L.lon, bw, lw * 0.55);
+    fronts.push({ cold: true, lat0: L.lat, lon0: L.lon, lat: cc[0], lon: cc[1], brg: bc, len: lc, sa: lc / 2.1, sc: 110, amp: 0.2 * L.depth, k });
+    fronts.push({ cold: false, lat0: L.lat, lon0: L.lon, lat: cw[0], lon: cw[1], brg: bw, len: lw, sa: lw / 2.2, sc: 120, amp: 0.12 * L.depth, k });
+  }
+  for (let i = 0; i < 3; i++) {
+    const ph = (((d * 12 + i * 30 + 15) % 90) + 90) % 90, a = 8.5 * Math.sin(Math.PI * ph / 90);
+    if (a > 1) ridges.push({ lat: 44 + ph * 0.08 + 2 * Math.sin(d * 0.4 + i), lon: -72 + ph, brg: 18 + 8 * Math.sin(d * 0.5 + i * 2), sa: 520, sc: 165, amp: a });
+  }
+  const ca = 10 * Math.max(0, Math.sin(d * 0.23 + 2.1)), cut = ca > 1.5 ? { lat: 36.5 + 3 * Math.sin(d * 0.21), lon: -21 + 8 * Math.sin(d * 0.13 + 1), amp: ca } : null;
+  for (let k = 0; k < 2; k++) { const x = (((d * 6.5 + k * 26) % 52) + 52) % 52, a = 2.8 * Math.sin(Math.PI * x / 52); waves.push({ lat: 13.5, lon: -16 - x, brg: 8, sa: 420, sc: 100, amp: a }); }
+  for (const o of fronts.concat(ridges, waves)) { const b = o.brg * D2R; o.sb = Math.sin(b); o.cb = Math.cos(b); o.ia = 1 / (2 * o.sa * o.sa); o.ic = 1 / (2 * o.sc * o.sc); o.r2 = 14 * 2 * Math.max(o.sa, o.sc) ** 2; }
+  return WXC.t = t, WXC.s = { d, hc: highCenter(t), lows, fronts, ridges, cut, waves };
+}
+// gaussiennes rapides (cos de la latitude du point, rejet précoce loin du système) : pressure() est appelée 4 fois par calcul de vent
+function gq(lat, lon, cl, cLat, cLon, sLat, sLon) { const dy = (lat - cLat) * 60; if (dy * dy > 28 * sLat * sLat) return 0; const dx = (lon - cLon) * 60 * cl, q = dy * dy / (2 * sLat * sLat) + dx * dx / (2 * sLon * sLon); return q > 14 ? 0 : Math.exp(-q); }
+function gqAx(lat, lon, cl, o) { const dy = (lat - o.lat) * 60; if (dy * dy > o.r2) return 0; const dx = (lon - o.lon) * 60 * cl, u = dx * o.sb + dy * o.cb, v = dx * o.cb - dy * o.sb, q = u * u * o.ia + v * v * o.ic; return q > 14 ? 0 : Math.exp(-q); }
 function pressure(lat, lon, t) {
-  const d = (t + WX_OFF) / 86400, hc = highCenter(t);
-  let p = 1011 + 18 * gauss(lat, lon, hc[0], hc[1], 650, 1100);
-  p -= 13 * gauss(lat, lon, 61, -25, 700, 900);
+  const S = wxSystems(t), hc = S.hc, cl = Math.cos(lat * D2R);
+  let p = 1011 + 17 * gq(lat, lon, cl, hc[0], hc[1], 430, 720);
+  p -= 12 * gq(lat, lon, cl, 61, -25, 470, 620);
   p -= 8 * Math.exp(-(((lat - 5) / 11) ** 2));
-  for (const L of lowCenters(t)) p -= L.depth * gauss(lat, lon, L.lat, L.lon, 380, 540);
-  p += 1.6 * Math.sin(lat / 5 + d * 0.9) * Math.sin(lon / 7 - d * 0.6);
+  for (const L of S.lows) if (L.depth > 0.5) p -= L.depth * gq(lat, lon, cl, L.lat, L.lon, 250, 340);
+  for (const F of S.fronts) p -= F.amp * gqAx(lat, lon, cl, F);
+  for (const R of S.ridges) p += R.amp * gqAx(lat, lon, cl, R);
+  if (S.cut) p -= S.cut.amp * gq(lat, lon, cl, S.cut.lat, S.cut.lon, 190, 230);
+  for (const W of S.waves) p -= W.amp * gqAx(lat, lon, cl, W);
+  p += 1.6 * Math.sin(lat / 5 + S.d * 0.9) * Math.sin(lon / 7 - S.d * 0.6);
   return p;
+}
+// zones de grains liées aux systèmes : le long des fronts froids et des ondes tropicales
+function wxConv(lat, lon, t) {
+  const S = wxSystems(t); let c = 0;
+  for (const F of S.fronts) if (F.cold) { const dy = (lat - F.lat) * 60; if (dy * dy < F.r2) c = Math.max(c, 0.85 * F.k * gaussAx(lat, lon, F.lat, F.lon, F.sa, 55, F.brg)); }
+  for (const W of S.waves) if (W.amp > 0.3 && Math.abs(lon - W.lon) < 6) c = Math.max(c, 0.25 * W.amp * gaussAx(lat, lon, W.lat, W.lon, W.sa, 70, W.brg));
+  return c;
 }
 let WIND_K = 4.6;
 function hash2(x, y) { const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return v - Math.floor(v); }
@@ -481,7 +528,7 @@ function windRace(lat, lon, t) {
   const G = Math.hypot(gx, gy) + 1e-9, ca = 0.9397, sa = 0.342;
   const ve = (-gy * ca - gx * sa) / G, vn = (gx * ca - gy * sa) / G;
   const tws = clamp(WIND_K * G * 0.707 / Math.max(Math.sin(Math.abs(lat) * D2R), 0.26), 1.5, 45), h = (t + WX_OFF) / 3600;
-  const zone = Math.max(smooth(6, 13, lat) * smooth(28, 20, lat), smooth(1008, 994, pc) * 0.9, 0.12);
+  const zone = Math.max(smooth(6, 13, lat) * smooth(28, 20, lat), smooth(1008, 994, pc) * 0.9, wxConv(lat, lon, t), 0.12);
   const w0 = { twd: norm360(Math.atan2(ve, vn) * R2D + 180), tws, p: pc };
   if (COURSE.coastal && COURSE.clim) climBlend(w0, COURSE.clim, lat, lon, h);
   return applySquall(w0, (lon + h * 0.25) * 4, lat * 4 + h * 0.03, zone);
@@ -2060,13 +2107,13 @@ function makeRouteState(dest, b, keepIsos) {
   const s0 = { lat: b.lat, lon: b.lon, t: t0, parent: null, twa: norm180(w0.twd - b.hdg), hdg: b.hdg, tws: w0.tws };
   const cl0 = Math.cos(s0.lat * D2R), Xd = (dest.lon - s0.lon) * 60 * cl0, Yd = (dest.lat - s0.lat) * 60;
   // concurrents au large : secteurs d'isochrone ×1,3 → 20 à 40 % de calcul en moins, ETA quasi identique (≤ 1 %)
-  return { coarse: race && !coast && !keepIsos, Xd, Yd, D0: Math.hypot(Xd, Yd), brg0: Math.atan2(Xd, Yd) * R2D, dest, race, short, dt: race ? (coast ? 600 : short ? 2700 : 7200) : 120, maxSteps: race ? 360 : 400, tackLoss: race ? (CLS.foils ? 150 : 60) : 30, s0, front: [s0], step: 0, cl0, isos: [], keepIsos };
+  return { coarse: race && !coast && !keepIsos, Xd, Yd, D0: Math.hypot(Xd, Yd), brg0: Math.atan2(Xd, Yd) * R2D, dest, race, short, dt: race ? (coast ? 600 : short ? 2700 : 7200) : 120, maxSteps: race ? (coast ? 360 : 480) : 400, tackLoss: race ? (CLS.foils ? 150 : 60) : 30, s0, front: [s0], step: 0, cl0, isos: [], keepIsos };
 }
 // Un pas d'isochrone, découpé : reprend là où il s'était arrêté si l'échéance `until` (performance.now) est dépassée.
 // Résultat identique au calcul d'un bloc ; seules les tranches changent (le pas transat pouvait prendre 15-20 ms d'un coup).
 function routeStep(st, until = Infinity) {
   const { dest, dt, s0, tackLoss, cl0 } = st, rr = dest.r || 0;
-  if (!st.cur) { let D = 1; st.front.forEach(n => { if (n.db) D = Math.max(D, Math.sqrt(n.db)); }); st.cur = { D, i: 0, j: 0, ws: [], best: null, bins: new Map(), arr: null }; }
+  if (!st.cur) { let D = 1; st.front.forEach(n => { if (n.db) D = Math.max(D, Math.sqrt(n.db)); }); st.cur = { D, i: 0, j: 0, ws: [], best: null, bins: new Map(), near: new Map(), arr: null }; }
   const C = st.cur, D = C.D, ws = C.ws;
   const sector = st.race ? clamp(R2D * Math.atan2(st.short || COURSE.coastal ? 4 : 12, D), 0.3, 3) * (st.coarse ? 1.3 : 1) : clamp(R2D * Math.atan2(0.25, D), 0.4, 5);
   const reachMax = 45 * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 + rr;
@@ -2095,14 +2142,19 @@ function routeStep(st, until = Infinity) {
       const X = (lon - s0.lon) * 60 * cl0, Y = (lat - s0.lat) * 60, db = X * X + Y * Y;
       if (st.step > 2 && !st.wide && (Math.abs(norm180(Math.atan2(X, Y) * R2D - st.brg0)) > 80 || (X - st.Xd) ** 2 + (Y - st.Yd) ** 2 > (st.D0 * 1.15 + 50) ** 2)) continue;
       const k = Math.floor(norm360(Math.atan2(X, Y) * R2D) / sector), prev = bins.get(k);
-      if (prev && db <= prev.db) continue;
+      // au large, près de l'arrivée : on garde aussi le nœud le plus proche de l'arrivée par secteur de 6° vu depuis l'arrivée
+      // (sinon le critère « le plus loin du départ » élimine les nœuds qui contournent une île posée devant l'arrivée)
+      const nearK = st.race && !COURSE.coastal && eL < 300 ? Math.floor(norm360(Math.atan2(lon - dest.lon, lat - dest.lat) * R2D) / 6) : -1, de2 = nearK >= 0 ? ((lon - dest.lon) * 60 * cn) ** 2 + ((lat - dest.lat) * 60) ** 2 : 0, pn = nearK >= 0 ? C.near.get(nearK) : null;
+      const keepFar = !(prev && db <= prev.db), keepNear = nearK >= 0 && (!pn || de2 < pn.de2);
+      if (!keepFar && !keepNear) continue;
       if (segLandLL(n.lat, n.lon, lat, lon, nm)) continue;
-      bins.set(k, { lat, lon, t: n.t + dt, parent: n, twa, hdg: h, tws: w.tws, db, k });
+      const node = { lat, lon, t: n.t + dt, parent: n, twa, hdg: h, tws: w.tws, db, k, de2 };
+      if (keepFar) bins.set(k, node); if (keepNear) C.near.set(nearK, node);
     }
   }
   st.cur = null;
   if (C.arr) { st.best = C.arr; return 'done'; }
-  st.front = [...bins.values()].sort((a, b) => a.k - b.k); st.step++;
+  const fr = new Set(bins.values()); C.near.forEach(n => fr.add(n)); st.front = [...fr].sort((a, b) => a.k - b.k); st.step++;
   if (st.keepIsos && st.step % (st.race ? Math.round(21600 / dt) : 5) === 0) { const dec = Math.max(1, Math.ceil(st.front.length / 320)); st.isos.push(st.front.filter((n, i) => i % dec === 0).map(n => [n.lat, n.lon, n.k * sector])); }
   return null;
 }
@@ -2390,6 +2442,41 @@ function windRGB(t) { for (let i = 1; i < WSTOPS.length; i++) if (t <= WSTOPS[i]
 $('lgBar').style.background = `linear-gradient(90deg,${WSTOPS.map(s => `rgb(${s[1].join(',')}) ${s[0] / 45 * 100}%`).join(',')})`;
 function fcstT() { return gameT + fcstH * (MODE === 'race' ? 3600 : 60); }
 
+// Carte : fronts (froid ▲ bleu, chaud ● rouge), dorsales (tirets), goutte froide, ondes tropicales, pot-au-noir
+function drawWxFeatures(g, t, fcC) {
+  const S = wxSystems(t + (fcOff(45, -30, t) || [0, 0, 0])[2]), big = $('tr').classList.contains('big'), z = view.zoom;
+  const P = (la, lo) => { const c = fcC(la, lo); return [MX(c[1]), MY(c[0])]; };
+  const line = (lat0, lon0, brg, d0, d1) => { const pts = []; for (let d = d0; d <= d1 + 1; d += Math.max(15, (d1 - d0) / 24)) { const q = llAt(lat0, lon0, brg, d); pts.push(P(q[0], q[1])); } return pts; };
+  const label = (txt, x, y, col) => { if (!big && z < 40) return; g.font = '10px system-ui'; g.fillStyle = col; g.textAlign = 'left'; g.fillText(txt, x + 6, y - 4); };
+  g.save(); g.lineJoin = 'round';
+  for (const F of S.fronts) {
+    if (F.k < 0.3) continue;
+    const pts = line(F.lat0, F.lon0, F.brg, 25, F.len * 0.95), col = F.cold ? '#5aa9ff' : '#ff6b6b', nb = (F.brg - 90) * D2R;
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 2; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke();
+    // symboles côté où avance le front, tous les ~22 px
+    let acc = 11; for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], L = Math.hypot(x1 - x0, y1 - y0); if (L < 0.1) continue; const ux = (x1 - x0) / L, uy = (y1 - y0) / L;
+      let px = uy, py = -ux; if (px * Math.sin(nb) - py * Math.cos(nb) < 0) { px = -px; py = -py; } // normale vers le côté d'avancée
+      while (acc < L) { const x = x0 + ux * acc, y = y0 + uy * acc; g.beginPath();
+        if (F.cold) { g.moveTo(x - ux * 4, y - uy * 4); g.lineTo(x + px * 6, y + py * 6); g.lineTo(x + ux * 4, y + uy * 4); }
+        else g.arc(x, y, 4, Math.atan2(py, px) - Math.PI / 2, Math.atan2(py, px) + Math.PI / 2);
+        g.closePath(); g.fill(); acc += 22; }
+      acc -= L; }
+    if (F.cold && pts.length > 2) label(T('front froid', 'cold front'), pts[Math.floor(pts.length * 0.7)][0], pts[Math.floor(pts.length * 0.7)][1], '#9ccbff');
+  }
+  g.setLineDash([7, 5]); g.lineWidth = 1.6;
+  for (const R of S.ridges) {
+    if (R.amp < 3) continue; const pts = line(R.lat, R.lon, R.brg, -R.sa * 1.1, R.sa * 1.1).map((p, i, a) => p), q = llAt(R.lat, R.lon, R.brg - 180, R.sa * 1.1), p0 = P(q[0], q[1]), q1 = llAt(R.lat, R.lon, R.brg, R.sa * 1.1), p1 = P(q1[0], q1[1]);
+    g.strokeStyle = 'rgba(127,209,255,0.85)'; g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.stroke(); const m = P(R.lat, R.lon); label(T('dorsale', 'ridge'), m[0], m[1], '#a8ddff');
+  }
+  for (const W of S.waves) {
+    if (W.amp < 1) continue; const q0 = llAt(W.lat, W.lon, W.brg + 180, W.sa), q1 = llAt(W.lat, W.lon, W.brg, W.sa), p0 = P(q0[0], q0[1]), p1 = P(q1[0], q1[1]);
+    g.strokeStyle = 'rgba(255,190,90,0.9)'; g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.stroke(); label(T('onde tropicale', 'tropical wave'), p1[0], p1[1] + 14, '#ffd08a');
+  }
+  g.setLineDash([]);
+  if (S.cut) { const c = P(S.cut.lat, S.cut.lon); g.font = 'bold 13px system-ui'; g.textAlign = 'center'; g.fillStyle = '#c9a0ff'; g.fillText('D', c[0], c[1]); label(T('goutte froide', 'cut-off low'), c[0], c[1] + 14, '#d9bcff'); }
+  const ia = P(5.5, unX(mapCv._w * 0.5)); if (ia[1] > 10 && ia[1] < mapCv._h - 10) { g.font = 'italic 10px system-ui'; g.fillStyle = 'rgba(220,200,255,0.8)'; g.textAlign = 'center'; g.fillText(T('pot-au-noir', 'doldrums'), mapCv._w * 0.5, ia[1]); }
+  g.restore();
+}
 function drawWindLayer() {
   const W = mapCv._w, H = mapCv._h, dpr = mapCv._dpr; mapLayer.width = mapCv.width; mapLayer.height = mapCv.height;
   const g = mapLayer.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -2417,6 +2504,8 @@ function drawWindLayer() {
     g.stroke();
     g.font = 'bold 15px system-ui'; g.textAlign = 'center';
     const fcC = (la, lo) => { const o = fcOff(la, lo, t); return o ? [la - o[0], lo - o[1]] : [la, lo]; };
+    drawWxFeatures(g, t, fcC);
+    g.font = 'bold 15px system-ui'; g.textAlign = 'center';
     const hc0 = highCenter(t), hc = fcC(hc0[0], hc0[1]); g.fillStyle = '#7fd1ff'; g.fillText('A', MX(hc[1]), MY(hc[0])); g.font = '10px system-ui'; g.fillText(Math.round(pressureFc(hc[0], hc[1], t)), MX(hc[1]), MY(hc[0]) + 12);
     lowCenters(t).forEach(L0 => { if (L0.depth < 8) return; const c = fcC(L0.lat, L0.lon), L = { lat: c[0], lon: c[1] }; g.font = 'bold 15px system-ui'; g.fillStyle = '#ff8fab'; g.fillText('D', MX(L.lon), MY(L.lat)); g.font = '10px system-ui'; g.fillText(Math.round(pressureFc(L.lat, L.lon, t)), MX(L.lon), MY(L.lat) + 12); });
     g.textAlign = 'left';
@@ -2831,6 +2920,7 @@ async function launch(info, prep, msg) {
 function start(msg) { MENU_CINE = false; $('overlay').classList.add('hide'); $('overlay').classList.remove('mm', 'mh'); running = true; paused = false; toast(msg, 5000); if (MODE === 'race' && GHOST.list.length && GHOST.on) setTimeout(() => toast(DAILY.on ? `👻 ${GHOST.list.length} fantôme${GHOST.list.length > 1 ? 's' : ''} en course (tes essais du jour) — touche Y pour masquer` : `👻 Ton fantôme (record ${fmtDur(GHOST.list[0].T)}) est en course — touche Y pour le masquer`, 4000), 5200); }
 const HELP_EN = () => `<h1>Help</h1>
     <h3>Manoeuvres</h3><p>The skipper does <b>one manoeuvre at a time</b>; the next ones wait in a queue (3 max). Durations are in race time and depend on the class: a <b>tack</b> or <b>gybe</b> costs speed for a few minutes, a <b>sail change</b> several minutes, moving the <b>foils</b> a few minutes. The helm is locked during a tack or gybe.</p>
+    <h3>Weather systems (offshore)</h3><p><b>A</b> Azores high: light wind in its centre, trade winds on its southern flank. <b>D</b> westerly lows, each with a <b>cold front</b> (blue ▲ line: squalls, sharp wind shift as it passes) and a <b>warm front</b> (red ●). Between two lows, a <b>ridge</b> (blue dashes): soft wind, cross it fast or go around. Sometimes an isolated <b>cut-off low</b> (purple D) near the Azores, and <b>tropical waves</b> (orange dashes) crossing the trades with squalls and shifts. The <b>doldrums</b> stay near 5° N.</p>
     <h3>Forecasts</h3><p>Maps and the router use a <b>forecast</b> published every 6 to 9 min of real play (every 1 h 30 of race time in the daily challenge). It is reliable at short range and drifts further out. Each new run recomputes the route: time to review your strategy.</p>
     <h3>Four classes</h3><p><b>IMOCA</b>: heavy and powerful, slow to accelerate, everything happens on the <b>foils</b> when reaching. <b>Class40</b>: no foils, planing scow, reefs, medium manoeuvres. <b>Mini 6.50</b>: light and quick, reefs, beware of broaches under spinnaker. <b>Mini proto</b>: faster, with foils.</p>
     <h3>Foils, sails, sheet</h3><p>Lower the <b>leeward</b> foil (wind on starboard → port foil). A windward foil brakes. <b>Jib</b>: upwind in a breeze · <b>Genoa</b>: light-air upwind to beam reach · <b>Spinnaker</b>: broad reach to running. The more you bear away, the more you ease.</p>
@@ -2843,6 +2933,7 @@ function showHelp(fromMenu) {
   if (LANG === 'en') { $('card').innerHTML = HELP_EN() + `<div class="go"><button id="hClose" data-default>${fromMenu ? '← Menu' : '▶ Resume'}</button></div>`; $('overlay').classList.remove('hide'); $('hClose').onclick = () => { if (fromMenu) return showMenu(typeof fromMenu === 'string' ? fromMenu : 'solo'); $('overlay').classList.add('hide'); paused = false; }; return; }
   $('card').innerHTML = `<h1>Aide</h1>
     <h3>Manœuvres</h3><p>Le skipper fait <b>une manœuvre à la fois</b>, les suivantes attendent dans une file (3 au plus). Durées en temps de course : <b>virement</b> 5 min (jusqu'à −55 %), <b>empannage</b> 6 min, <b>changement de voile</b> 10 min (−38 %), <b>foils</b> 4 min (−8 %). Pendant un virement ou un empannage la barre est bloquée. Passer le vent sans manœuvre demandée = manœuvre « non préparée », qui coûte quand même.</p>
+    <h3>Systèmes météo (au large)</h3><p><b>A</b> anticyclone des Açores : vent faible au centre, alizés sur son flanc sud. <b>D</b> dépressions d'ouest, chacune avec un <b>front froid</b> (ligne bleue ▲ : grains, forte bascule du vent au passage) et un <b>front chaud</b> (rouge ●). Entre deux dépressions, une <b>dorsale</b> (tirets bleus) : vent mou, à traverser vite ou à contourner. Parfois une <b>goutte froide</b> (D violet) isolée près des Açores, et des <b>ondes tropicales</b> (tirets orange) qui traversent les alizés avec grains et bascules. Le <b>pot-au-noir</b> reste vers 5° N.</p>
     <h3>Prévisions météo</h3><p>Les cartes et le routeur utilisent une <b>prévision</b>, publiée toutes les 6 à 9 min de jeu réel (compteur dans le panneau). Elle est fiable à courte échéance puis s'écarte de la réalité : dépressions décalées, en avance ou en retard, vent ±12 % à 4-5 jours. À chaque nouveau run, le routage est recalculé : c'est le moment de revoir ta stratégie.</p>
     <h3>Ris (Minis)</h3><p>Au-delà de ~18 nd au près (~23 nd au portant) le Mini est surtoilé et perd de la vitesse : prends 1 ris, puis 2 au-dessus de ~24 / 30 nd. Chaque ris coûte de la puissance dans le petit temps, réduit la gîte et le risque de départ au lof. Manœuvre : 2 min 30.</p>
     <h3>Mini Transat</h3><p>Deux étapes. À l'escale de La Palma, la flotte termine son étape puis repart ensemble. Classement final au temps cumulé.</p>
