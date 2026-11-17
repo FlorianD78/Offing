@@ -56,7 +56,7 @@ Pour vérifier : `https://offing.vercel.app/api/health` (ou le domaine attribué
 
 ## Modèles 3D
 
-`public/models/imoca-hi.json` (joueur) et `imoca-lo.json` (bots, qualité basse) contiennent l'IMOCA importé des STL : coque, pont, quille, foils, safrans. Le mât, la bôme et les voiles restent générés par le jeu. Pour régénérer après une modification des STL : `python3 tools/stl_to_model.py` (voir l'en-tête du script). Si le fichier ne se charge pas, le jeu garde le modèle paramétrique.
+`public/models/<classe>-hi.json` (joueur) et `<classe>-lo.json` (bots, qualité basse), pour `imoca`, `c40`, `mini` et `proto`, contiennent les modèles 3D générés par `tools/gen_boats.py` : coque à bouchains avec étrave scow (nez rond limité à 1,12 m dans le premier mètre pour l'IMOCA, jauge), pont, rouf, cockpit, quille et bulbe, safrans jumeaux, foils (IMOCA, proto), filières, winchs, panneaux solaires, hydrogénérateurs. Dimensions de jauge : IMOCA 18,28 × 5,85 m, TE 4,50 m ; Class40 12,19 × 4,50 m, TE 3,00 m, tirant d'air 19 m ; Mini 6,50 × 3,00 m, TE 1,60 m (série) / 2,00 m (proto), tirant d'air 12 m. Régénération : `pip install numpy scipy && python3 tools/gen_boats.py public/models`. Le mât, la bôme et les voiles restent générés par le jeu ; si un fichier ne se charge pas, le jeu garde le modèle paramétrique.
 
 ## En local
 
