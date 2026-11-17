@@ -315,7 +315,7 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
     <span id="trimTxt">–</span>
   </div>
   <div class="line desk" id="camLine">
-    <button id="camBtn" title="Caméra suiveuse / libre (C)">🎥 Suiveuse</button>
+    <button id="camBtn" title="Caméra suiveuse / libre / à bord (C)">🎥 Suiveuse</button>
     <button id="zIn" title="Zoom avant">＋</button>
     <button id="zOut" title="Zoom arrière">－</button>
   </div>
@@ -1250,7 +1250,18 @@ function parseModelBin(buf) {
     if (p.uv) { const u = new Uint16Array(buf, o, p.nv * 2), uv = new Float32Array(p.nv * 2); for (let i = 0; i < p.nv * 2; i++) uv[i] = u[i] / 65535; g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); }
     g.computeVertexNormals(); g.computeBoundingSphere(); out.geo[p.name] = g;
   }
+  // les bordés importés montent à l'intérieur du cockpit (faces texturées livrée, en conflit de profondeur avec la cuve) :
+  // on retire ces triangles, la cuve de cockpit les remplace — visible surtout en vue à bord
+  ['hull_topS', 'hull_topP'].forEach(n => { const g = out.geo[n]; if (g) cutBox(g, -1.92, 1.92, 0.45, 1.4, 5.05, 8.7); });
   return out;
+}
+function cutBox(g, x0, x1, y0, y1, z0, z1) {
+  const P = g.attributes.position.array, I = g.index.array, keep = [];
+  for (let t = 0; t < I.length; t += 3) {
+    let cx = 0, cy = 0, cz = 0; for (let k = 0; k < 3; k++) { const j = I[t + k] * 3; cx += P[j]; cy += P[j + 1]; cz += P[j + 2]; }
+    cx /= 3; cy /= 3; cz /= 3; if (cx > x0 && cx < x1 && cy > y0 && cy < y1 && cz > z0 && cz < z1) continue; keep.push(I[t], I[t + 1], I[t + 2]);
+  }
+  if (keep.length < I.length) g.setIndex(new THREE.BufferAttribute(I instanceof Uint32Array ? new Uint32Array(keep) : new Uint16Array(keep), 1));
 }
 // cuve de cockpit : le maillage importé a des trous (plancher et parois) par lesquels on voyait l'eau → plancher,
 // parois latérales, cloison avant et seuil arrière fermés, calés sur le pont relevé du modèle (z 5,0 → 8,7 m)
@@ -2246,8 +2257,10 @@ function foilLeeward() {
 function trimBy(d) { player.autoTrim = false; player.trim = clamp(player.trim + d, 0, 1); }
 function setAccel(a) { accel = a; buildAccel(); }
 function togglePause() { if (!running) return; paused = !paused; $('pause').style.display = paused ? 'block' : 'none'; if (paused) saveGame(); }
-const cam = { dist: 95, elev: 14, az: 0, mode: 'chase' };
-function toggleCam() { cam.mode = cam.mode === 'chase' ? 'free' : 'chase'; cam.az = 0; $('camBtn').textContent = cam.mode === 'chase' ? '🎥 Suiveuse' : '🎥 Libre'; }
+const cam = { dist: 95, elev: 14, az: 0, mode: 'chase', obAz: 0, obEl: 0, obFov: 72, obSide: 1, obIdle: 9 };
+const CAM_LBL = { chase: ['🎥 Suiveuse', '🎥 Chase'], free: ['🎥 Libre', '🎥 Free'], onboard: ['🎥 À bord', '🎥 Onboard'] };
+function setCamMode(m) { cam.mode = m; cam.az = 0; cam.obAz = 0; cam.obEl = 0; cam.obIdle = 9; $('camBtn').textContent = T(...CAM_LBL[m]); if (m === 'onboard') toast(T('🎥 Vue à bord : glisse pour tourner la tête, molette pour le champ de vision', '🎥 Onboard view: drag to look around, wheel for field of view'), 2600); }
+function toggleCam() { setCamMode(cam.mode === 'chase' ? 'free' : cam.mode === 'free' ? 'onboard' : 'chase'); }
 
 const keys = {};
 addEventListener('keydown', e => {
@@ -2288,7 +2301,8 @@ $('reefP').onclick = () => reefBy(1); $('reefM').onclick = () => reefBy(-1);
 $('foilP').onclick = () => toggleFoil('P'); $('foilS').onclick = () => toggleFoil('S'); $('foilSwap').onclick = foilLeeward;
 $('trim').oninput = e => { player.autoTrim = false; player.trim = e.target.value / 100; };
 $('aSail').onclick = () => player.autoSail = !player.autoSail; $('aTrim').onclick = () => player.autoTrim = !player.autoTrim; $('aFoil').onclick = () => player.autoFoil = !player.autoFoil;
-$('zIn').onclick = () => cam.dist = clamp(cam.dist / 1.4, CLS.cam * 0.25, 4000); $('zOut').onclick = () => cam.dist = clamp(cam.dist * 1.4, CLS.cam * 0.25, 4000);
+$('zIn').onclick = () => { if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov / 1.2, 35, 90); else cam.dist = clamp(cam.dist / 1.4, CLS.cam * 0.25, 4000); };
+$('zOut').onclick = () => { if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov * 1.2, 35, 90); else cam.dist = clamp(cam.dist * 1.4, CLS.cam * 0.25, 4000); };
 $('mobBtn').onclick = () => setMobile(!isMobile());
 $('tabDesk').onclick = () => setMobile(false); $('tabFold').onclick = () => setFold(!document.body.classList.contains('fold')); $('tabCourse').onclick = () => setSheet('course'); $('tabSails').onclick = () => setSheet('sails');
 $('tabMap').onclick = () => { setSheet(null); toggleMapBig(); }; $('mapClose').onclick = () => toggleMapBig();
@@ -2316,9 +2330,10 @@ function buildAccel() { const el = $('accel'); el.querySelectorAll('button').for
 const pointers = new Map(); let pinchD = 0;
 canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinchD = Math.hypot(a.x - b.x, a.y - b.y); } });
 canvas.addEventListener('pointermove', e => { const p = pointers.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
-  if (pointers.size === 1) { cam.az -= dx * 0.3; cam.elev = clamp(cam.elev + dy * 0.2, 2, 88); } else if (pointers.size === 2) { const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); if (pinchD > 0 && d > 0) cam.dist = clamp(cam.dist * pinchD / d, CLS.cam * 0.25, 4000); pinchD = d; } });
+  if (pointers.size === 1 && cam.mode === 'onboard') { cam.obAz = clamp(cam.obAz - dx * 0.25, -170, 170); cam.obEl = clamp(cam.obEl - dy * 0.18, -45, 35); cam.obIdle = 0; }
+  else if (pointers.size === 1) { cam.az -= dx * 0.3; cam.elev = clamp(cam.elev + dy * 0.2, 2, 88); } else if (pointers.size === 2) { const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); if (pinchD > 0 && d > 0) { if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov * pinchD / d, 35, 90); else cam.dist = clamp(cam.dist * pinchD / d, CLS.cam * 0.25, 4000); } pinchD = d; } });
 const pUp = e => { pointers.delete(e.pointerId); pinchD = 0; }; canvas.addEventListener('pointerup', pUp); canvas.addEventListener('pointercancel', pUp);
-canvas.addEventListener('wheel', e => { e.preventDefault(); cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), CLS.cam * 0.25, 4000); }, { passive: false });
+canvas.addEventListener('wheel', e => { e.preventDefault(); if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov * Math.exp(e.deltaY * 0.0008), 35, 90); else cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), CLS.cam * 0.25, 4000); }, { passive: false });
 
 /* ===================== CARTE ===================== */
 const mapCv = $('map'), polCv = $('polar'), mapLayer = document.createElement('canvas'), heat = document.createElement('canvas');
@@ -2556,7 +2571,7 @@ function updateHUD() {
     if (MODE === 'race') { const mk = curMarks()[player.mi], r = rankOf(player); last = cell(mk ? `${r}${r === 1 ? 'ER' : 'E'} · MARQUE` : 'ARRIVÉ', mk ? gcDist(player.lat, player.lon, mk.lat, mk.lon).toFixed(0) + ' nm' : '✓'); }
     else last = cell('BOUÉES', `${TRAIN_BUOYS.filter(b => b.done).length}/${TRAIN_BUOYS.length}`);
     $('mstrip').innerHTML = cell('VITESSE', (player.dspd || player.spd).toFixed(1)) + cell('TWA', twaTxt(twa), twa >= 0 ? '#5dff9e' : '#ff6b6b') + cell('VENT', w.tws.toFixed(0) + ' nd', `rgb(${windRGB(w.tws).join(',')})`) + cell('CAP', Math.round(player.hdg) + '°') + last;
-    $('tabPause').classList.toggle('on', paused); $('tabCam').classList.toggle('on', cam.mode === 'free');
+    $('tabPause').classList.toggle('on', paused); $('tabCam').classList.toggle('on', cam.mode !== 'chase');
   }
   $('iSog').textContent = (player.dspd || player.spd).toFixed(1); $('iHdg').textContent = Math.round(player.hdg) + '°';
   const tw = $('iTwa'); tw.textContent = twaTxt(twa); tw.style.color = twa >= 0 ? '#5dff9e' : '#ff6b6b';
@@ -2639,7 +2654,7 @@ const CONTROLS_FR = `<ul>
   <li><kbd>Y</kbd> afficher / masquer les fantômes · 🛰 nouvelle prévision météo toutes les 6 à 9 min de jeu</li>
   <li>Routeur : <kbd>K</kbd> appliquer le cap conseillé · <kbd>L</kbd> pilote routeur · 📍 router vers un point de la carte</li>
   <li>Assistances (−1,5 % chacune) : <kbd>A</kbd> voile auto · <kbd>R</kbd> écoute auto · <kbd>G</kbd> foils auto · pilote routeur</li>
-  <li><kbd>+</kbd>/<kbd>−</kbd> vitesse du temps · <kbd>M</kbd> carte plein écran · <kbd>C</kbd> caméra · <kbd>X</kbd> son · <kbd>P</kbd> pause · <kbd>Échap</kbd> menu</li></ul>`;
+  <li><kbd>+</kbd>/<kbd>−</kbd> vitesse du temps · <kbd>M</kbd> carte plein écran · <kbd>C</kbd> caméra (suiveuse, libre, à bord) · <kbd>X</kbd> son · <kbd>P</kbd> pause · <kbd>Échap</kbd> menu</li></ul>`;
 const CONTROLS_EN = `<ul>
   <li><kbd>←</kbd>/<kbd>→</kbd> or <kbd>Q</kbd>/<kbd>D</kbd> steer (<kbd>Shift</kbd> = fine) · <kbd>Space</kbd> tack/gybe · <kbd>T</kbd> lock heading ⇄ TWA · <kbd>V</kbd> VMG angle</li>
   <li><kbd>1</kbd> Jib · <kbd>2</kbd> Genoa · <kbd>3</kbd> Spinnaker (★ = best sail) · <kbd>↑</kbd>/<kbd>↓</kbd> or <kbd>Z</kbd>/<kbd>S</kbd> sheet in / ease (green tick = optimum)</li>
@@ -2647,7 +2662,7 @@ const CONTROLS_EN = `<ul>
   <li><kbd>Y</kbd> show / hide ghosts · 🛰 new weather forecast every 6 to 9 min of play</li>
   <li>Router: <kbd>K</kbd> apply suggested heading · <kbd>L</kbd> router autopilot · 📍 route to a point on the map</li>
   <li>Assists (−1.5 % each): <kbd>A</kbd> auto sail · <kbd>R</kbd> auto trim · <kbd>G</kbd> auto foils · router autopilot</li>
-  <li><kbd>+</kbd>/<kbd>−</kbd> time speed · <kbd>M</kbd> full-screen map · <kbd>C</kbd> camera · <kbd>X</kbd> sound · <kbd>P</kbd> pause · <kbd>Esc</kbd> menu</li></ul>`;
+  <li><kbd>+</kbd>/<kbd>−</kbd> time speed · <kbd>M</kbd> full-screen map · <kbd>C</kbd> camera (chase, free, onboard) · <kbd>X</kbd> sound · <kbd>P</kbd> pause · <kbd>Esc</kbd> menu</li></ul>`;
 Object.defineProperty(window, 'CONTROLS', { get: () => T(CONTROLS_FR, CONTROLS_EN) });
 const sailNm = i => T(SAILS[i].name, ({ Foc: 'Jib', 'Génois': 'Genoa', Spi: 'Spinnaker' })[SAILS[i].name] || SAILS[i].name);
 const cN = c => T(c.name, c.en || c.name), cZ = c => T(c.zone || '', c.zoneEn || c.zone || ''), mN = m => T(m.name, m.en || m.name);
@@ -2999,7 +3014,7 @@ const I18N = {
   'Agrandir la carte (M)': 'Enlarge map (M)', 'Centrer sur le bateau': 'Centre on boat', 'Vue d\'ensemble': 'Overview', 'Afficher les isochrones': 'Show isochrones', 'Glisser pour déplacer, molette pour zoomer': 'Drag to pan, wheel to zoom',
   '10° à bâbord': '10° to port', '1° à bâbord (← / Q)': '1° to port (← / Q)', 'Verrouiller le cap ou l\'angle au vent (T)': 'Lock heading or wind angle (T)', '1° à tribord (→ / D)': '1° to starboard (→ / D)', '10° à tribord': '10° to starboard',
   'Virer / empanner (Espace)': 'Tack / gybe (Space)', 'Angle VMG optimal (V)': 'Optimal VMG angle (V)', 'Foil bâbord (B)': 'Port foil (B)', 'Foil tribord (N)': 'Starboard foil (N)', 'Foil sous le vent baissé, au vent relevé (F)': 'Leeward foil down, windward up (F)',
-  'Larguer un ris (O)': 'Shake a reef (O)', 'Prendre un ris (I)': 'Take a reef (I)', 'Caméra suiveuse / libre (C)': 'Chase / free camera (C)', 'Zoom avant': 'Zoom in', 'Zoom arrière': 'Zoom out', 'Réduire / agrandir les commandes': 'Fold / unfold controls',
+  'Larguer un ris (O)': 'Shake a reef (O)', 'Prendre un ris (I)': 'Take a reef (I)', 'Caméra suiveuse / libre / à bord (C)': 'Chase / free / onboard camera (C)', 'Zoom avant': 'Zoom in', 'Zoom arrière': 'Zoom out', 'Réduire / agrandir les commandes': 'Fold / unfold controls',
   'Choix automatique de la voile (A) — coûte 1,5 % de vitesse': 'Automatic sail choice (A) — costs 1.5 % speed', 'Réglage automatique de l\'écoute (R) — coûte 1,5 %': 'Automatic sheet trim (R) — costs 1.5 %', 'Gestion automatique des foils (G) — coûte 1,5 %': 'Automatic foils (G) — costs 1.5 %',
 };
 const I18N_SKIP = new Set(['card', 'tlBody', 'rInfo', 'board', 'foilHint', 'trimTxt', 'mantxt', 'rnext', 'manq', 'toast', 'shoreWarn', 'tlTitle', 'iAll', 'iPerf', 'iHeel', 'iBaro', 'fcstL', 'reefTxt', 'msails', 'sails', 'accel']);
@@ -3427,7 +3442,32 @@ function updateFlecks(rdt, svx, svz) {
   flGeo.attributes.position.needsUpdate = true; flGeo.attributes.aA.needsUpdate = true; flGeo.attributes.aS.needsUpdate = true;
 }
 let camFov = 55, camKick = 0;
-function updateCamera() {
+// Vue à bord : œil du skipper en mètres, repère du bateau (étrave vers −z), côté au vent (x > 0 = côté qui se lève à la gîte)
+// IMOCA : debout au fond du cockpit, derrière le moulin ; Class40 : assis au poste de barre ; Mini : assis au rappel près de la barre franche
+const ONBOARD = { imoca: { x: 1.45, y: 2.45, z: 8.0 }, c40: { x: 1.55, y: 2.3, z: 4.4 }, mini: { x: 0.85, y: 1.7, z: 2.2 }, proto: { x: 0.85, y: 1.7, z: 2.2 } };
+const _ob = new THREE.Vector3(); let obWas = false;
+function onboardCamera(rdt) {
+  const V = player.vis, R = V.root, E = ONBOARD[CLS.id] || ONBOARD.mini, sc = R.scale.x;
+  R.children.forEach(c => { if (c.isSprite) c.visible = false; }); // pas d'étiquette de nom devant les yeux
+  // le skipper change de bord après le virement (≈ 2 s), seulement quand la gîte est franche
+  const hs = Math.abs(player.heel) > 3 ? Math.sign(player.heel) : cam.obSide; cam.obSide += (hs - cam.obSide) * Math.min(1, rdt * 1.2);
+  // regard libre qui revient doucement vers l'avant après 2,5 s sans toucher
+  cam.obIdle += rdt; if (cam.obIdle > 2.5) { const k = Math.min(1, rdt * 1.5); cam.obAz -= cam.obAz * k; cam.obEl -= cam.obEl * k; }
+  R.updateMatrixWorld(); _ob.set(E.x * cam.obSide / sc, E.y / sc, E.z / sc); R.localToWorld(_ob);
+  const ds = player.dspd || player.spd, t = realT, bob = Math.sin(t * 1.9) * 0.025 + Math.sin(t * 3.7 + 1) * 0.012 * (1 + ds * 0.05);
+  camera.position.set(_ob.x, _ob.y + bob, _ob.z);
+  // la tête compense une partie du roulis et du tangage (horizon moins agité qu'une caméra fixée à la coque)
+  const r = R.rotation; camera.rotation.order = 'YXZ';
+  camera.rotation.set(r.x * 0.7 - 0.07 + cam.obEl * D2R + bob * 0.15, r.y + cam.obAz * D2R + cam.obSide * 0.06, r.z * 0.45);
+  const fov = cam.obFov + clamp((ds - 8) / 22, 0, 1) * 6; if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, rdt * 3); camera.updateProjectionMatrix(); }
+  camKick *= 0.9; const shake = (0.006 * ds * (0.5 + seaAmp * 0.5) * (1 - Math.min(0.6, player.lift * 0.4)) * 0.06 + camKick * 0.5);
+  camera.rotation.x += Math.sin(t * 23.1) * Math.sin(t * 7.3) * shake * 0.02; camera.rotation.z += Math.sin(t * 29.7 + 1) * Math.sin(t * 5.1) * shake * 0.02;
+  sky.position.copy(camera.position);
+}
+function updateCamera(rdt = 0.016) {
+  const ob = cam.mode === 'onboard' && !(MENU_CINE && !$('overlay').classList.contains('hide')) && player && player.vis;
+  if (ob !== obWas) { obWas = ob; camera.near = ob ? 0.15 : 0.5; camera.updateProjectionMatrix(); if (!ob && player && player.vis) player.vis.root.children.forEach(c => { if (c.isSprite) c.visible = true; }); if (!ob) camera.fov = camFov; }
+  if (ob) return onboardCamera(rdt);
   const cine = MENU_CINE && !$('overlay').classList.contains('hide'), cDist = cine ? 46 * Math.max(0.6, CLS.k) : cam.dist, cEl = cine ? 7 + 3 * Math.sin(realT * 0.05) : cam.elev, cAz = cine ? (realT * 3.5) % 360 : cam.az;
   const ty = 2 + 4 * CLS.k + player.lift, baseAz = cam.mode === 'chase' || cine ? player.dispHdg + 180 : 180, az = (baseAz + cAz) * D2R, el = cEl * D2R;
   camera.position.set(Math.sin(az) * Math.cos(el) * cDist, ty + Math.sin(el) * cDist, -Math.cos(az) * Math.cos(el) * cDist);
@@ -3483,7 +3523,7 @@ function frame(now) {
   const wa = ((player.twd || 0) + 180) * D2R; oceanU.uWind.value.set(Math.sin(wa), -Math.cos(wa), tws);
   camera.updateMatrixWorld(); _wkF.setFromProjectionMatrix(_wkM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   boats.forEach(b => { if (active.includes(b)) updateBoatVisual(b, rdt); }); updateGhost(rdt);
-  updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(); updateAudio(rdt);
+  updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(rdt); updateAudio(rdt);
   hudAcc += rdt; mapAcc += rdt; polAcc += rdt; projAcc += rdt;
   if (projAcc > 0.5) { projAcc = 0; computeProjection(); }
   if (hudAcc > 0.1) { hudAcc = 0; updateHUD(); }
