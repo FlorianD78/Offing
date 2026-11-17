@@ -10,6 +10,7 @@ Jeu de course au large en 3D dans le navigateur. Le Défi du jour a un classemen
 
 ## Flux d'un défi
 
+0. Le tirage du jour (2 parcours × 2 classes) est calculé par la date de Paris, à l'identique côté jeu et côté serveur (`dailyPick`).
 1. `GET /api/ghosts` charge les fantômes :
    - premier essai du jour : le top 10 (mis en cache 60 s par le CDN) ;
    - ensuite : les 10 meilleurs temps les plus proches du tien.
@@ -51,7 +52,11 @@ git push -u origin main
 3. Lance **Deploy**, puis **Redeploy** si tu as ajouté les variables après le premier déploiement.
 4. Ensuite, chaque push sur `main` déploie en production et chaque pull request reçoit une URL de preview. La CI GitHub (`npm test`) tourne en parallèle.
 
-Pour vérifier : `https://offing.vercel.app/api/health` (ou le domaine attribué par Vercel) doit renvoyer `{"ok":true,"day":"…","engine":1}`.
+Pour vérifier : `https://offing.vercel.app/api/health` (ou le domaine attribué par Vercel) doit renvoyer `{"ok":true,"day":"…","engine":2,…}`.
+
+## Modèles 3D
+
+`public/models/imoca-hi.json` (joueur) et `imoca-lo.json` (bots, qualité basse) contiennent l'IMOCA importé des STL : coque, pont, quille, foils, safrans. Le mât, la bôme et les voiles restent générés par le jeu. Pour régénérer après une modification des STL : `python3 tools/stl_to_model.py` (voir l'en-tête du script). Si le fichier ne se charge pas, le jeu garde le modèle paramétrique.
 
 ## En local
 
@@ -66,7 +71,7 @@ npm run local     # http://localhost:3000 (base en mémoire, ou ta base si SUPAB
 Le chrono n'est valable que si le client et le serveur ont le même moteur. Après toute modification qui change la trajectoire d'un bateau (polaires, météo, manœuvres, pas de temps) :
 
 1. Incrémente `ENGINE_VER` dans `public/index.html`. Le serveur refuse alors les journaux de l'ancienne version et les clients ouverts sont invités à recharger la page.
-2. Régénère `scripts/fixtures/iroise-imoca.json` (un journal du nouveau moteur avec son `expectT`). Tant que ce n'est pas fait, `check-engine` ignore le test.
+2. Régénère `scripts/fixtures/daily-ref.json` (un journal du nouveau moteur avec son `expectT`). Tant que ce n'est pas fait, `check-engine` ignore le test.
 
 Évite de déployer un tel changement en pleine journée : les chronos déjà enregistrés ce jour-là viennent de l'ancien moteur.
 
@@ -89,9 +94,10 @@ Le chrono n'est valable que si le client et le serveur ont le même moteur. Apr�
 
 | Méthode | Route | Rôle |
 |---|---|---|
-| GET | `/api/health` | état, jour du défi, version du moteur |
+| GET | `/api/health` | état, jour du défi, version du moteur, tirage du jour |
 | POST | `/api/register` | `{name}` crée un profil et renvoie `{id, token}` ; `{id, token, name}` renomme |
-| GET | `/api/ghosts?course&cls&player` | fantômes du jour (traces allégées à 1 point toutes les 2 min) |
+| GET | `/api/ghosts?course&cls&player[&mode=top]` | fantômes du jour (traces allégées à 1 point toutes les 2 min) ; `mode=top` : le top 10, pour l'analyse de course |
+| POST | `/api/me` | `{id, token}` : restaure un profil avec le code de récupération |
 | POST | `/api/submit` | `{id, token, log}` : rejeu, enregistrement, rang |
 | GET | `/api/leaderboard?course&cls&player` | top 50 du jour et ta place |
 | GET | `/api/cron` | ménage quotidien (appelé par Vercel avec `CRON_SECRET`) |

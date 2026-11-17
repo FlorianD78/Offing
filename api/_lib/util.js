@@ -1,8 +1,6 @@
 'use strict';
 const crypto = require('crypto');
 
-const COURSES = ['iroise', 'normandes', 'scilly', 'galante'];
-const CLASSES = ['imoca', 'mini', 'proto'];
 const LIMITS = { submitsPerDay: 40, registersPerIpPerDay: 5, maxLogBytes: 400_000, maxEvents: 20_000 };
 
 // Jour du défi = date à Paris (comme le client)
@@ -52,4 +50,4 @@ function thinTrace(trace, every = 120) {
   return out;
 }
 
-module.exports = { COURSES, CLASSES, LIMITS, parisDay, acceptedDays, sha256, newToken, safeEq, NAME_RE, UUID_RE, clientIpHash, HttpError, handler, thinTrace };
+module.exports = { LIMITS, parisDay, acceptedDays, sha256, newToken, safeEq, NAME_RE, UUID_RE, clientIpHash, HttpError, handler, thinTrace };

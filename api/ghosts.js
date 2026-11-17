@@ -1,14 +1,15 @@
 'use strict';
-// GET ?course&cls[&player] -> 1er essai : top 10 ; ensuite : les 10 meilleurs temps les plus proches du tien (hors toi)
-const { handler, HttpError, COURSES, CLASSES, UUID_RE, parisDay, thinTrace } = require('./_lib/util');
+// GET ?course&cls[&player][&mode=top] -> 1er essai (ou mode=top) : top 10 ; ensuite : les 10 meilleurs temps les plus proches du tien (hors toi)
+const { handler, HttpError, UUID_RE, parisDay, thinTrace } = require('./_lib/util');
 const { db } = require('./_lib/db');
+const { loadEngine } = require('./_lib/engine');
 
 const out = (rows, mineT) => rows.map(x => ({ name: x.players?.name || '?', T: x.time_s, trace: thinTrace(x.trace, 120) }));
 
 module.exports = handler(['GET'], async (req, res) => {
-  const { course, cls, player } = req.query || {}, day = parisDay();
-  if (!COURSES.includes(course) || !CLASSES.includes(cls)) throw new HttpError(400, 'parcours invalide');
-  const me = player && UUID_RE.test(player) ? await db().getBest(player, day, course, cls) : null;
+  const { course, cls, player, mode } = req.query || {}, day = parisDay(), E = loadEngine();
+  if (!E.coastal().includes(course) || !E.classes().includes(cls)) throw new HttpError(400, 'parcours invalide');
+  const me = mode !== 'top' && player && UUID_RE.test(player) ? await db().getBest(player, day, course, cls) : null;
   let rows;
   if (!me) {
     rows = await db().ghosts(day, course, cls, { dir: 'top', limit: 10 });
