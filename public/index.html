@@ -17,6 +17,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0b1a26;font-family:sy
 .row b{color:#fff;font-variant-numeric:tabular-nums;text-align:right}
 #tl{top:12px;left:12px;width:262px}
 #board{margin-top:8px;border-top:1px solid rgba(255,255,255,.08);padding-top:6px}
+#boardP{bottom:12px;display:none;padding:8px 12px}
+#boardP #board{margin-top:0;border-top:0;padding-top:0}
+#boardP .title{margin-bottom:4px}
 #board div{display:flex;align-items:center;gap:6px;padding:1px 0;font-size:12px;color:#cfe3f1;font-variant-numeric:tabular-nums}
 #board div .n{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #board div.me{color:#fff;font-weight:700}
@@ -253,6 +256,8 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
   <div id="trainBox" style="display:none;margin-top:6px;color:#a9c3d6;font-size:12px;line-height:1.4">Passe à moins de 500 m des bouées orange, dans l'ordre que tu veux. Règle le vent en bas à droite.<div style="margin-top:4px"><button id="rstB" style="font-size:11px;padding:3px 8px">↻ Réinitialiser</button></div></div>
 </div>
 
+<div id="boardP" class="panel"><div class="title"><span id="boardT">CLASSEMENT</span></div></div>
+
 <div id="tr" class="panel">
   <div class="maptools">
     <button id="mapBig" title="Agrandir la carte (M)">⛶</button><button id="mapClose" class="mob">✕ Fermer</button>
@@ -310,7 +315,7 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
     <span id="trimTxt">–</span>
   </div>
   <div class="line desk" id="camLine">
-    <button id="camBtn" title="Caméra suiveuse / libre (C)">🎥 Suiveuse</button>
+    <button id="camBtn" title="Caméra suiveuse / libre / à bord (C)">🎥 Suiveuse</button>
     <button id="zIn" title="Zoom avant">＋</button>
     <button id="zOut" title="Zoom arrière">－</button>
   </div>
@@ -439,25 +444,72 @@ function isLand(lat, lon) {
 }
 
 /* ===================== MÉTÉO ===================== */
-function gauss(lat, lon, cLat, cLon, sLat, sLon) { const dy = (lat - cLat) * 60, dx = (lon - cLon) * 60 * Math.cos(((lat + cLat) / 2) * D2R); return Math.exp(-(dy * dy / (2 * sLat * sLat) + dx * dx / (2 * sLon * sLon))); }
+function gauss(lat, lon, cLat, cLon, sLat, sLon) { const dy = (lat - cLat) * 60, dx = (lon - cLon) * 60 * Math.cos(((lat + cLat) / 2) * D2R), q = dy * dy / (2 * sLat * sLat) + dx * dx / (2 * sLon * sLon); return q > 14 ? 0 : Math.exp(-q); }
+// gaussienne allongée selon un axe (relèvement brg en degrés depuis le nord) : sa le long de l'axe, sc en travers (nm)
+function gaussAx(lat, lon, cLat, cLon, sa, sc, brg) {
+  const dy = (lat - cLat) * 60, dx = (lon - cLon) * 60 * Math.cos(((lat + cLat) / 2) * D2R), b = brg * D2R, sb = Math.sin(b), cb = Math.cos(b);
+  const u = dx * sb + dy * cb, v = dx * cb - dy * sb, q = u * u / (2 * sa * sa) + v * v / (2 * sc * sc); return q > 14 ? 0 : Math.exp(-q);
+}
+// point à `dist` nm d'un centre selon un relèvement (approximation locale, suffisante à l'échelle des systèmes)
+const llAt = (lat, lon, brg, dist) => { const b = brg * D2R, la = lat + Math.cos(b) * dist / 60; return [la, lon + Math.sin(b) * dist / (60 * Math.cos(((lat + la) / 2) * D2R))]; };
 let WX_OFF = 0, START_H = 13;
 /* ----- Défi du jour : même météo, mêmes prévisions et même hasard pour tous les joueurs du jour ; simulation à pas fixe, ordres enregistrés ----- */
-const DSTEP = 1, ENGINE_VER = 3; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
+const DSTEP = 1, ENGINE_VER = 4; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
 const DAILY = { on: false, day: '', seed: 0, K: 0, acc: 0, log: null, lastCtl: null };
 let IN_STEP = false;
 function parisDay() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
 function hash32(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function hrand(a, b) { let h = Math.imul((a ^ 0x9e3779b9) >>> 0, 0x85ebca6b) ^ Math.imul((b + 0x7f4a7c15) >>> 0, 0xc2b2ae35); h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; h = Math.imul(h, 0x297a2d39); h ^= h >>> 15; return (h >>> 0) / 4294967296; }
 function highCenter(t) { const d = (t + WX_OFF) / 86400; return [35 + 2.5 * Math.sin(d * 0.7 + 0.5), -33 + 7 * Math.sin(d * 0.45)]; }
-function lowCenters(t) { const d = (t + WX_OFF) / 86400, out = []; for (let i = 0; i < 3; i++) { const ph = (((d * 12 + i * 30) % 90) + 90) % 90; out.push({ lat: 46 + 4 * Math.sin(i * 2.1 + d * 0.3) + ph * 0.1, lon: -72 + ph, depth: 30 * Math.sin(Math.PI * ph / 90) }); } return out; }
+function lowCenters(t) { const d = (t + WX_OFF) / 86400, out = []; for (let i = 0; i < 3; i++) { const ph = (((d * 12 + i * 30) % 90) + 90) % 90; out.push({ i, ph, lat: 46 + 4 * Math.sin(i * 2.1 + d * 0.3) + ph * 0.1, lon: -72 + ph, depth: 24 * Math.sin(Math.PI * ph / 90) }); } return out; }
+/* Systèmes météo à l'instant t (mis en cache : le routage interroge des milliers de points au même instant).
+   - anticyclone des Açores et dépression d'Islande, plus compacts qu'avant ;
+   - 3 dépressions mobiles d'ouest, chacune avec son front froid (talweg étroit vers le SSW) et son front chaud (vers l'ESE) ;
+   - une dorsale entre deux dépressions successives, qui remonte de l'anticyclone vers le NNE ;
+   - une goutte froide (petite dépression isolée, lente) entre Açores et Ibérie, une partie du temps ;
+   - deux ondes tropicales qui traversent les alizés d'est en ouest ; le pot-au-noir reste près de 5° N. */
+const WXC = { t: NaN, s: null };
+function wxSystems(t) {
+  if (t === WXC.t) return WXC.s;
+  const d = (t + WX_OFF) / 86400, lows = lowCenters(t), fronts = [], ridges = [], waves = [];
+  for (const L of lows) {
+    const k = L.depth / 24; if (k < 0.12) continue;
+    const bc = 208 + 12 * Math.sin(d * 0.8 + L.i * 1.7), lc = 650 * (0.45 + 0.55 * k), bw = 112 + 10 * Math.sin(d * 0.6 + L.i), lw = 340 * k;
+    const cc = llAt(L.lat, L.lon, bc, lc * 0.55), cw = llAt(L.lat, L.lon, bw, lw * 0.55);
+    fronts.push({ cold: true, lat0: L.lat, lon0: L.lon, lat: cc[0], lon: cc[1], brg: bc, len: lc, sa: lc / 2.1, sc: 110, amp: 0.2 * L.depth, k });
+    fronts.push({ cold: false, lat0: L.lat, lon0: L.lon, lat: cw[0], lon: cw[1], brg: bw, len: lw, sa: lw / 2.2, sc: 120, amp: 0.12 * L.depth, k });
+  }
+  for (let i = 0; i < 3; i++) {
+    const ph = (((d * 12 + i * 30 + 15) % 90) + 90) % 90, a = 8.5 * Math.sin(Math.PI * ph / 90);
+    if (a > 1) ridges.push({ lat: 44 + ph * 0.08 + 2 * Math.sin(d * 0.4 + i), lon: -72 + ph, brg: 18 + 8 * Math.sin(d * 0.5 + i * 2), sa: 520, sc: 165, amp: a });
+  }
+  const ca = 10 * Math.max(0, Math.sin(d * 0.23 + 2.1)), cut = ca > 1.5 ? { lat: 36.5 + 3 * Math.sin(d * 0.21), lon: -21 + 8 * Math.sin(d * 0.13 + 1), amp: ca } : null;
+  for (let k = 0; k < 2; k++) { const x = (((d * 6.5 + k * 26) % 52) + 52) % 52, a = 2.8 * Math.sin(Math.PI * x / 52); waves.push({ lat: 13.5, lon: -16 - x, brg: 8, sa: 420, sc: 100, amp: a }); }
+  for (const o of fronts.concat(ridges, waves)) { const b = o.brg * D2R; o.sb = Math.sin(b); o.cb = Math.cos(b); o.ia = 1 / (2 * o.sa * o.sa); o.ic = 1 / (2 * o.sc * o.sc); o.r2 = 14 * 2 * Math.max(o.sa, o.sc) ** 2; }
+  return WXC.t = t, WXC.s = { d, hc: highCenter(t), lows, fronts, ridges, cut, waves };
+}
+// gaussiennes rapides (cos de la latitude du point, rejet précoce loin du système) : pressure() est appelée 4 fois par calcul de vent
+function gq(lat, lon, cl, cLat, cLon, sLat, sLon) { const dy = (lat - cLat) * 60; if (dy * dy > 28 * sLat * sLat) return 0; const dx = (lon - cLon) * 60 * cl, q = dy * dy / (2 * sLat * sLat) + dx * dx / (2 * sLon * sLon); return q > 14 ? 0 : Math.exp(-q); }
+function gqAx(lat, lon, cl, o) { const dy = (lat - o.lat) * 60; if (dy * dy > o.r2) return 0; const dx = (lon - o.lon) * 60 * cl, u = dx * o.sb + dy * o.cb, v = dx * o.cb - dy * o.sb, q = u * u * o.ia + v * v * o.ic; return q > 14 ? 0 : Math.exp(-q); }
 function pressure(lat, lon, t) {
-  const d = (t + WX_OFF) / 86400, hc = highCenter(t);
-  let p = 1011 + 18 * gauss(lat, lon, hc[0], hc[1], 650, 1100);
-  p -= 13 * gauss(lat, lon, 61, -25, 700, 900);
+  const S = wxSystems(t), hc = S.hc, cl = Math.cos(lat * D2R);
+  let p = 1011 + 17 * gq(lat, lon, cl, hc[0], hc[1], 430, 720);
+  p -= 12 * gq(lat, lon, cl, 61, -25, 470, 620);
   p -= 8 * Math.exp(-(((lat - 5) / 11) ** 2));
-  for (const L of lowCenters(t)) p -= L.depth * gauss(lat, lon, L.lat, L.lon, 380, 540);
-  p += 1.6 * Math.sin(lat / 5 + d * 0.9) * Math.sin(lon / 7 - d * 0.6);
+  for (const L of S.lows) if (L.depth > 0.5) p -= L.depth * gq(lat, lon, cl, L.lat, L.lon, 250, 340);
+  for (const F of S.fronts) p -= F.amp * gqAx(lat, lon, cl, F);
+  for (const R of S.ridges) p += R.amp * gqAx(lat, lon, cl, R);
+  if (S.cut) p -= S.cut.amp * gq(lat, lon, cl, S.cut.lat, S.cut.lon, 190, 230);
+  for (const W of S.waves) p -= W.amp * gqAx(lat, lon, cl, W);
+  p += 1.6 * Math.sin(lat / 5 + S.d * 0.9) * Math.sin(lon / 7 - S.d * 0.6);
   return p;
+}
+// zones de grains liées aux systèmes : le long des fronts froids et des ondes tropicales
+function wxConv(lat, lon, t) {
+  const S = wxSystems(t); let c = 0;
+  for (const F of S.fronts) if (F.cold) { const dy = (lat - F.lat) * 60; if (dy * dy < F.r2) c = Math.max(c, 0.85 * F.k * gaussAx(lat, lon, F.lat, F.lon, F.sa, 55, F.brg)); }
+  for (const W of S.waves) if (W.amp > 0.3 && Math.abs(lon - W.lon) < 6) c = Math.max(c, 0.25 * W.amp * gaussAx(lat, lon, W.lat, W.lon, W.sa, 70, W.brg));
+  return c;
 }
 let WIND_K = 4.6;
 function hash2(x, y) { const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return v - Math.floor(v); }
@@ -476,7 +528,7 @@ function windRace(lat, lon, t) {
   const G = Math.hypot(gx, gy) + 1e-9, ca = 0.9397, sa = 0.342;
   const ve = (-gy * ca - gx * sa) / G, vn = (gx * ca - gy * sa) / G;
   const tws = clamp(WIND_K * G * 0.707 / Math.max(Math.sin(Math.abs(lat) * D2R), 0.26), 1.5, 45), h = (t + WX_OFF) / 3600;
-  const zone = Math.max(smooth(6, 13, lat) * smooth(28, 20, lat), smooth(1008, 994, pc) * 0.9, 0.12);
+  const zone = Math.max(smooth(6, 13, lat) * smooth(28, 20, lat), smooth(1008, 994, pc) * 0.9, wxConv(lat, lon, t), 0.12);
   const w0 = { twd: norm360(Math.atan2(ve, vn) * R2D + 180), tws, p: pc };
   if (COURSE.coastal && COURSE.clim) climBlend(w0, COURSE.clim, lat, lon, h);
   return applySquall(w0, (lon + h * 0.25) * 4, lat * 4 + h * 0.03, zone);
@@ -1245,7 +1297,18 @@ function parseModelBin(buf) {
     if (p.uv) { const u = new Uint16Array(buf, o, p.nv * 2), uv = new Float32Array(p.nv * 2); for (let i = 0; i < p.nv * 2; i++) uv[i] = u[i] / 65535; g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); }
     g.computeVertexNormals(); g.computeBoundingSphere(); out.geo[p.name] = g;
   }
+  // les bordés importés montent à l'intérieur du cockpit (faces texturées livrée, en conflit de profondeur avec la cuve) :
+  // on retire ces triangles, la cuve de cockpit les remplace — visible surtout en vue à bord
+  ['hull_topS', 'hull_topP'].forEach(n => { const g = out.geo[n]; if (g) cutBox(g, -1.92, 1.92, 0.45, 1.4, 5.05, 8.7); });
   return out;
+}
+function cutBox(g, x0, x1, y0, y1, z0, z1) {
+  const P = g.attributes.position.array, I = g.index.array, keep = [];
+  for (let t = 0; t < I.length; t += 3) {
+    let cx = 0, cy = 0, cz = 0; for (let k = 0; k < 3; k++) { const j = I[t + k] * 3; cx += P[j]; cy += P[j + 1]; cz += P[j + 2]; }
+    cx /= 3; cy /= 3; cz /= 3; if (cx > x0 && cx < x1 && cy > y0 && cy < y1 && cz > z0 && cz < z1) continue; keep.push(I[t], I[t + 1], I[t + 2]);
+  }
+  if (keep.length < I.length) g.setIndex(new THREE.BufferAttribute(I instanceof Uint32Array ? new Uint32Array(keep) : new Uint16Array(keep), 1));
 }
 // cuve de cockpit : le maillage importé a des trous (plancher et parois) par lesquels on voyait l'eau → plancher,
 // parois latérales, cloison avant et seuil arrière fermés, calés sur le pont relevé du modèle (z 5,0 → 8,7 m)
@@ -1509,7 +1572,7 @@ function makeWake() {
   });
   const m = new THREE.Mesh(g, mat); m.frustumCulled = false; m.renderOrder = 1; scene.add(m); return m;
 }
-const _wk = { };
+const _wk = { }, _wkS = new THREE.Sphere(), _wkF = new THREE.Frustum(), _wkM = new THREE.Matrix4();
 function updateWake(b, px, pz, fx, fz, rx, rz) {
   const m = b.vis.wake, k = b.vis.cd.k, kk = 0.5 + 0.5 * k, pos = m.geometry.attributes.position.array, spd = b.dspd || b.spd, L = clamp((25 + spd * 5.5) * (0.55 + 0.45 * k), 12, 230), La = L * 0.8;
   let o = 0;
@@ -1881,7 +1944,7 @@ function dailyStep() {
   if (!P.finished && !P.atStop) {
     // le pilote routeur agit avant le pas ; son effet est enregistré comme un ordre ordinaire
     P.follow = !!(ROUTE.follow && (ROUTE.nodes || P.grounded));
-    if (P.follow && !isTurnMan(P.man) && !P.queue.some(q => q.type === 'turn')) { const w = wind(P.lat, P.lon, gameT), adv = P.grounded ? null : routeAdvice();
+    if (P.follow && !isTurnMan(P.man) && !P.queue.some(q => q.type === 'turn')) { const w = wind(P.lat, P.lon, gameT), adv = P.grounded ? null : routeAdviceFor(player, ROUTE);
       if (P.grounded) { const nh = Math.round(pilotSafe(P, P.hdg, w.twd)); if (nh !== Math.round(P.hdg)) { P.mode = 'cap'; P.hdg = nh; } }
       else if (adv) { const tw = norm180(w.twd - adv.hdg), cur = norm180(w.twd - P.hdg), nh = Math.round(pilotSafe(P, (Math.sign(tw) !== Math.sign(cur) && Math.abs(tw) > 4) ? norm360(w.twd - Math.sign(cur || 1) * Math.abs(tw)) : adv.hdg, w.twd)); if (P.mode !== 'cap' || Math.abs(norm180(nh - P.hdg)) >= 1) { P.mode = 'cap'; P.hdg = nh; } } }
     if (DAILY.log) { const c = ctlOf(P), js = JSON.stringify(c); if (js !== DAILY.lastCtl) { DAILY.log.ev.push([DAILY.K, 'c', c]); DAILY.lastCtl = js; } }
@@ -1916,7 +1979,7 @@ function stepBoat(b, dt) {
   else {
     if (DAILY.on) { if (b.follow && !isTurnMan(b.man) && !b.queue.some(q => q.type === 'turn')) cost *= ASSIST; }
     else if (ROUTE.follow && (ROUTE.nodes || b.grounded) && !isTurnMan(b.man) && !b.queue.some(q => q.type === 'turn')) {
-      const adv = b.grounded ? null : routeAdvice(); cost *= ASSIST;
+      const adv = b.grounded ? null : routeAdviceFor(player, ROUTE); cost *= ASSIST;
       if (b.grounded) { b.mode = 'cap'; b.hdg = pilotSafe(b, b.hdg, w.twd); }
       else if (adv) { const tw = norm180(w.twd - adv.hdg), cur = norm180(w.twd - b.hdg); b.mode = 'cap'; b.hdg = pilotSafe(b, (Math.sign(tw) !== Math.sign(cur) && Math.abs(tw) > 4) ? norm360(w.twd - Math.sign(cur || 1) * Math.abs(tw)) : adv.hdg, w.twd); }
     }
@@ -2012,17 +2075,20 @@ function rankOf(b) { return standings().indexOf(b) + 1; }
 
 /* ===================== ROUTAGE (isochrones) + ordonnanceur de calculs ===================== */
 const ROUTE = { dest: null, busy: false, nodes: null, isos: [], eta: 0, t0: 0, follow: false, showIso: true, err: '', steps: 0, lastAuto: 0, pick: false, job: null };
-const JOBS = []; let jobsRunning = false;
-function enqueueJob(job, urgent) { urgent ? JOBS.unshift(job) : JOBS.push(job); if (!jobsRunning) { jobsRunning = true; setTimeout(runJobs, 0); } }
-function runJobs() {
+// File de calculs de routage (joueur + concurrents). Exécutée par tranches dans frame(), dans le temps restant de l'image :
+// le routage ne bloque plus le rendu (avant : tranches de 14 ms enchaînées par setTimeout → saccades sur les grandes traversées).
+const JOBS = []; let jobsT = 0;
+function enqueueJob(job, urgent) { urgent ? JOBS.unshift(job) : JOBS.push(job); }
+function runJobs(budget = 14) {
   const t1 = performance.now();
-  while (JOBS.length && performance.now() - t1 < 14) {
+  while (JOBS.length && performance.now() - t1 < budget) {
     const j = JOBS[0]; if (j.cancelled) { JOBS.shift(); continue; }
-    const r = routeStep(j.st); if (j.onStep) j.onStep(j.st);
+    const r = routeStep(j.st, t1 + budget); if (j.onStep) j.onStep(j.st);
     if (r) { JOBS.shift(); j.onDone(r, j.st); }
   }
-  if (JOBS.length) setTimeout(runJobs, 0); else jobsRunning = false;
 }
+// onglet en arrière-plan : rAF est suspendu, le calcul continue doucement
+setInterval(() => { if (document.hidden && JOBS.length) runJobs(30); }, 250);
 function cancelAllJobs() { JOBS.forEach(j => j.cancelled = true); boats.forEach(b => b.routeJob = null); }
 function clearRoute() { if (ROUTE.job) ROUTE.job.cancelled = true; Object.assign(ROUTE, { dest: null, busy: false, nodes: null, isos: [], err: '', follow: false, pick: false, job: null }); }
 // Pilote routeur « anti-échouement » : si la terre est à moins de ~0,3 nm sur le cap voulu, il s'écarte vers le large (même bord si possible)
@@ -2040,44 +2106,55 @@ function makeRouteState(dest, b, keepIsos) {
   const race = MODE === 'race', t0 = b.t !== undefined ? b.t : gameT, w0 = windFc(b.lat, b.lon, t0), short = race && COURSE.id === 'fastnet', coast = race && COURSE.coastal;
   const s0 = { lat: b.lat, lon: b.lon, t: t0, parent: null, twa: norm180(w0.twd - b.hdg), hdg: b.hdg, tws: w0.tws };
   const cl0 = Math.cos(s0.lat * D2R), Xd = (dest.lon - s0.lon) * 60 * cl0, Yd = (dest.lat - s0.lat) * 60;
-  return { Xd, Yd, D0: Math.hypot(Xd, Yd), brg0: Math.atan2(Xd, Yd) * R2D, dest, race, short, dt: race ? (coast ? 600 : short ? 2700 : 7200) : 120, maxSteps: race ? 360 : 400, tackLoss: race ? (CLS.foils ? 150 : 60) : 30, s0, front: [s0], step: 0, cl0, isos: [], keepIsos };
+  // concurrents au large : secteurs d'isochrone ×1,3 → 20 à 40 % de calcul en moins, ETA quasi identique (≤ 1 %)
+  return { coarse: race && !coast && !keepIsos, Xd, Yd, D0: Math.hypot(Xd, Yd), brg0: Math.atan2(Xd, Yd) * R2D, dest, race, short, dt: race ? (coast ? 600 : short ? 2700 : 7200) : 120, maxSteps: race ? (coast ? 360 : 480) : 400, tackLoss: race ? (CLS.foils ? 150 : 60) : 30, s0, front: [s0], step: 0, cl0, isos: [], keepIsos };
 }
-function routeStep(st) {
+// Un pas d'isochrone, découpé : reprend là où il s'était arrêté si l'échéance `until` (performance.now) est dépassée.
+// Résultat identique au calcul d'un bloc ; seules les tranches changent (le pas transat pouvait prendre 15-20 ms d'un coup).
+function routeStep(st, until = Infinity) {
   const { dest, dt, s0, tackLoss, cl0 } = st, rr = dest.r || 0;
-  let D = 1; st.front.forEach(n => { if (n.db) D = Math.max(D, Math.sqrt(n.db)); });
-  const sector = st.race ? clamp(R2D * Math.atan2(st.short || COURSE.coastal ? 4 : 12, D), 0.3, 3) : clamp(R2D * Math.atan2(0.25, D), 0.4, 5);
-  let best = null; const ws = [];
+  if (!st.cur) { let D = 1; st.front.forEach(n => { if (n.db) D = Math.max(D, Math.sqrt(n.db)); }); st.cur = { D, i: 0, j: 0, ws: [], best: null, bins: new Map(), near: new Map(), arr: null }; }
+  const C = st.cur, D = C.D, ws = C.ws;
+  const sector = st.race ? clamp(R2D * Math.atan2(st.short || COURSE.coastal ? 4 : 12, D), 0.3, 3) * (st.coarse ? 1.3 : 1) : clamp(R2D * Math.atan2(0.25, D), 0.4, 5);
   const reachMax = 45 * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 + rr;
-  for (const n of st.front) {
-    const w = windFc(n.lat, n.lon, n.t); ws.push(w);
+  for (; C.i < st.front.length; C.i++) {
+    if ((C.i & 31) === 31 && performance.now() > until) return null;
+    const n = st.front[C.i], w = windFc(n.lat, n.lon, n.t); ws[C.i] = w;
     if (Math.abs(n.lat - dest.lat) * 60 > reachMax) continue;
     const d = gcDist(n.lat, n.lon, dest.lat, dest.lon); if (d > reachMax) continue;
     const brg = gcBrg(n.lat, n.lon, dest.lat, dest.lon), twa = norm180(w.twd - brg), s = bestFast(Math.abs(twa), w.tws), dd = Math.max(0, d - rr * 0.8);
-    if (s > 0.5 && dd <= s * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 && !segLandLL(n.lat, n.lon, dest.lat, dest.lon, Math.max(0, d - Math.max(rr, st.race ? 1 : 0.05)))) { const ta = n.t + dd / s * 3600; if (!best || ta < best.t) best = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: brg, tws: w.tws }; }
+    if (s > 0.5 && dd <= s * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 && !segLandLL(n.lat, n.lon, dest.lat, dest.lon, Math.max(0, d - Math.max(rr, st.race ? 1 : 0.05)))) { const ta = n.t + dd / s * 3600; if (!C.best || ta < C.best.t) C.best = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: brg, tws: w.tws }; }
   }
-  if (best) { st.best = best; return 'done'; }
+  if (C.best) { st.best = C.best; st.cur = null; return 'done'; }
   if (st.step >= st.maxSteps || !st.front.length) { // côtier : nouvel essai plus fin, puis plus large (passes étroites, îles à contourner)
-    if (st.race && COURSE.coastal && (st.retry || 0) < 2) { st.retry = (st.retry || 0) + 1; st.dt = st.retry === 1 ? 300 : 900; st.maxSteps = Math.round(216000 / st.dt); st.front = [st.s0]; st.step = 0; st.isos = []; st.wide = st.retry === 2; return null; }
-    return 'fail'; }
-  const bins = new Map(), tol = Math.max(rr, st.race ? (COURSE.coastal ? 0.6 : 2.5) : 0.08); let arr = null;
-  st.front.forEach((n, idx) => {
-    const w = ws[idx], brgD = gcBrg(n.lat, n.lon, dest.lat, dest.lon), cn = Math.cos(n.lat * D2R), ex = (dest.lon - n.lon) * 60 * cn, ey = (dest.lat - n.lat) * 60, eL = Math.hypot(ex, ey);
+    if (st.race && COURSE.coastal && (st.retry || 0) < 2) { st.retry = (st.retry || 0) + 1; st.dt = st.retry === 1 ? 300 : 900; st.maxSteps = Math.round(216000 / st.dt); st.front = [st.s0]; st.step = 0; st.isos = []; st.wide = st.retry === 2; st.cur = null; return null; }
+    st.cur = null; return 'fail'; }
+  const bins = C.bins, tol = Math.max(rr, st.race ? (COURSE.coastal ? 0.6 : 2.5) : 0.08);
+  for (; C.j < st.front.length; C.j++) {
+    if ((C.j & 7) === 7 && performance.now() > until) return null;
+    const n = st.front[C.j], w = ws[C.j], brgD = gcBrg(n.lat, n.lon, dest.lat, dest.lon), cn = Math.cos(n.lat * D2R), ex = (dest.lon - n.lon) * 60 * cn, ey = (dest.lat - n.lat) * 60, eL = Math.hypot(ex, ey);
     for (let off = -102; off <= 102; off += 6) {
       const h = norm360(brgD + off), twa = norm180(w.twd - h), s = bestFast(Math.abs(twa), w.tws); if (s < 0.3) continue;
       const nm = s * ((n.parent && Math.sign(twa) !== Math.sign(n.twa)) ? dt - tackLoss : dt) / 3600, hr = h * D2R;
       const lat = n.lat + nm * Math.cos(hr) / 60, lon = n.lon + nm * Math.sin(hr) / (60 * cn);
       if (eL < nm + tol) { const sx = Math.sin(hr) * nm, sy = Math.cos(hr) * nm, u = clamp((ex * sx + ey * sy) / (nm * nm), 0, 1), cd = Math.hypot(ex - u * sx, ey - u * sy);
-        if (cd <= tol) { const ta = n.t + u * dt; if ((!arr || ta < arr.t) && !segLandLL(n.lat, n.lon, n.lat + u * sy / 60, n.lon + u * sx / (60 * cn), u * nm)) arr = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: h, tws: w.tws }; } }
+        if (cd <= tol) { const ta = n.t + u * dt; if ((!C.arr || ta < C.arr.t) && !segLandLL(n.lat, n.lon, n.lat + u * sy / 60, n.lon + u * sx / (60 * cn), u * nm)) C.arr = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: h, tws: w.tws }; } }
       const X = (lon - s0.lon) * 60 * cl0, Y = (lat - s0.lat) * 60, db = X * X + Y * Y;
       if (st.step > 2 && !st.wide && (Math.abs(norm180(Math.atan2(X, Y) * R2D - st.brg0)) > 80 || (X - st.Xd) ** 2 + (Y - st.Yd) ** 2 > (st.D0 * 1.15 + 50) ** 2)) continue;
       const k = Math.floor(norm360(Math.atan2(X, Y) * R2D) / sector), prev = bins.get(k);
-      if (prev && db <= prev.db) continue;
+      // au large, près de l'arrivée : on garde aussi le nœud le plus proche de l'arrivée par secteur de 6° vu depuis l'arrivée
+      // (sinon le critère « le plus loin du départ » élimine les nœuds qui contournent une île posée devant l'arrivée)
+      const nearK = st.race && !COURSE.coastal && eL < 300 ? Math.floor(norm360(Math.atan2(lon - dest.lon, lat - dest.lat) * R2D) / 6) : -1, de2 = nearK >= 0 ? ((lon - dest.lon) * 60 * cn) ** 2 + ((lat - dest.lat) * 60) ** 2 : 0, pn = nearK >= 0 ? C.near.get(nearK) : null;
+      const keepFar = !(prev && db <= prev.db), keepNear = nearK >= 0 && (!pn || de2 < pn.de2);
+      if (!keepFar && !keepNear) continue;
       if (segLandLL(n.lat, n.lon, lat, lon, nm)) continue;
-      bins.set(k, { lat, lon, t: n.t + dt, parent: n, twa, hdg: h, tws: w.tws, db, k });
+      const node = { lat, lon, t: n.t + dt, parent: n, twa, hdg: h, tws: w.tws, db, k, de2 };
+      if (keepFar) bins.set(k, node); if (keepNear) C.near.set(nearK, node);
     }
-  });
-  if (arr) { st.best = arr; return 'done'; }
-  st.front = [...bins.values()].sort((a, b) => a.k - b.k); st.step++;
+  }
+  st.cur = null;
+  if (C.arr) { st.best = C.arr; return 'done'; }
+  const fr = new Set(bins.values()); C.near.forEach(n => fr.add(n)); st.front = [...fr].sort((a, b) => a.k - b.k); st.step++;
   if (st.keepIsos && st.step % (st.race ? Math.round(21600 / dt) : 5) === 0) { const dec = Math.max(1, Math.ceil(st.front.length / 320)); st.isos.push(st.front.filter((n, i) => i % dec === 0).map(n => [n.lat, n.lon, n.k * sector])); }
   return null;
 }
@@ -2134,7 +2211,12 @@ function routeAdviceFor(b, Rt) {
   const twa = norm180(w.twd - hdg), a = Math.abs(twa);
   return { bi, tNear, hdg, twa, sail: bestSail(a, w.tws), foil: foilBoost(a, w.tws) > 0.02 ? (twa >= 0 ? 'bâbord' : 'tribord') : 'relevés', xtrack: bd, stale: bd > (race ? (COURSE.coastal ? 3 : COURSE.id === 'fastnet' ? 12 : 40) : 1.5) };
 }
-function routeAdvice() { return ROUTE.nodes ? routeAdviceFor(player, ROUTE) : null; }
+const _adv = { t: -1, nodes: null, v: null, g: 0 };
+function routeAdvice() {
+  if (!ROUTE.nodes) return null;
+  if (_adv.nodes === ROUTE.nodes && realT - _adv.t >= 0 && realT - _adv.t < 0.2 && Math.abs(gameT - _adv.g) < 900 && _adv.mi === player.mi) return _adv.v;
+  _adv.v = routeAdviceFor(player, ROUTE); _adv.t = realT; _adv.nodes = ROUTE.nodes; _adv.g = gameT; _adv.hdg = player.hdg; _adv.mi = player.mi; return _adv.v;
+}
 function fmtIn(sec) { sec = Math.max(0, sec); if (MODE !== 'race' || sec < 3600) return Math.max(1, Math.round(sec / 60)) + ' min'; const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.round(sec % 3600 / 60); return d ? `${d} j ${h} h` : `${h} h ${pad(m)}`; }
 const foilState = (a, twa, tws) => foilBoost(a, tws) > 0.02 ? (twa >= 0 ? 'P' : 'S') : '0';
 const foilName = f => f === 'P' ? 'bâbord ▼' : f === 'S' ? 'tribord ▼' : 'relevés';
@@ -2157,7 +2239,7 @@ function routePlan() {
   return plan;
 }
 function applyAdvice() {
-  const adv = routeAdvice(); if (!adv) return;
+  const adv = routeAdviceFor(player, ROUTE); if (!adv) return;
   const w = curWind(), cur = norm180(w.twd - player.hdg);
   if (Math.sign(adv.twa) !== Math.sign(cur) && Math.abs(adv.twa) > 2) {
     // le routeur ne manœuvre jamais à ta place : on garde le bord actuel à l'angle conseillé
@@ -2227,8 +2309,10 @@ function foilLeeward() {
 function trimBy(d) { player.autoTrim = false; player.trim = clamp(player.trim + d, 0, 1); }
 function setAccel(a) { accel = a; buildAccel(); }
 function togglePause() { if (!running) return; paused = !paused; $('pause').style.display = paused ? 'block' : 'none'; if (paused) saveGame(); }
-const cam = { dist: 95, elev: 14, az: 0, mode: 'chase' };
-function toggleCam() { cam.mode = cam.mode === 'chase' ? 'free' : 'chase'; cam.az = 0; $('camBtn').textContent = cam.mode === 'chase' ? '🎥 Suiveuse' : '🎥 Libre'; }
+const cam = { dist: 95, elev: 14, az: 0, mode: 'chase', obAz: 0, obEl: 0, obFov: 72, obSide: 1, obIdle: 9 };
+const CAM_LBL = { chase: ['🎥 Suiveuse', '🎥 Chase'], free: ['🎥 Libre', '🎥 Free'], onboard: ['🎥 À bord', '🎥 Onboard'] };
+function setCamMode(m) { cam.mode = m; cam.az = 0; cam.obAz = 0; cam.obEl = 0; cam.obIdle = 9; $('camBtn').textContent = T(...CAM_LBL[m]); if (m === 'onboard') toast(T('🎥 Vue à bord : glisse pour tourner la tête, molette pour le champ de vision', '🎥 Onboard view: drag to look around, wheel for field of view'), 2600); }
+function toggleCam() { setCamMode(cam.mode === 'chase' ? 'free' : cam.mode === 'free' ? 'onboard' : 'chase'); }
 
 const keys = {};
 addEventListener('keydown', e => {
@@ -2269,7 +2353,8 @@ $('reefP').onclick = () => reefBy(1); $('reefM').onclick = () => reefBy(-1);
 $('foilP').onclick = () => toggleFoil('P'); $('foilS').onclick = () => toggleFoil('S'); $('foilSwap').onclick = foilLeeward;
 $('trim').oninput = e => { player.autoTrim = false; player.trim = e.target.value / 100; };
 $('aSail').onclick = () => player.autoSail = !player.autoSail; $('aTrim').onclick = () => player.autoTrim = !player.autoTrim; $('aFoil').onclick = () => player.autoFoil = !player.autoFoil;
-$('zIn').onclick = () => cam.dist = clamp(cam.dist / 1.4, CLS.cam * 0.25, 4000); $('zOut').onclick = () => cam.dist = clamp(cam.dist * 1.4, CLS.cam * 0.25, 4000);
+$('zIn').onclick = () => { if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov / 1.2, 35, 90); else cam.dist = clamp(cam.dist / 1.4, CLS.cam * 0.25, 4000); };
+$('zOut').onclick = () => { if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov * 1.2, 35, 90); else cam.dist = clamp(cam.dist * 1.4, CLS.cam * 0.25, 4000); };
 $('mobBtn').onclick = () => setMobile(!isMobile());
 $('tabDesk').onclick = () => setMobile(false); $('tabFold').onclick = () => setFold(!document.body.classList.contains('fold')); $('tabCourse').onclick = () => setSheet('course'); $('tabSails').onclick = () => setSheet('sails');
 $('tabMap').onclick = () => { setSheet(null); toggleMapBig(); }; $('mapClose').onclick = () => toggleMapBig();
@@ -2297,9 +2382,10 @@ function buildAccel() { const el = $('accel'); el.querySelectorAll('button').for
 const pointers = new Map(); let pinchD = 0;
 canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinchD = Math.hypot(a.x - b.x, a.y - b.y); } });
 canvas.addEventListener('pointermove', e => { const p = pointers.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
-  if (pointers.size === 1) { cam.az -= dx * 0.3; cam.elev = clamp(cam.elev + dy * 0.2, 2, 88); } else if (pointers.size === 2) { const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); if (pinchD > 0 && d > 0) cam.dist = clamp(cam.dist * pinchD / d, CLS.cam * 0.25, 4000); pinchD = d; } });
+  if (pointers.size === 1 && cam.mode === 'onboard') { cam.obAz = clamp(cam.obAz - dx * 0.25, -170, 170); cam.obEl = clamp(cam.obEl - dy * 0.18, -45, 35); cam.obIdle = 0; }
+  else if (pointers.size === 1) { cam.az -= dx * 0.3; cam.elev = clamp(cam.elev + dy * 0.2, 2, 88); } else if (pointers.size === 2) { const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); if (pinchD > 0 && d > 0) { if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov * pinchD / d, 35, 90); else cam.dist = clamp(cam.dist * pinchD / d, CLS.cam * 0.25, 4000); } pinchD = d; } });
 const pUp = e => { pointers.delete(e.pointerId); pinchD = 0; }; canvas.addEventListener('pointerup', pUp); canvas.addEventListener('pointercancel', pUp);
-canvas.addEventListener('wheel', e => { e.preventDefault(); cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), CLS.cam * 0.25, 4000); }, { passive: false });
+canvas.addEventListener('wheel', e => { e.preventDefault(); if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov * Math.exp(e.deltaY * 0.0008), 35, 90); else cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), CLS.cam * 0.25, 4000); }, { passive: false });
 
 /* ===================== CARTE ===================== */
 const mapCv = $('map'), polCv = $('polar'), mapLayer = document.createElement('canvas'), heat = document.createElement('canvas');
@@ -2356,6 +2442,41 @@ function windRGB(t) { for (let i = 1; i < WSTOPS.length; i++) if (t <= WSTOPS[i]
 $('lgBar').style.background = `linear-gradient(90deg,${WSTOPS.map(s => `rgb(${s[1].join(',')}) ${s[0] / 45 * 100}%`).join(',')})`;
 function fcstT() { return gameT + fcstH * (MODE === 'race' ? 3600 : 60); }
 
+// Carte : fronts (froid ▲ bleu, chaud ● rouge), dorsales (tirets), goutte froide, ondes tropicales, pot-au-noir
+function drawWxFeatures(g, t, fcC) {
+  const S = wxSystems(t + (fcOff(45, -30, t) || [0, 0, 0])[2]), big = $('tr').classList.contains('big'), z = view.zoom;
+  const P = (la, lo) => { const c = fcC(la, lo); return [MX(c[1]), MY(c[0])]; };
+  const line = (lat0, lon0, brg, d0, d1) => { const pts = []; for (let d = d0; d <= d1 + 1; d += Math.max(15, (d1 - d0) / 24)) { const q = llAt(lat0, lon0, brg, d); pts.push(P(q[0], q[1])); } return pts; };
+  const label = (txt, x, y, col) => { if (!big && z < 40) return; g.font = '10px system-ui'; g.fillStyle = col; g.textAlign = 'left'; g.fillText(txt, x + 6, y - 4); };
+  g.save(); g.lineJoin = 'round';
+  for (const F of S.fronts) {
+    if (F.k < 0.3) continue;
+    const pts = line(F.lat0, F.lon0, F.brg, 25, F.len * 0.95), col = F.cold ? '#5aa9ff' : '#ff6b6b', nb = (F.brg - 90) * D2R;
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 2; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke();
+    // symboles côté où avance le front, tous les ~22 px
+    let acc = 11; for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], L = Math.hypot(x1 - x0, y1 - y0); if (L < 0.1) continue; const ux = (x1 - x0) / L, uy = (y1 - y0) / L;
+      let px = uy, py = -ux; if (px * Math.sin(nb) - py * Math.cos(nb) < 0) { px = -px; py = -py; } // normale vers le côté d'avancée
+      while (acc < L) { const x = x0 + ux * acc, y = y0 + uy * acc; g.beginPath();
+        if (F.cold) { g.moveTo(x - ux * 4, y - uy * 4); g.lineTo(x + px * 6, y + py * 6); g.lineTo(x + ux * 4, y + uy * 4); }
+        else g.arc(x, y, 4, Math.atan2(py, px) - Math.PI / 2, Math.atan2(py, px) + Math.PI / 2);
+        g.closePath(); g.fill(); acc += 22; }
+      acc -= L; }
+    if (F.cold && pts.length > 2) label(T('front froid', 'cold front'), pts[Math.floor(pts.length * 0.7)][0], pts[Math.floor(pts.length * 0.7)][1], '#9ccbff');
+  }
+  g.setLineDash([7, 5]); g.lineWidth = 1.6;
+  for (const R of S.ridges) {
+    if (R.amp < 3) continue; const pts = line(R.lat, R.lon, R.brg, -R.sa * 1.1, R.sa * 1.1).map((p, i, a) => p), q = llAt(R.lat, R.lon, R.brg - 180, R.sa * 1.1), p0 = P(q[0], q[1]), q1 = llAt(R.lat, R.lon, R.brg, R.sa * 1.1), p1 = P(q1[0], q1[1]);
+    g.strokeStyle = 'rgba(127,209,255,0.85)'; g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.stroke(); const m = P(R.lat, R.lon); label(T('dorsale', 'ridge'), m[0], m[1], '#a8ddff');
+  }
+  for (const W of S.waves) {
+    if (W.amp < 1) continue; const q0 = llAt(W.lat, W.lon, W.brg + 180, W.sa), q1 = llAt(W.lat, W.lon, W.brg, W.sa), p0 = P(q0[0], q0[1]), p1 = P(q1[0], q1[1]);
+    g.strokeStyle = 'rgba(255,190,90,0.9)'; g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.stroke(); label(T('onde tropicale', 'tropical wave'), p1[0], p1[1] + 14, '#ffd08a');
+  }
+  g.setLineDash([]);
+  if (S.cut) { const c = P(S.cut.lat, S.cut.lon); g.font = 'bold 13px system-ui'; g.textAlign = 'center'; g.fillStyle = '#c9a0ff'; g.fillText('D', c[0], c[1]); label(T('goutte froide', 'cut-off low'), c[0], c[1] + 14, '#d9bcff'); }
+  const ia = P(5.5, unX(mapCv._w * 0.5)); if (ia[1] > 10 && ia[1] < mapCv._h - 10) { g.font = 'italic 10px system-ui'; g.fillStyle = 'rgba(220,200,255,0.8)'; g.textAlign = 'center'; g.fillText(T('pot-au-noir', 'doldrums'), mapCv._w * 0.5, ia[1]); }
+  g.restore();
+}
 function drawWindLayer() {
   const W = mapCv._w, H = mapCv._h, dpr = mapCv._dpr; mapLayer.width = mapCv.width; mapLayer.height = mapCv.height;
   const g = mapLayer.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -2383,6 +2504,8 @@ function drawWindLayer() {
     g.stroke();
     g.font = 'bold 15px system-ui'; g.textAlign = 'center';
     const fcC = (la, lo) => { const o = fcOff(la, lo, t); return o ? [la - o[0], lo - o[1]] : [la, lo]; };
+    drawWxFeatures(g, t, fcC);
+    g.font = 'bold 15px system-ui'; g.textAlign = 'center';
     const hc0 = highCenter(t), hc = fcC(hc0[0], hc0[1]); g.fillStyle = '#7fd1ff'; g.fillText('A', MX(hc[1]), MY(hc[0])); g.font = '10px system-ui'; g.fillText(Math.round(pressureFc(hc[0], hc[1], t)), MX(hc[1]), MY(hc[0]) + 12);
     lowCenters(t).forEach(L0 => { if (L0.depth < 8) return; const c = fcC(L0.lat, L0.lon), L = { lat: c[0], lon: c[1] }; g.font = 'bold 15px system-ui'; g.fillStyle = '#ff8fab'; g.fillText('D', MX(L.lon), MY(L.lat)); g.font = '10px system-ui'; g.fillText(Math.round(pressureFc(L.lat, L.lon, t)), MX(L.lon), MY(L.lat) + 12); });
     g.textAlign = 'left';
@@ -2392,6 +2515,31 @@ function drawWindLayer() {
     const w = windFc(unY(y), unX(x), t), a = (w.twd + 180) * D2R, L = 6 + Math.min(w.tws, 40) * 0.45, dx = Math.sin(a), dy = -Math.cos(a), ex = x + dx * L / 2, ey = y + dy * L / 2;
     g.strokeStyle = 'rgba(255,255,255,0.75)'; g.beginPath(); g.moveTo(x - dx * L / 2, y - dy * L / 2); g.lineTo(ex, ey); g.moveTo(ex, ey); g.lineTo(ex - dx * 4 + dy * 3, ey - dy * 4 - dx * 3); g.moveTo(ex, ey); g.lineTo(ex - dx * 4 - dy * 3, ey - dy * 4 + dx * 3); g.stroke();
   }
+  mapLandKey = mapKey();
+}
+let mapLandKey = '', landLayerKey = '', isoId = 0;
+const landLayer = document.createElement('canvas');
+const mapKey = () => [view.cLon, view.cMy, view.zoom, mapCv._w, mapCv._h, mapCv._dpr, MODE, COURSE.id, $('tr').classList.contains('big')].join('|');
+// Terres + isochrones dans un calque en cache : redessiné seulement si la vue, le parcours ou les isochrones changent
+function drawLandLayer() {
+  const isoK = ROUTE.showIso ? (ROUTE.isos.__id || (ROUTE.isos.__id = ++isoId)) + ':' + ROUTE.isos.length : 0, key = mapKey() + '|' + isoK;
+  if (key === landLayerKey && landLayer.width === mapCv.width && landLayer.height === mapCv.height) return;
+  landLayerKey = key; landLayer.width = mapCv.width; landLayer.height = mapCv.height;
+  const g = landLayer.getContext('2d'); g.setTransform(mapCv._dpr, 0, 0, mapCv._dpr, 0, 0); drawLand(g);
+  if (ROUTE.showIso && ROUTE.isos.length) {
+    g.strokeStyle = 'rgba(140,230,255,0.45)'; g.lineWidth = 1;
+    ROUTE.isos.forEach(iso => { g.beginPath(); let pk = null, px = 0, py = 0; iso.forEach(p => { const x = MX(p[1]), y = MY(p[0]); if (pk === null || p[2] - pk > 4 || Math.hypot(x - px, y - py) > 28) g.moveTo(x, y); else g.lineTo(x, y); pk = p[2]; px = x; py = y; }); g.stroke(); });
+  }
+}
+function drawLand(g) {
+  const big = $('tr').classList.contains('big');
+  g.fillStyle = '#d6cdb2'; g.strokeStyle = '#7d735a'; g.lineWidth = 1;
+  if (MODE === 'race') POLYS.forEach(p => { polyPath(g, p.pts); g.fill(); g.stroke(); });
+  ISLANDS.forEach(isl => {
+    const pts = []; for (let i = 0; i < 40; i++) { const th = i / 40 * Math.PI * 2, r = islandR(isl, th); pts.push([isl.lat + r * Math.sin(th) / 60, isl.lon + r * Math.cos(th) / (60 * Math.cos(isl.lat * D2R))]); }
+    polyPath(g, pts); g.fill(); g.stroke();
+    if (big && view.zoom > (MODE === 'race' ? 60 : 0)) { g.fillStyle = '#20303a'; g.font = '10px system-ui'; g.fillText(isl.name, MX(isl.lon) + 4, MY(isl.lat)); g.fillStyle = '#d6cdb2'; }
+  });
 }
 let projPts = [];
 function computeProjection() {
@@ -2407,26 +2555,16 @@ function lblTime(dt) { return MODE === 'race' ? (dt >= 86400 ? `+${Math.floor(dt
 function drawMap() {
   const c = mapCv, g = c.getContext('2d'), W = c._w, H = c._h; if (!W) return;
   const now = performance.now();
-  if (windDirty || (Math.abs(fcstT() - lastWindT) > (MODE === 'race' ? 1800 : 30) && now - lastWindReal > 300)) { drawWindLayer(); windDirty = false; lastWindT = fcstT(); lastWindReal = now; }
-  g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(mapLayer, 0, 0); g.setTransform(c._dpr, 0, 0, c._dpr, 0, 0);
+  // terres dessinées dans le calque en cache (avant : tous les polygones redessinés 10×/s) ; recalcul si la vue change
+  if (windDirty || mapLandKey !== mapKey() || (Math.abs(fcstT() - lastWindT) > (MODE === 'race' ? 1800 : 30) && now - lastWindReal > 300)) { drawWindLayer(); windDirty = false; lastWindT = fcstT(); lastWindReal = now; }
+  drawLandLayer(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(mapLayer, 0, 0); g.drawImage(landLayer, 0, 0); g.setTransform(c._dpr, 0, 0, c._dpr, 0, 0);
   const big = $('tr').classList.contains('big');
-  g.fillStyle = '#d6cdb2'; g.strokeStyle = '#7d735a'; g.lineWidth = 1;
-  if (MODE === 'race') POLYS.forEach(p => { polyPath(g, p.pts); g.fill(); g.stroke(); });
-  ISLANDS.forEach(isl => {
-    const pts = []; for (let i = 0; i < 40; i++) { const th = i / 40 * Math.PI * 2, r = islandR(isl, th); pts.push([isl.lat + r * Math.sin(th) / 60, isl.lon + r * Math.cos(th) / (60 * Math.cos(isl.lat * D2R))]); }
-    polyPath(g, pts); g.fill(); g.stroke();
-    if (big && view.zoom > (MODE === 'race' ? 60 : 0)) { g.fillStyle = '#20303a'; g.font = '10px system-ui'; g.fillText(isl.name, MX(isl.lon) + 4, MY(isl.lat)); g.fillStyle = '#d6cdb2'; }
-  });
   if (MODE === 'race') {
     const M = curMarks(); g.setLineDash([5, 5]); g.strokeStyle = 'rgba(255,255,255,0.4)'; g.lineWidth = 1.2; g.beginPath();
     let prev = [COURSE.start.lat, COURSE.start.lon]; g.moveTo(MX(prev[1]), MY(prev[0]));
     M.forEach(m => { gcPoints(prev, [m.lat, m.lon], 40).forEach(p => g.lineTo(MX(p[1]), MY(p[0]))); prev = [m.lat, m.lon]; }); g.stroke(); g.setLineDash([]);
     M.forEach((m, i) => { const done = i < player.mi; g.fillStyle = m.finish ? '#3dff9a' : done ? '#7a8a99' : '#ffb000'; g.strokeStyle = '#fff'; g.beginPath(); g.arc(MX(m.lon), MY(m.lat), 5, 0, Math.PI * 2); g.fill(); g.stroke(); g.font = 'bold 11px system-ui'; if (W >= 200) g.fillText(m.name.split(' · ')[0], MX(m.lon) + 7, MY(m.lat) + 4); });
   } else TRAIN_BUOYS.forEach(b => { g.fillStyle = b.done ? '#7a8a99' : '#ff9f1c'; g.beginPath(); g.arc(MX(b.lon), MY(b.lat), 4.5, 0, Math.PI * 2); g.fill(); g.font = 'bold 10px system-ui'; g.fillText(b.name, MX(b.lon) + 6, MY(b.lat) - 4); });
-  if (ROUTE.showIso && ROUTE.isos.length) {
-    g.strokeStyle = 'rgba(140,230,255,0.45)'; g.lineWidth = 1;
-    ROUTE.isos.forEach(iso => { g.beginPath(); let pk = null, px = 0, py = 0; iso.forEach(p => { const x = MX(p[1]), y = MY(p[0]); if (pk === null || p[2] - pk > 4 || Math.hypot(x - px, y - py) > 28) g.moveTo(x, y); else g.lineTo(x, y); pk = p[2]; px = x; py = y; }); g.stroke(); });
-  }
   if (big) active.forEach(b => { if (b.isPlayer || !b.route || !b.route.nodes) return; g.strokeStyle = b.color; g.globalAlpha = 0.35; g.setLineDash([3, 3]); g.lineWidth = 1; g.beginPath(); b.route.nodes.forEach((n, i) => i ? g.lineTo(MX(n.lon), MY(n.lat)) : g.moveTo(MX(n.lon), MY(n.lat))); g.stroke(); g.setLineDash([]); g.globalAlpha = 1; });
   if (ROUTE.nodes) {
     const R = ROUTE.nodes; g.strokeStyle = '#ff4fd8'; g.lineWidth = 2.6; g.beginPath(); R.forEach((n, i) => i ? g.lineTo(MX(n.lon), MY(n.lat)) : g.moveTo(MX(n.lon), MY(n.lat))); g.stroke();
@@ -2500,6 +2638,20 @@ function updateRouteBanner() {
   }
   RALERT.nowState = pl.turnNow;
 }
+// Classement : panneau à part, centré entre le panneau d'instruments (bas gauche) et la barre de commandes (bas centre)
+// quand l’écart fait au moins 160 px ; sinon (écran étroit, interface téléphone) il reste dans le panneau du haut.
+function placeBoard() {
+  const bd = $('board'), P = $('boardP'), bl = $('bl').getBoundingClientRect(), bc = $('bc').getBoundingClientRect();
+  const gap = bc.left - bl.right - 24, fits = !document.body.classList.contains('mobile') && MODE === 'race' && bl.width > 0 && gap >= 160;
+  if (fits) {
+    if (bd.parentNode !== P) P.appendChild(bd);
+    const w = Math.min(300, gap); P.style.display = 'block'; P.style.width = w + 'px'; P.style.left = Math.round(bl.right + 12 + (gap - w) / 2) + 'px';
+    P.style.maxHeight = Math.max(120, bl.height) + 'px'; P.style.overflow = 'auto'; $('boardT').textContent = T('CLASSEMENT', 'STANDINGS');
+  } else {
+    if (bd.parentNode !== $('tl')) $('tl').insertBefore(bd, $('trainBox'));
+    P.style.display = 'none';
+  }
+}
 function updateHUD() {
   const w = curWind(), twa = norm180(w.twd - player.hdg), a = Math.abs(twa);
   if (isMobile()) {
@@ -2508,7 +2660,7 @@ function updateHUD() {
     if (MODE === 'race') { const mk = curMarks()[player.mi], r = rankOf(player); last = cell(mk ? `${r}${r === 1 ? 'ER' : 'E'} · MARQUE` : 'ARRIVÉ', mk ? gcDist(player.lat, player.lon, mk.lat, mk.lon).toFixed(0) + ' nm' : '✓'); }
     else last = cell('BOUÉES', `${TRAIN_BUOYS.filter(b => b.done).length}/${TRAIN_BUOYS.length}`);
     $('mstrip').innerHTML = cell('VITESSE', (player.dspd || player.spd).toFixed(1)) + cell('TWA', twaTxt(twa), twa >= 0 ? '#5dff9e' : '#ff6b6b') + cell('VENT', w.tws.toFixed(0) + ' nd', `rgb(${windRGB(w.tws).join(',')})`) + cell('CAP', Math.round(player.hdg) + '°') + last;
-    $('tabPause').classList.toggle('on', paused); $('tabCam').classList.toggle('on', cam.mode === 'free');
+    $('tabPause').classList.toggle('on', paused); $('tabCam').classList.toggle('on', cam.mode !== 'chase');
   }
   $('iSog').textContent = (player.dspd || player.spd).toFixed(1); $('iHdg').textContent = Math.round(player.hdg) + '°';
   const tw = $('iTwa'); tw.textContent = twaTxt(twa); tw.style.color = twa >= 0 ? '#5dff9e' : '#ff6b6b';
@@ -2526,8 +2678,10 @@ function updateHUD() {
       + (nmk ? row(T('Prochaine marque', 'Next mark'), `${mN(nmk).split(' · ')[0]} · ${gcDist(player.lat, player.lon, nmk.lat, nmk.lon).toFixed(nmk.finish && d < 100 ? 1 : 0)} nm`) : '')
       + row(T('Restant total', 'Distance left'), player.finished ? T('Arrivé ✓', 'Finished ✓') : d.toFixed(0) + ' nm') + row(T('Position', 'Lat / lon'), posTxt) + row(T('Temps réel joué', 'Real time played'), fmtClock(realRaceT));
     const lead = dtf(st.find(b => !b.finished && !b.atStop) || st[0]);
+    placeBoard();
     $('board').innerHTML = st.map((b, i) => `<div class="${b.isPlayer ? 'me' : ''}" title="${b.strat || ''}"><span>${i + 1}.</span><span class="dot" style="background:${b.color}"></span><span class="n">${b.name}${!b.isPlayer && b.routeJob ? ' <span style="color:#ff9fe9">⟳</span>' : ''}</span><span>${b.finished ? fmtDur(b.finishT) : b.atStop ? '⚓ ' + fmtDur(b.legT[0]) : (i === 0 ? dtf(b).toFixed(0) + ' nm' : '+' + (dtf(b) - lead).toFixed(1) + ' nm') + (LEG.n === 2 ? ` <span style="color:#7fa3bd">E1 ${b === st[0] ? fmtDur(b.legT[0]) : ((b.legT[0] - st[0].legT[0]) >= 0 ? '+' : '−') + fmtDur(Math.abs(b.legT[0] - st[0].legT[0]))}</span>` : '')}</span></div>`).join('') + ghostRow();
   } else {
+    placeBoard();
     const left = TRAIN_BUOYS.filter(b => !b.done); let near = null, nd = 1e9; left.forEach(b => { const dd = gcDist(player.lat, player.lon, b.lat, b.lon); if (dd < nd) { nd = dd; near = b; } });
     $('tlBody').innerHTML = row(T('Chrono', 'Time'), fmtClock(gameT)) + row(T('Loch', 'Log'), player.log.toFixed(2) + ' nm') + row(T('Bouées validées', 'Buoys rounded'), `${TRAIN_BUOYS.length - left.length} / ${TRAIN_BUOYS.length}`) + (near ? row(T('Bouée proche', 'Nearest buoy'), `${near.name} · ${nd.toFixed(2)} nm · ${Math.round(gcBrg(player.lat, player.lon, near.lat, near.lon))}°`) : row(T('Tour', 'Lap'), T('complet ✓', 'complete ✓')));
   }
@@ -2589,7 +2743,7 @@ const CONTROLS_FR = `<ul>
   <li><kbd>Y</kbd> afficher / masquer les fantômes · 🛰 nouvelle prévision météo toutes les 6 à 9 min de jeu</li>
   <li>Routeur : <kbd>K</kbd> appliquer le cap conseillé · <kbd>L</kbd> pilote routeur · 📍 router vers un point de la carte</li>
   <li>Assistances (−1,5 % chacune) : <kbd>A</kbd> voile auto · <kbd>R</kbd> écoute auto · <kbd>G</kbd> foils auto · pilote routeur</li>
-  <li><kbd>+</kbd>/<kbd>−</kbd> vitesse du temps · <kbd>M</kbd> carte plein écran · <kbd>C</kbd> caméra · <kbd>X</kbd> son · <kbd>P</kbd> pause · <kbd>Échap</kbd> menu</li></ul>`;
+  <li><kbd>+</kbd>/<kbd>−</kbd> vitesse du temps · <kbd>M</kbd> carte plein écran · <kbd>C</kbd> caméra (suiveuse, libre, à bord) · <kbd>X</kbd> son · <kbd>P</kbd> pause · <kbd>Échap</kbd> menu</li></ul>`;
 const CONTROLS_EN = `<ul>
   <li><kbd>←</kbd>/<kbd>→</kbd> or <kbd>Q</kbd>/<kbd>D</kbd> steer (<kbd>Shift</kbd> = fine) · <kbd>Space</kbd> tack/gybe · <kbd>T</kbd> lock heading ⇄ TWA · <kbd>V</kbd> VMG angle</li>
   <li><kbd>1</kbd> Jib · <kbd>2</kbd> Genoa · <kbd>3</kbd> Spinnaker (★ = best sail) · <kbd>↑</kbd>/<kbd>↓</kbd> or <kbd>Z</kbd>/<kbd>S</kbd> sheet in / ease (green tick = optimum)</li>
@@ -2597,7 +2751,7 @@ const CONTROLS_EN = `<ul>
   <li><kbd>Y</kbd> show / hide ghosts · 🛰 new weather forecast every 6 to 9 min of play</li>
   <li>Router: <kbd>K</kbd> apply suggested heading · <kbd>L</kbd> router autopilot · 📍 route to a point on the map</li>
   <li>Assists (−1.5 % each): <kbd>A</kbd> auto sail · <kbd>R</kbd> auto trim · <kbd>G</kbd> auto foils · router autopilot</li>
-  <li><kbd>+</kbd>/<kbd>−</kbd> time speed · <kbd>M</kbd> full-screen map · <kbd>C</kbd> camera · <kbd>X</kbd> sound · <kbd>P</kbd> pause · <kbd>Esc</kbd> menu</li></ul>`;
+  <li><kbd>+</kbd>/<kbd>−</kbd> time speed · <kbd>M</kbd> full-screen map · <kbd>C</kbd> camera (chase, free, onboard) · <kbd>X</kbd> sound · <kbd>P</kbd> pause · <kbd>Esc</kbd> menu</li></ul>`;
 Object.defineProperty(window, 'CONTROLS', { get: () => T(CONTROLS_FR, CONTROLS_EN) });
 const sailNm = i => T(SAILS[i].name, ({ Foc: 'Jib', 'Génois': 'Genoa', Spi: 'Spinnaker' })[SAILS[i].name] || SAILS[i].name);
 const cN = c => T(c.name, c.en || c.name), cZ = c => T(c.zone || '', c.zoneEn || c.zone || ''), mN = m => T(m.name, m.en || m.name);
@@ -2766,6 +2920,7 @@ async function launch(info, prep, msg) {
 function start(msg) { MENU_CINE = false; $('overlay').classList.add('hide'); $('overlay').classList.remove('mm', 'mh'); running = true; paused = false; toast(msg, 5000); if (MODE === 'race' && GHOST.list.length && GHOST.on) setTimeout(() => toast(DAILY.on ? `👻 ${GHOST.list.length} fantôme${GHOST.list.length > 1 ? 's' : ''} en course (tes essais du jour) — touche Y pour masquer` : `👻 Ton fantôme (record ${fmtDur(GHOST.list[0].T)}) est en course — touche Y pour le masquer`, 4000), 5200); }
 const HELP_EN = () => `<h1>Help</h1>
     <h3>Manoeuvres</h3><p>The skipper does <b>one manoeuvre at a time</b>; the next ones wait in a queue (3 max). Durations are in race time and depend on the class: a <b>tack</b> or <b>gybe</b> costs speed for a few minutes, a <b>sail change</b> several minutes, moving the <b>foils</b> a few minutes. The helm is locked during a tack or gybe.</p>
+    <h3>Weather systems (offshore)</h3><p><b>A</b> Azores high: light wind in its centre, trade winds on its southern flank. <b>D</b> westerly lows, each with a <b>cold front</b> (blue ▲ line: squalls, sharp wind shift as it passes) and a <b>warm front</b> (red ●). Between two lows, a <b>ridge</b> (blue dashes): soft wind, cross it fast or go around. Sometimes an isolated <b>cut-off low</b> (purple D) near the Azores, and <b>tropical waves</b> (orange dashes) crossing the trades with squalls and shifts. The <b>doldrums</b> stay near 5° N.</p>
     <h3>Forecasts</h3><p>Maps and the router use a <b>forecast</b> published every 6 to 9 min of real play (every 1 h 30 of race time in the daily challenge). It is reliable at short range and drifts further out. Each new run recomputes the route: time to review your strategy.</p>
     <h3>Four classes</h3><p><b>IMOCA</b>: heavy and powerful, slow to accelerate, everything happens on the <b>foils</b> when reaching. <b>Class40</b>: no foils, planing scow, reefs, medium manoeuvres. <b>Mini 6.50</b>: light and quick, reefs, beware of broaches under spinnaker. <b>Mini proto</b>: faster, with foils.</p>
     <h3>Foils, sails, sheet</h3><p>Lower the <b>leeward</b> foil (wind on starboard → port foil). A windward foil brakes. <b>Jib</b>: upwind in a breeze · <b>Genoa</b>: light-air upwind to beam reach · <b>Spinnaker</b>: broad reach to running. The more you bear away, the more you ease.</p>
@@ -2778,6 +2933,7 @@ function showHelp(fromMenu) {
   if (LANG === 'en') { $('card').innerHTML = HELP_EN() + `<div class="go"><button id="hClose" data-default>${fromMenu ? '← Menu' : '▶ Resume'}</button></div>`; $('overlay').classList.remove('hide'); $('hClose').onclick = () => { if (fromMenu) return showMenu(typeof fromMenu === 'string' ? fromMenu : 'solo'); $('overlay').classList.add('hide'); paused = false; }; return; }
   $('card').innerHTML = `<h1>Aide</h1>
     <h3>Manœuvres</h3><p>Le skipper fait <b>une manœuvre à la fois</b>, les suivantes attendent dans une file (3 au plus). Durées en temps de course : <b>virement</b> 5 min (jusqu'à −55 %), <b>empannage</b> 6 min, <b>changement de voile</b> 10 min (−38 %), <b>foils</b> 4 min (−8 %). Pendant un virement ou un empannage la barre est bloquée. Passer le vent sans manœuvre demandée = manœuvre « non préparée », qui coûte quand même.</p>
+    <h3>Systèmes météo (au large)</h3><p><b>A</b> anticyclone des Açores : vent faible au centre, alizés sur son flanc sud. <b>D</b> dépressions d'ouest, chacune avec un <b>front froid</b> (ligne bleue ▲ : grains, forte bascule du vent au passage) et un <b>front chaud</b> (rouge ●). Entre deux dépressions, une <b>dorsale</b> (tirets bleus) : vent mou, à traverser vite ou à contourner. Parfois une <b>goutte froide</b> (D violet) isolée près des Açores, et des <b>ondes tropicales</b> (tirets orange) qui traversent les alizés avec grains et bascules. Le <b>pot-au-noir</b> reste vers 5° N.</p>
     <h3>Prévisions météo</h3><p>Les cartes et le routeur utilisent une <b>prévision</b>, publiée toutes les 6 à 9 min de jeu réel (compteur dans le panneau). Elle est fiable à courte échéance puis s'écarte de la réalité : dépressions décalées, en avance ou en retard, vent ±12 % à 4-5 jours. À chaque nouveau run, le routage est recalculé : c'est le moment de revoir ta stratégie.</p>
     <h3>Ris (Minis)</h3><p>Au-delà de ~18 nd au près (~23 nd au portant) le Mini est surtoilé et perd de la vitesse : prends 1 ris, puis 2 au-dessus de ~24 / 30 nd. Chaque ris coûte de la puissance dans le petit temps, réduit la gîte et le risque de départ au lof. Manœuvre : 2 min 30.</p>
     <h3>Mini Transat</h3><p>Deux étapes. À l'escale de La Palma, la flotte termine son étape puis repart ensemble. Classement final au temps cumulé.</p>
@@ -2949,7 +3105,7 @@ const I18N = {
   'Agrandir la carte (M)': 'Enlarge map (M)', 'Centrer sur le bateau': 'Centre on boat', 'Vue d\'ensemble': 'Overview', 'Afficher les isochrones': 'Show isochrones', 'Glisser pour déplacer, molette pour zoomer': 'Drag to pan, wheel to zoom',
   '10° à bâbord': '10° to port', '1° à bâbord (← / Q)': '1° to port (← / Q)', 'Verrouiller le cap ou l\'angle au vent (T)': 'Lock heading or wind angle (T)', '1° à tribord (→ / D)': '1° to starboard (→ / D)', '10° à tribord': '10° to starboard',
   'Virer / empanner (Espace)': 'Tack / gybe (Space)', 'Angle VMG optimal (V)': 'Optimal VMG angle (V)', 'Foil bâbord (B)': 'Port foil (B)', 'Foil tribord (N)': 'Starboard foil (N)', 'Foil sous le vent baissé, au vent relevé (F)': 'Leeward foil down, windward up (F)',
-  'Larguer un ris (O)': 'Shake a reef (O)', 'Prendre un ris (I)': 'Take a reef (I)', 'Caméra suiveuse / libre (C)': 'Chase / free camera (C)', 'Zoom avant': 'Zoom in', 'Zoom arrière': 'Zoom out', 'Réduire / agrandir les commandes': 'Fold / unfold controls',
+  'Larguer un ris (O)': 'Shake a reef (O)', 'Prendre un ris (I)': 'Take a reef (I)', 'Caméra suiveuse / libre / à bord (C)': 'Chase / free / onboard camera (C)', 'Zoom avant': 'Zoom in', 'Zoom arrière': 'Zoom out', 'Réduire / agrandir les commandes': 'Fold / unfold controls',
   'Choix automatique de la voile (A) — coûte 1,5 % de vitesse': 'Automatic sail choice (A) — costs 1.5 % speed', 'Réglage automatique de l\'écoute (R) — coûte 1,5 %': 'Automatic sheet trim (R) — costs 1.5 %', 'Gestion automatique des foils (G) — coûte 1,5 %': 'Automatic foils (G) — costs 1.5 %',
 };
 const I18N_SKIP = new Set(['card', 'tlBody', 'rInfo', 'board', 'foilHint', 'trimTxt', 'mantxt', 'rnext', 'manq', 'toast', 'shoreWarn', 'tlTitle', 'iAll', 'iPerf', 'iHeel', 'iBaro', 'fcstL', 'reefTxt', 'msails', 'sails', 'accel']);
@@ -3155,6 +3311,9 @@ function updateBoatVisual(b, rdt) {
   if (v.foilPos) { const F = v.foilPos; v.foilS.position.set(F[0] - F[3] * (1 - b.foilS), F[1] + F[4] * (1 - b.foilS), F[2]); v.foilP.position.set(-(F[0] - F[3] * (1 - b.foilP)), F[1] + F[4] * (1 - b.foilP), F[2]); }
   else if (cd.foils) { const k = cd.k; v.foilS.position.set((2.3 - 2.1 * (1 - b.foilS)) * k, (0.3 + 2.0 * (1 - b.foilS)) * k, -1.7 * k); v.foilP.position.set((-2.3 + 2.1 * (1 - b.foilP)) * k, (0.3 + 2.0 * (1 - b.foilP)) * k, -1.7 * k); }
   if (b.isGhost) return;
+  if (!b.isPlayer) { const dx = px - camera.position.x, dz = pz - camera.position.z, d = Math.hypot(dx, dz), L = 30 + (b.dspd || b.spd) * 6;
+    _wkS.center.set(px - fx * L * 0.5, 0, pz - fz * L * 0.5); _wkS.radius = L * 0.6 + 10;
+    const see = d < 2500 && _wkF.intersectsSphere(_wkS); v.wake.visible = see; if (!see) return; }
   updateWake(b, px, pz, fx, fz, rx, rz);
   if (Math.hypot(px - camera.position.x, pz - camera.position.z) < 1500) boatSpray(b, px, pz, fx, fz, rx, rz, hb * damp + b.lift, rdt);
 }
@@ -3374,7 +3533,32 @@ function updateFlecks(rdt, svx, svz) {
   flGeo.attributes.position.needsUpdate = true; flGeo.attributes.aA.needsUpdate = true; flGeo.attributes.aS.needsUpdate = true;
 }
 let camFov = 55, camKick = 0;
-function updateCamera() {
+// Vue à bord : œil du skipper en mètres, repère du bateau (étrave vers −z), côté au vent (x > 0 = côté qui se lève à la gîte)
+// IMOCA : debout au fond du cockpit, derrière le moulin ; Class40 : assis au poste de barre ; Mini : assis au rappel près de la barre franche
+const ONBOARD = { imoca: { x: 1.45, y: 2.45, z: 8.0 }, c40: { x: 1.55, y: 2.3, z: 4.4 }, mini: { x: 0.85, y: 1.7, z: 2.2 }, proto: { x: 0.85, y: 1.7, z: 2.2 } };
+const _ob = new THREE.Vector3(); let obWas = false;
+function onboardCamera(rdt) {
+  const V = player.vis, R = V.root, E = ONBOARD[CLS.id] || ONBOARD.mini, sc = R.scale.x;
+  R.children.forEach(c => { if (c.isSprite) c.visible = false; }); // pas d'étiquette de nom devant les yeux
+  // le skipper change de bord après le virement (≈ 2 s), seulement quand la gîte est franche
+  const hs = Math.abs(player.heel) > 3 ? Math.sign(player.heel) : cam.obSide; cam.obSide += (hs - cam.obSide) * Math.min(1, rdt * 1.2);
+  // regard libre qui revient doucement vers l'avant après 2,5 s sans toucher
+  cam.obIdle += rdt; if (cam.obIdle > 2.5) { const k = Math.min(1, rdt * 1.5); cam.obAz -= cam.obAz * k; cam.obEl -= cam.obEl * k; }
+  R.updateMatrixWorld(); _ob.set(E.x * cam.obSide / sc, E.y / sc, E.z / sc); R.localToWorld(_ob);
+  const ds = player.dspd || player.spd, t = realT, bob = Math.sin(t * 1.9) * 0.025 + Math.sin(t * 3.7 + 1) * 0.012 * (1 + ds * 0.05);
+  camera.position.set(_ob.x, _ob.y + bob, _ob.z);
+  // la tête compense une partie du roulis et du tangage (horizon moins agité qu'une caméra fixée à la coque)
+  const r = R.rotation; camera.rotation.order = 'YXZ';
+  camera.rotation.set(r.x * 0.7 - 0.07 + cam.obEl * D2R + bob * 0.15, r.y + cam.obAz * D2R + cam.obSide * 0.06, r.z * 0.45);
+  const fov = cam.obFov + clamp((ds - 8) / 22, 0, 1) * 6; if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, rdt * 3); camera.updateProjectionMatrix(); }
+  camKick *= 0.9; const shake = (0.006 * ds * (0.5 + seaAmp * 0.5) * (1 - Math.min(0.6, player.lift * 0.4)) * 0.06 + camKick * 0.5);
+  camera.rotation.x += Math.sin(t * 23.1) * Math.sin(t * 7.3) * shake * 0.02; camera.rotation.z += Math.sin(t * 29.7 + 1) * Math.sin(t * 5.1) * shake * 0.02;
+  sky.position.copy(camera.position);
+}
+function updateCamera(rdt = 0.016) {
+  const ob = cam.mode === 'onboard' && !(MENU_CINE && !$('overlay').classList.contains('hide')) && player && player.vis;
+  if (ob !== obWas) { obWas = ob; camera.near = ob ? 0.15 : 0.5; camera.updateProjectionMatrix(); if (!ob && player && player.vis) player.vis.root.children.forEach(c => { if (c.isSprite) c.visible = true; }); if (!ob) camera.fov = camFov; }
+  if (ob) return onboardCamera(rdt);
   const cine = MENU_CINE && !$('overlay').classList.contains('hide'), cDist = cine ? 46 * Math.max(0.6, CLS.k) : cam.dist, cEl = cine ? 7 + 3 * Math.sin(realT * 0.05) : cam.elev, cAz = cine ? (realT * 3.5) % 360 : cam.az;
   const ty = 2 + 4 * CLS.k + player.lift, baseAz = cam.mode === 'chase' || cine ? player.dispHdg + 180 : 180, az = (baseAz + cAz) * D2R, el = cEl * D2R;
   camera.position.set(Math.sin(az) * Math.cos(el) * cDist, ty + Math.sin(el) * cDist, -Math.cos(az) * Math.cos(el) * cDist);
@@ -3428,14 +3612,16 @@ function frame(now) {
   oceanU.uTime.value = realT; oceanU.uAmp.value = seaAmp; oceanU.uSwell.value = swellAmp; oceanU.uG.value.set(GX % 2048, GZ % 2048);
   oceanFFTUpdate(rdt); const md = (a, L) => ((a % L) + L) % L; oceanU.uFG.value.set(md(GX, OCN.L[0]), md(GZ, OCN.L[0]), md(GX, OCN.L[1]), md(GZ, OCN.L[1])); oceanU.uHs.value = OCN.hs; updateHullContact();
   const wa = ((player.twd || 0) + 180) * D2R; oceanU.uWind.value.set(Math.sin(wa), -Math.cos(wa), tws);
+  camera.updateMatrixWorld(); _wkF.setFromProjectionMatrix(_wkM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   boats.forEach(b => { if (active.includes(b)) updateBoatVisual(b, rdt); }); updateGhost(rdt);
-  updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(); updateAudio(rdt);
+  updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(rdt); updateAudio(rdt);
   hudAcc += rdt; mapAcc += rdt; polAcc += rdt; projAcc += rdt;
   if (projAcc > 0.5) { projAcc = 0; computeProjection(); }
   if (hudAcc > 0.1) { hudAcc = 0; updateHUD(); }
   if (mapAcc > 0.1) { mapAcc = 0; drawMap(); }
   if (polAcc > 0.2) { polAcc = 0; drawPolar(); }
   renderer.render(scene, camera);
+  if (JOBS.length) { const idle = !running || paused || MENU_CINE, used = performance.now() - now; runJobs(idle ? 12 : clamp(11 - used, 2.5, 8)); }
   requestAnimationFrame(frame);
 }
 resize(); { let c0 = 'imoca'; try { c0 = localStorage.getItem('gl3d_cls') || 'imoca'; } catch (e) {} setClass(c0); } setupMode('race', 'transat');
