@@ -1004,7 +1004,7 @@ const ocean = new THREE.Mesh(makeOceanGeo(), oceanMat); ocean.frustumCulled = fa
 // Applique un niveau graphique : résolution, ombres, maillage de la mer, densité des particules
 function applyGfx(level) {
   const lv = level === 'auto' || !GFX_PRESETS[level] ? autoGfx() : level, P = GFX_PRESETS[lv]; GFX.level = lv; GFX.halo = SETTINGS.halo; GFX.shore = SETTINGS.shore;
-  const dpr = window.devicePixelRatio || 1; GFX.pr = P.pr < 1 ? P.pr : Math.min(dpr, P.pr, document.body.classList.contains('mobile') ? 1.5 : 2); renderer.setPixelRatio(GFX.pr * (typeof PERF !== 'undefined' ? PERF.scale : 1));
+  const dpr = window.devicePixelRatio || 1; GFX.pr = P.pr < 1 ? P.pr : Math.min(dpr, P.pr, document.body.classList.contains('mobile') ? 1.5 : 2); if (typeof PERF !== 'undefined') Object.assign(PERF, { acc: 0, n: 0, win: 0, scale: 1, good: 0, probe: 0, warm: 0, off: false }); renderer.setPixelRatio(GFX.pr);
   renderer.shadowMap.enabled = !!P.shadows; sunLight.castShadow = !!P.shadows;
   if (P.shadows && sunLight.shadow.mapSize.x !== P.shadows) { sunLight.shadow.mapSize.set(P.shadows, P.shadows); if (sunLight.shadow.map) { sunLight.shadow.map.dispose(); sunLight.shadow.map = null; } }
   scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { m.needsUpdate = true; }); });
@@ -3391,14 +3391,20 @@ function updateCamera() {
 let last = performance.now(), hudAcc = 0, mapAcc = 0, polAcc = 0, projAcc = 0;
 // résolution adaptative : si l'image passe sous ~48 i/s pendant 1 s, la définition de rendu baisse par paliers (jusqu'à 60 %) ;
 // elle remonte quand la marge revient (5 s consécutives à la cadence de l'écran). Ignoré onglet masqué / gros à-coups.
-const PERF = { acc: 0, n: 0, win: 0, scale: 1, good: 0 };
+// Résolution adaptative : ne descend jamais sous 1 pixel physique par pixel CSS (aucun effet sur écran 1x ou préréglage bas),
+// attend 4 s de mesures stables, et se désactive si baisser la résolution n'accélère pas le rendu (jeu limité par le CPU).
+const PERF = { acc: 0, n: 0, win: 0, scale: 1, good: 0, probe: 0, warm: 0, off: false };
 function perfAdapt(ms) {
-  if (ms > 120 || document.hidden) return; PERF.acc += ms; PERF.n++; PERF.win += ms; if (PERF.win < 1000) return;
-  const avg = PERF.acc / PERF.n; PERF.acc = PERF.n = PERF.win = 0; let sc = PERF.scale;
-  if (avg > 21 && sc > 0.6) { sc = Math.max(0.6, sc - 0.1); PERF.good = 0; }
-  else if (avg < 17.6) { if (++PERF.good >= 5 && sc < 1) { sc = Math.min(1, sc + 0.05); PERF.good = 0; } } else PERF.good = 0;
+  if (PERF.off || ms > 120 || document.hidden || MENU_CINE || paused) { PERF.acc = PERF.n = PERF.win = 0; return; }
+  PERF.acc += ms; PERF.n++; PERF.win += ms; if (PERF.win < 1000) return;
+  const avg = PERF.acc / PERF.n; PERF.acc = PERF.n = PERF.win = 0; if (++PERF.warm < 4) return;
+  const floor = Math.max(0.6, Math.min(1, 1 / GFX.pr)); let sc = PERF.scale;
+  if (PERF.probe) { const [prevSc, prevAvg] = PERF.probe; PERF.probe = 0; if (avg > prevAvg * 0.9) { PERF.off = true; sc = prevSc; } }
+  else if (avg > 24 && sc > floor) { PERF.probe = [sc, avg]; sc = Math.max(floor, sc - 0.1); PERF.good = 0; }
+  else if (avg < 18) { if (++PERF.good >= 4 && sc < 1) { sc = Math.min(1, sc + 0.1); PERF.good = 0; } } else PERF.good = 0;
   if (sc !== PERF.scale) { PERF.scale = sc; renderer.setPixelRatio(GFX.pr * sc); }
 }
+
 function frame(now) {
   perfAdapt(now - last); const rdt = Math.min(0.1, (now - last) / 1000); last = now; realT += rdt;
   handleInput(rdt);
