@@ -93,6 +93,8 @@ body.mobile #shoreWarn{top:100px;font-size:12px}
 #pause{position:fixed;top:45%;left:50%;transform:translate(-50%,-50%);font-size:34px;font-weight:800;letter-spacing:.2em;color:#fff;text-shadow:0 2px 12px #000;display:none;pointer-events:none}
 #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,12,20,.6);z-index:40;padding:16px}
 #overlay.hide{display:none}
+.card.help .go{position:sticky;bottom:-22px;margin:14px -26px -22px;padding:12px 26px;background:linear-gradient(0deg,rgba(10,26,42,1) 70%,rgba(10,26,42,0))}
+body.mobile .card.help .go{bottom:-16px;margin:12px -16px -16px;padding:10px 16px}
 #overlay.mm{justify-content:flex-start;align-items:stretch;padding:0;background:linear-gradient(90deg,rgba(3,12,22,.94) 0,rgba(3,12,22,.8) 30%,rgba(3,12,22,.25) 58%,rgba(3,12,22,0) 75%),linear-gradient(0deg,rgba(3,12,22,.5),transparent 40%)}
 #overlay.mm .card{background:none;border:0;box-shadow:none;max-width:520px;max-height:none;height:100%;border-radius:0;padding:0;overflow:visible}
 .mmwrap{height:100%;display:flex;flex-direction:column;padding:6vh 48px 22px;box-sizing:border-box;overflow:auto}
@@ -134,7 +136,7 @@ body.mobile .mmside{display:none}body.mobile #overlay.mm{background:rgba(3,12,22
 details.ctl summary{cursor:pointer;color:#7fd1ff;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;margin-top:16px}
 @media (max-width:900px){.tiles,.dgrid{grid-template-columns:1fr}.tile.daily{grid-row:auto}.clsPick{grid-template-columns:1fr 1fr}}
 body.mobile .tiles,body.mobile .dgrid{grid-template-columns:1fr}body.mobile .tile.daily{grid-row:auto}body.mobile .clsPick{grid-template-columns:1fr 1fr}
-.card{max-width:760px;width:100%;max-height:94vh;overflow:auto;background:rgba(10,26,42,.96);border:1px solid rgba(127,209,255,.25);border-radius:16px;padding:22px 26px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.card{max-width:760px;width:100%;max-height:94vh;max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;background:rgba(10,26,42,.96);border:1px solid rgba(127,209,255,.25);border-radius:16px;padding:22px 26px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .card h1{margin:0 0 4px;font-size:28px;letter-spacing:.03em}
 .card h1 span{color:#7fd1ff}
 .card h3{margin:16px 0 6px;font-size:12.5px;letter-spacing:.12em;color:#7fd1ff;text-transform:uppercase}
@@ -2653,7 +2655,7 @@ function showMenu(view = 'home') {
   const day = parisDay(), pick = dailyPick(day), dayTxt = new Date(day + 'T12:00:00').toLocaleDateString(LOC(), { weekday: 'long', day: 'numeric', month: 'long' });
   const coastCard = c => `<div class="c"><img src="${courseThumb(c)}" alt=""><b>${cN(c)}</b><span>${cZ(c)} · ${c.nm} nm · ${estTxt(c)}</span>${recTxt(c.id)}<button data-coast="${c.id}">${T('Prendre le départ', 'Start')}</button></div>`;
   let html = HEAD;
-  $('overlay').classList.toggle('mm', view === 'home'); MENU_CINE = view === 'home';
+  $('card').classList.remove('help'); $('overlay').classList.remove('mh'); $('overlay').classList.toggle('mm', view === 'home'); MENU_CINE = view === 'home';
   if (view === 'home') { const PR = loadProfile(), LV = levelOf(PR.pts), dc = pick.courses.map(id => cN(COURSES[id])).join(' · '), dl = pick.classes.map(clsName).join(' · ');
     html = `<div class="mmwrap"><div class="logo">OFF<span>ING</span></div><p class="mmtag">Same wind. Your race.</p>
     <div class="mmprof">${NET.me ? `🌐 <b>${esc(NET.me.name)}</b> · ` : ''}⭐ ${nf(PR.pts)} pts · ${lvlName(LV.name)}<div class="bar"><i style="width:${Math.round(LV.prog * 100)}%"></i></div></div>
@@ -2725,7 +2727,7 @@ function showMenu(view = 'home') {
 /* ----- Écran de chargement : prépare tout avant le départ (parcours, modèles, météo, routage, côtes, vagues, shaders) ----- */
 let LAUNCHING = false, MENU_CINE = false;
 // menu principal : interface de course masquée, seule la scène 3D reste en fond
-if (typeof MutationObserver !== 'undefined') new MutationObserver(() => { const o = $('overlay'); document.body.classList.toggle('inmenu', o.classList.contains('mm') && !o.classList.contains('hide')); }).observe($('overlay'), { attributes: true, attributeFilter: ['class'] });
+if (typeof MutationObserver !== 'undefined') new MutationObserver(() => { const o = $('overlay'); document.body.classList.toggle('inmenu', (o.classList.contains('mm') || o.classList.contains('mh')) && !o.classList.contains('hide')); }).observe($('overlay'), { attributes: true, attributeFilter: ['class'] });
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => r())), ldSleep = ms => new Promise(r => setTimeout(r, ms));
 const LD_TIPS = [
   ['Lis les isochrones : la route la plus courte est rarement la plus rapide.', 'Read the isochrones: the shortest route is rarely the fastest.'],
@@ -2761,7 +2763,7 @@ async function launch(info, prep, msg) {
   finally { LAUNCHING = false; }
   $('loader').classList.add('hide'); start(m || '');
 }
-function start(msg) { MENU_CINE = false; $('overlay').classList.add('hide'); $('overlay').classList.remove('mm'); running = true; paused = false; toast(msg, 5000); if (MODE === 'race' && GHOST.list.length && GHOST.on) setTimeout(() => toast(DAILY.on ? `👻 ${GHOST.list.length} fantôme${GHOST.list.length > 1 ? 's' : ''} en course (tes essais du jour) — touche Y pour masquer` : `👻 Ton fantôme (record ${fmtDur(GHOST.list[0].T)}) est en course — touche Y pour le masquer`, 4000), 5200); }
+function start(msg) { MENU_CINE = false; $('overlay').classList.add('hide'); $('overlay').classList.remove('mm', 'mh'); running = true; paused = false; toast(msg, 5000); if (MODE === 'race' && GHOST.list.length && GHOST.on) setTimeout(() => toast(DAILY.on ? `👻 ${GHOST.list.length} fantôme${GHOST.list.length > 1 ? 's' : ''} en course (tes essais du jour) — touche Y pour masquer` : `👻 Ton fantôme (record ${fmtDur(GHOST.list[0].T)}) est en course — touche Y pour le masquer`, 4000), 5200); }
 const HELP_EN = () => `<h1>Help</h1>
     <h3>Manoeuvres</h3><p>The skipper does <b>one manoeuvre at a time</b>; the next ones wait in a queue (3 max). Durations are in race time and depend on the class: a <b>tack</b> or <b>gybe</b> costs speed for a few minutes, a <b>sail change</b> several minutes, moving the <b>foils</b> a few minutes. The helm is locked during a tack or gybe.</p>
     <h3>Forecasts</h3><p>Maps and the router use a <b>forecast</b> published every 6 to 9 min of real play (every 1 h 30 of race time in the daily challenge). It is reliable at short range and drifts further out. Each new run recomputes the route: time to review your strategy.</p>
@@ -2772,6 +2774,7 @@ const HELP_EN = () => `<h1>Help</h1>
     <h3>Controls</h3>${CONTROLS}`;
 function showHelp(fromMenu) {
   if (finishedShown && !fromMenu) return; if (running) paused = true;
+  $('overlay').classList.remove('mm'); $('overlay').classList.toggle('mh', !!fromMenu); $('card').classList.add('help'); $('card').scrollTop = 0;
   if (LANG === 'en') { $('card').innerHTML = HELP_EN() + `<div class="go"><button id="hClose" data-default>${fromMenu ? '← Menu' : '▶ Resume'}</button></div>`; $('overlay').classList.remove('hide'); $('hClose').onclick = () => { if (fromMenu) return showMenu(typeof fromMenu === 'string' ? fromMenu : 'solo'); $('overlay').classList.add('hide'); paused = false; }; return; }
   $('card').innerHTML = `<h1>Aide</h1>
     <h3>Manœuvres</h3><p>Le skipper fait <b>une manœuvre à la fois</b>, les suivantes attendent dans une file (3 au plus). Durées en temps de course : <b>virement</b> 5 min (jusqu'à −55 %), <b>empannage</b> 6 min, <b>changement de voile</b> 10 min (−38 %), <b>foils</b> 4 min (−8 %). Pendant un virement ou un empannage la barre est bloquée. Passer le vent sans manœuvre demandée = manœuvre « non préparée », qui coûte quand même.</p>
