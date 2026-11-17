@@ -1243,11 +1243,28 @@ function parseModelBin(buf) {
   }
   return out;
 }
+// cuve de cockpit : le maillage importé a des trous (plancher et parois) par lesquels on voyait l'eau → plancher,
+// parois latérales, cloison avant et seuil arrière fermés, calés sur le pont relevé du modèle (z 5,0 → 8,7 m)
+let COCKPIT_TUB_G = null;
+function COCKPIT_TUB() {
+  if (COCKPIT_TUB_G) return COCKPIT_TUB_G;
+  const X = 1.795, Y0 = 0.485, Z0 = 5.03, Z1 = 8.72, top = z => 1.45 - Math.max(0, z - 5.0) * 0.0905 - 0.02, pos = [], q = (a, b, c, d) => pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+  for (let i = 0; i < 12; i++) {
+    const za = Z0 + (Z1 - Z0) * i / 12, zb = Z0 + (Z1 - Z0) * (i + 1) / 12;
+    q([-X, Y0, za], [X, Y0, za], [X, Y0, zb], [-X, Y0, zb]);                                   // plancher
+    q([X, Y0, za], [X, top(za), za], [X, top(zb), zb], [X, Y0, zb]);                           // paroi tribord
+    q([-X, Y0, zb], [-X, top(zb), zb], [-X, top(za), za], [-X, Y0, za]);                       // paroi bâbord
+  }
+  q([-X, Y0, Z0], [-X, 1.45, Z0], [X, 1.45, Z0], [X, Y0, Z0]);                                  // cloison avant (sous le rouf)
+  q([X, Y0, Z1], [X, 0.98, Z1], [-X, 0.98, Z1], [-X, Y0, Z1]);                                  // seuil arrière
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  return COCKPIT_TUB_G = g;
+}
 function applyImocaModel(V) {
   const M = (V.isPlayer && GFX.level !== 'low' ? IMOCA_MODEL.hi : IMOCA_MODEL.lo) || IMOCA_MODEL.hi || IMOCA_MODEL.lo; if (!M || V.stl === M) return;
   if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
   V.param.forEach(o => o.visible = false); const G = M.geo, list = [], m3 = (geo, mat, parent = V.root) => { if (!geo) return null; const m = new THREE.Mesh(geo, mat); parent.add(m); list.push(m); return m; };
-  m3(G.hull_deck, MAT.deck); m3(G.hull_roof, MAT.roof); m3(G.hull_topS, V.mats.livS); m3(G.hull_topP, V.mats.livP); m3(G.hull_bottom, MAT.bottom); m3(G.hull_ends, V.mats.hullMat);
+  m3(G.hull_deck, MAT.deck); m3(COCKPIT_TUB(), MAT.deck); m3(G.hull_roof, MAT.roof); m3(G.hull_topS, V.mats.livS); m3(G.hull_topP, V.mats.livP); m3(G.hull_bottom, MAT.bottom); m3(G.hull_ends, V.mats.hullMat);
   V.keel.position.set(...M.meta.keelPivot); m3(G.keel, V.mats.accMat, V.keel);
   m3(G.foil, MAT.foil, V.foilS); m3(G.foil, MAT.foil, V.foilP);
   [1, -1].forEach(k => { const r = m3(G.rudder, MAT.bottom); r.scale.x = k; });
