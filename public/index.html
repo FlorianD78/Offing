@@ -1509,7 +1509,7 @@ function makeWake() {
   });
   const m = new THREE.Mesh(g, mat); m.frustumCulled = false; m.renderOrder = 1; scene.add(m); return m;
 }
-const _wk = { };
+const _wk = { }, _wkS = new THREE.Sphere(), _wkF = new THREE.Frustum(), _wkM = new THREE.Matrix4();
 function updateWake(b, px, pz, fx, fz, rx, rz) {
   const m = b.vis.wake, k = b.vis.cd.k, kk = 0.5 + 0.5 * k, pos = m.geometry.attributes.position.array, spd = b.dspd || b.spd, L = clamp((25 + spd * 5.5) * (0.55 + 0.45 * k), 12, 230), La = L * 0.8;
   let o = 0;
@@ -1881,7 +1881,7 @@ function dailyStep() {
   if (!P.finished && !P.atStop) {
     // le pilote routeur agit avant le pas ; son effet est enregistré comme un ordre ordinaire
     P.follow = !!(ROUTE.follow && (ROUTE.nodes || P.grounded));
-    if (P.follow && !isTurnMan(P.man) && !P.queue.some(q => q.type === 'turn')) { const w = wind(P.lat, P.lon, gameT), adv = P.grounded ? null : routeAdvice();
+    if (P.follow && !isTurnMan(P.man) && !P.queue.some(q => q.type === 'turn')) { const w = wind(P.lat, P.lon, gameT), adv = P.grounded ? null : routeAdviceFor(player, ROUTE);
       if (P.grounded) { const nh = Math.round(pilotSafe(P, P.hdg, w.twd)); if (nh !== Math.round(P.hdg)) { P.mode = 'cap'; P.hdg = nh; } }
       else if (adv) { const tw = norm180(w.twd - adv.hdg), cur = norm180(w.twd - P.hdg), nh = Math.round(pilotSafe(P, (Math.sign(tw) !== Math.sign(cur) && Math.abs(tw) > 4) ? norm360(w.twd - Math.sign(cur || 1) * Math.abs(tw)) : adv.hdg, w.twd)); if (P.mode !== 'cap' || Math.abs(norm180(nh - P.hdg)) >= 1) { P.mode = 'cap'; P.hdg = nh; } } }
     if (DAILY.log) { const c = ctlOf(P), js = JSON.stringify(c); if (js !== DAILY.lastCtl) { DAILY.log.ev.push([DAILY.K, 'c', c]); DAILY.lastCtl = js; } }
@@ -1916,7 +1916,7 @@ function stepBoat(b, dt) {
   else {
     if (DAILY.on) { if (b.follow && !isTurnMan(b.man) && !b.queue.some(q => q.type === 'turn')) cost *= ASSIST; }
     else if (ROUTE.follow && (ROUTE.nodes || b.grounded) && !isTurnMan(b.man) && !b.queue.some(q => q.type === 'turn')) {
-      const adv = b.grounded ? null : routeAdvice(); cost *= ASSIST;
+      const adv = b.grounded ? null : routeAdviceFor(player, ROUTE); cost *= ASSIST;
       if (b.grounded) { b.mode = 'cap'; b.hdg = pilotSafe(b, b.hdg, w.twd); }
       else if (adv) { const tw = norm180(w.twd - adv.hdg), cur = norm180(w.twd - b.hdg); b.mode = 'cap'; b.hdg = pilotSafe(b, (Math.sign(tw) !== Math.sign(cur) && Math.abs(tw) > 4) ? norm360(w.twd - Math.sign(cur || 1) * Math.abs(tw)) : adv.hdg, w.twd); }
     }
@@ -2012,17 +2012,20 @@ function rankOf(b) { return standings().indexOf(b) + 1; }
 
 /* ===================== ROUTAGE (isochrones) + ordonnanceur de calculs ===================== */
 const ROUTE = { dest: null, busy: false, nodes: null, isos: [], eta: 0, t0: 0, follow: false, showIso: true, err: '', steps: 0, lastAuto: 0, pick: false, job: null };
-const JOBS = []; let jobsRunning = false;
-function enqueueJob(job, urgent) { urgent ? JOBS.unshift(job) : JOBS.push(job); if (!jobsRunning) { jobsRunning = true; setTimeout(runJobs, 0); } }
-function runJobs() {
+// File de calculs de routage (joueur + concurrents). Exécutée par tranches dans frame(), dans le temps restant de l'image :
+// le routage ne bloque plus le rendu (avant : tranches de 14 ms enchaînées par setTimeout → saccades sur les grandes traversées).
+const JOBS = []; let jobsT = 0;
+function enqueueJob(job, urgent) { urgent ? JOBS.unshift(job) : JOBS.push(job); }
+function runJobs(budget = 14) {
   const t1 = performance.now();
-  while (JOBS.length && performance.now() - t1 < 14) {
+  while (JOBS.length && performance.now() - t1 < budget) {
     const j = JOBS[0]; if (j.cancelled) { JOBS.shift(); continue; }
-    const r = routeStep(j.st); if (j.onStep) j.onStep(j.st);
+    const r = routeStep(j.st, t1 + budget); if (j.onStep) j.onStep(j.st);
     if (r) { JOBS.shift(); j.onDone(r, j.st); }
   }
-  if (JOBS.length) setTimeout(runJobs, 0); else jobsRunning = false;
 }
+// onglet en arrière-plan : rAF est suspendu, le calcul continue doucement
+setInterval(() => { if (document.hidden && JOBS.length) runJobs(30); }, 250);
 function cancelAllJobs() { JOBS.forEach(j => j.cancelled = true); boats.forEach(b => b.routeJob = null); }
 function clearRoute() { if (ROUTE.job) ROUTE.job.cancelled = true; Object.assign(ROUTE, { dest: null, busy: false, nodes: null, isos: [], err: '', follow: false, pick: false, job: null }); }
 // Pilote routeur « anti-échouement » : si la terre est à moins de ~0,3 nm sur le cap voulu, il s'écarte vers le large (même bord si possible)
@@ -2040,34 +2043,39 @@ function makeRouteState(dest, b, keepIsos) {
   const race = MODE === 'race', t0 = b.t !== undefined ? b.t : gameT, w0 = windFc(b.lat, b.lon, t0), short = race && COURSE.id === 'fastnet', coast = race && COURSE.coastal;
   const s0 = { lat: b.lat, lon: b.lon, t: t0, parent: null, twa: norm180(w0.twd - b.hdg), hdg: b.hdg, tws: w0.tws };
   const cl0 = Math.cos(s0.lat * D2R), Xd = (dest.lon - s0.lon) * 60 * cl0, Yd = (dest.lat - s0.lat) * 60;
-  return { Xd, Yd, D0: Math.hypot(Xd, Yd), brg0: Math.atan2(Xd, Yd) * R2D, dest, race, short, dt: race ? (coast ? 600 : short ? 2700 : 7200) : 120, maxSteps: race ? 360 : 400, tackLoss: race ? (CLS.foils ? 150 : 60) : 30, s0, front: [s0], step: 0, cl0, isos: [], keepIsos };
+  // concurrents au large : secteurs d'isochrone ×1,3 → 20 à 40 % de calcul en moins, ETA quasi identique (≤ 1 %)
+  return { coarse: race && !coast && !keepIsos, Xd, Yd, D0: Math.hypot(Xd, Yd), brg0: Math.atan2(Xd, Yd) * R2D, dest, race, short, dt: race ? (coast ? 600 : short ? 2700 : 7200) : 120, maxSteps: race ? 360 : 400, tackLoss: race ? (CLS.foils ? 150 : 60) : 30, s0, front: [s0], step: 0, cl0, isos: [], keepIsos };
 }
-function routeStep(st) {
+// Un pas d'isochrone, découpé : reprend là où il s'était arrêté si l'échéance `until` (performance.now) est dépassée.
+// Résultat identique au calcul d'un bloc ; seules les tranches changent (le pas transat pouvait prendre 15-20 ms d'un coup).
+function routeStep(st, until = Infinity) {
   const { dest, dt, s0, tackLoss, cl0 } = st, rr = dest.r || 0;
-  let D = 1; st.front.forEach(n => { if (n.db) D = Math.max(D, Math.sqrt(n.db)); });
-  const sector = st.race ? clamp(R2D * Math.atan2(st.short || COURSE.coastal ? 4 : 12, D), 0.3, 3) : clamp(R2D * Math.atan2(0.25, D), 0.4, 5);
-  let best = null; const ws = [];
+  if (!st.cur) { let D = 1; st.front.forEach(n => { if (n.db) D = Math.max(D, Math.sqrt(n.db)); }); st.cur = { D, i: 0, j: 0, ws: [], best: null, bins: new Map(), arr: null }; }
+  const C = st.cur, D = C.D, ws = C.ws;
+  const sector = st.race ? clamp(R2D * Math.atan2(st.short || COURSE.coastal ? 4 : 12, D), 0.3, 3) * (st.coarse ? 1.3 : 1) : clamp(R2D * Math.atan2(0.25, D), 0.4, 5);
   const reachMax = 45 * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 + rr;
-  for (const n of st.front) {
-    const w = windFc(n.lat, n.lon, n.t); ws.push(w);
+  for (; C.i < st.front.length; C.i++) {
+    if ((C.i & 31) === 31 && performance.now() > until) return null;
+    const n = st.front[C.i], w = windFc(n.lat, n.lon, n.t); ws[C.i] = w;
     if (Math.abs(n.lat - dest.lat) * 60 > reachMax) continue;
     const d = gcDist(n.lat, n.lon, dest.lat, dest.lon); if (d > reachMax) continue;
     const brg = gcBrg(n.lat, n.lon, dest.lat, dest.lon), twa = norm180(w.twd - brg), s = bestFast(Math.abs(twa), w.tws), dd = Math.max(0, d - rr * 0.8);
-    if (s > 0.5 && dd <= s * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 && !segLandLL(n.lat, n.lon, dest.lat, dest.lon, Math.max(0, d - Math.max(rr, st.race ? 1 : 0.05)))) { const ta = n.t + dd / s * 3600; if (!best || ta < best.t) best = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: brg, tws: w.tws }; }
+    if (s > 0.5 && dd <= s * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 && !segLandLL(n.lat, n.lon, dest.lat, dest.lon, Math.max(0, d - Math.max(rr, st.race ? 1 : 0.05)))) { const ta = n.t + dd / s * 3600; if (!C.best || ta < C.best.t) C.best = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: brg, tws: w.tws }; }
   }
-  if (best) { st.best = best; return 'done'; }
+  if (C.best) { st.best = C.best; st.cur = null; return 'done'; }
   if (st.step >= st.maxSteps || !st.front.length) { // côtier : nouvel essai plus fin, puis plus large (passes étroites, îles à contourner)
-    if (st.race && COURSE.coastal && (st.retry || 0) < 2) { st.retry = (st.retry || 0) + 1; st.dt = st.retry === 1 ? 300 : 900; st.maxSteps = Math.round(216000 / st.dt); st.front = [st.s0]; st.step = 0; st.isos = []; st.wide = st.retry === 2; return null; }
-    return 'fail'; }
-  const bins = new Map(), tol = Math.max(rr, st.race ? (COURSE.coastal ? 0.6 : 2.5) : 0.08); let arr = null;
-  st.front.forEach((n, idx) => {
-    const w = ws[idx], brgD = gcBrg(n.lat, n.lon, dest.lat, dest.lon), cn = Math.cos(n.lat * D2R), ex = (dest.lon - n.lon) * 60 * cn, ey = (dest.lat - n.lat) * 60, eL = Math.hypot(ex, ey);
+    if (st.race && COURSE.coastal && (st.retry || 0) < 2) { st.retry = (st.retry || 0) + 1; st.dt = st.retry === 1 ? 300 : 900; st.maxSteps = Math.round(216000 / st.dt); st.front = [st.s0]; st.step = 0; st.isos = []; st.wide = st.retry === 2; st.cur = null; return null; }
+    st.cur = null; return 'fail'; }
+  const bins = C.bins, tol = Math.max(rr, st.race ? (COURSE.coastal ? 0.6 : 2.5) : 0.08);
+  for (; C.j < st.front.length; C.j++) {
+    if ((C.j & 7) === 7 && performance.now() > until) return null;
+    const n = st.front[C.j], w = ws[C.j], brgD = gcBrg(n.lat, n.lon, dest.lat, dest.lon), cn = Math.cos(n.lat * D2R), ex = (dest.lon - n.lon) * 60 * cn, ey = (dest.lat - n.lat) * 60, eL = Math.hypot(ex, ey);
     for (let off = -102; off <= 102; off += 6) {
       const h = norm360(brgD + off), twa = norm180(w.twd - h), s = bestFast(Math.abs(twa), w.tws); if (s < 0.3) continue;
       const nm = s * ((n.parent && Math.sign(twa) !== Math.sign(n.twa)) ? dt - tackLoss : dt) / 3600, hr = h * D2R;
       const lat = n.lat + nm * Math.cos(hr) / 60, lon = n.lon + nm * Math.sin(hr) / (60 * cn);
       if (eL < nm + tol) { const sx = Math.sin(hr) * nm, sy = Math.cos(hr) * nm, u = clamp((ex * sx + ey * sy) / (nm * nm), 0, 1), cd = Math.hypot(ex - u * sx, ey - u * sy);
-        if (cd <= tol) { const ta = n.t + u * dt; if ((!arr || ta < arr.t) && !segLandLL(n.lat, n.lon, n.lat + u * sy / 60, n.lon + u * sx / (60 * cn), u * nm)) arr = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: h, tws: w.tws }; } }
+        if (cd <= tol) { const ta = n.t + u * dt; if ((!C.arr || ta < C.arr.t) && !segLandLL(n.lat, n.lon, n.lat + u * sy / 60, n.lon + u * sx / (60 * cn), u * nm)) C.arr = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: h, tws: w.tws }; } }
       const X = (lon - s0.lon) * 60 * cl0, Y = (lat - s0.lat) * 60, db = X * X + Y * Y;
       if (st.step > 2 && !st.wide && (Math.abs(norm180(Math.atan2(X, Y) * R2D - st.brg0)) > 80 || (X - st.Xd) ** 2 + (Y - st.Yd) ** 2 > (st.D0 * 1.15 + 50) ** 2)) continue;
       const k = Math.floor(norm360(Math.atan2(X, Y) * R2D) / sector), prev = bins.get(k);
@@ -2075,8 +2083,9 @@ function routeStep(st) {
       if (segLandLL(n.lat, n.lon, lat, lon, nm)) continue;
       bins.set(k, { lat, lon, t: n.t + dt, parent: n, twa, hdg: h, tws: w.tws, db, k });
     }
-  });
-  if (arr) { st.best = arr; return 'done'; }
+  }
+  st.cur = null;
+  if (C.arr) { st.best = C.arr; return 'done'; }
   st.front = [...bins.values()].sort((a, b) => a.k - b.k); st.step++;
   if (st.keepIsos && st.step % (st.race ? Math.round(21600 / dt) : 5) === 0) { const dec = Math.max(1, Math.ceil(st.front.length / 320)); st.isos.push(st.front.filter((n, i) => i % dec === 0).map(n => [n.lat, n.lon, n.k * sector])); }
   return null;
@@ -2134,7 +2143,12 @@ function routeAdviceFor(b, Rt) {
   const twa = norm180(w.twd - hdg), a = Math.abs(twa);
   return { bi, tNear, hdg, twa, sail: bestSail(a, w.tws), foil: foilBoost(a, w.tws) > 0.02 ? (twa >= 0 ? 'bâbord' : 'tribord') : 'relevés', xtrack: bd, stale: bd > (race ? (COURSE.coastal ? 3 : COURSE.id === 'fastnet' ? 12 : 40) : 1.5) };
 }
-function routeAdvice() { return ROUTE.nodes ? routeAdviceFor(player, ROUTE) : null; }
+const _adv = { t: -1, nodes: null, v: null, g: 0 };
+function routeAdvice() {
+  if (!ROUTE.nodes) return null;
+  if (_adv.nodes === ROUTE.nodes && realT - _adv.t >= 0 && realT - _adv.t < 0.2 && Math.abs(gameT - _adv.g) < 900 && _adv.mi === player.mi) return _adv.v;
+  _adv.v = routeAdviceFor(player, ROUTE); _adv.t = realT; _adv.nodes = ROUTE.nodes; _adv.g = gameT; _adv.hdg = player.hdg; _adv.mi = player.mi; return _adv.v;
+}
 function fmtIn(sec) { sec = Math.max(0, sec); if (MODE !== 'race' || sec < 3600) return Math.max(1, Math.round(sec / 60)) + ' min'; const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.round(sec % 3600 / 60); return d ? `${d} j ${h} h` : `${h} h ${pad(m)}`; }
 const foilState = (a, twa, tws) => foilBoost(a, tws) > 0.02 ? (twa >= 0 ? 'P' : 'S') : '0';
 const foilName = f => f === 'P' ? 'bâbord ▼' : f === 'S' ? 'tribord ▼' : 'relevés';
@@ -2157,7 +2171,7 @@ function routePlan() {
   return plan;
 }
 function applyAdvice() {
-  const adv = routeAdvice(); if (!adv) return;
+  const adv = routeAdviceFor(player, ROUTE); if (!adv) return;
   const w = curWind(), cur = norm180(w.twd - player.hdg);
   if (Math.sign(adv.twa) !== Math.sign(cur) && Math.abs(adv.twa) > 2) {
     // le routeur ne manœuvre jamais à ta place : on garde le bord actuel à l'angle conseillé
@@ -2392,6 +2406,31 @@ function drawWindLayer() {
     const w = windFc(unY(y), unX(x), t), a = (w.twd + 180) * D2R, L = 6 + Math.min(w.tws, 40) * 0.45, dx = Math.sin(a), dy = -Math.cos(a), ex = x + dx * L / 2, ey = y + dy * L / 2;
     g.strokeStyle = 'rgba(255,255,255,0.75)'; g.beginPath(); g.moveTo(x - dx * L / 2, y - dy * L / 2); g.lineTo(ex, ey); g.moveTo(ex, ey); g.lineTo(ex - dx * 4 + dy * 3, ey - dy * 4 - dx * 3); g.moveTo(ex, ey); g.lineTo(ex - dx * 4 - dy * 3, ey - dy * 4 + dx * 3); g.stroke();
   }
+  mapLandKey = mapKey();
+}
+let mapLandKey = '', landLayerKey = '', isoId = 0;
+const landLayer = document.createElement('canvas');
+const mapKey = () => [view.cLon, view.cMy, view.zoom, mapCv._w, mapCv._h, mapCv._dpr, MODE, COURSE.id, $('tr').classList.contains('big')].join('|');
+// Terres + isochrones dans un calque en cache : redessiné seulement si la vue, le parcours ou les isochrones changent
+function drawLandLayer() {
+  const isoK = ROUTE.showIso ? (ROUTE.isos.__id || (ROUTE.isos.__id = ++isoId)) + ':' + ROUTE.isos.length : 0, key = mapKey() + '|' + isoK;
+  if (key === landLayerKey && landLayer.width === mapCv.width && landLayer.height === mapCv.height) return;
+  landLayerKey = key; landLayer.width = mapCv.width; landLayer.height = mapCv.height;
+  const g = landLayer.getContext('2d'); g.setTransform(mapCv._dpr, 0, 0, mapCv._dpr, 0, 0); drawLand(g);
+  if (ROUTE.showIso && ROUTE.isos.length) {
+    g.strokeStyle = 'rgba(140,230,255,0.45)'; g.lineWidth = 1;
+    ROUTE.isos.forEach(iso => { g.beginPath(); let pk = null, px = 0, py = 0; iso.forEach(p => { const x = MX(p[1]), y = MY(p[0]); if (pk === null || p[2] - pk > 4 || Math.hypot(x - px, y - py) > 28) g.moveTo(x, y); else g.lineTo(x, y); pk = p[2]; px = x; py = y; }); g.stroke(); });
+  }
+}
+function drawLand(g) {
+  const big = $('tr').classList.contains('big');
+  g.fillStyle = '#d6cdb2'; g.strokeStyle = '#7d735a'; g.lineWidth = 1;
+  if (MODE === 'race') POLYS.forEach(p => { polyPath(g, p.pts); g.fill(); g.stroke(); });
+  ISLANDS.forEach(isl => {
+    const pts = []; for (let i = 0; i < 40; i++) { const th = i / 40 * Math.PI * 2, r = islandR(isl, th); pts.push([isl.lat + r * Math.sin(th) / 60, isl.lon + r * Math.cos(th) / (60 * Math.cos(isl.lat * D2R))]); }
+    polyPath(g, pts); g.fill(); g.stroke();
+    if (big && view.zoom > (MODE === 'race' ? 60 : 0)) { g.fillStyle = '#20303a'; g.font = '10px system-ui'; g.fillText(isl.name, MX(isl.lon) + 4, MY(isl.lat)); g.fillStyle = '#d6cdb2'; }
+  });
 }
 let projPts = [];
 function computeProjection() {
@@ -2407,26 +2446,16 @@ function lblTime(dt) { return MODE === 'race' ? (dt >= 86400 ? `+${Math.floor(dt
 function drawMap() {
   const c = mapCv, g = c.getContext('2d'), W = c._w, H = c._h; if (!W) return;
   const now = performance.now();
-  if (windDirty || (Math.abs(fcstT() - lastWindT) > (MODE === 'race' ? 1800 : 30) && now - lastWindReal > 300)) { drawWindLayer(); windDirty = false; lastWindT = fcstT(); lastWindReal = now; }
-  g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(mapLayer, 0, 0); g.setTransform(c._dpr, 0, 0, c._dpr, 0, 0);
+  // terres dessinées dans le calque en cache (avant : tous les polygones redessinés 10×/s) ; recalcul si la vue change
+  if (windDirty || mapLandKey !== mapKey() || (Math.abs(fcstT() - lastWindT) > (MODE === 'race' ? 1800 : 30) && now - lastWindReal > 300)) { drawWindLayer(); windDirty = false; lastWindT = fcstT(); lastWindReal = now; }
+  drawLandLayer(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(mapLayer, 0, 0); g.drawImage(landLayer, 0, 0); g.setTransform(c._dpr, 0, 0, c._dpr, 0, 0);
   const big = $('tr').classList.contains('big');
-  g.fillStyle = '#d6cdb2'; g.strokeStyle = '#7d735a'; g.lineWidth = 1;
-  if (MODE === 'race') POLYS.forEach(p => { polyPath(g, p.pts); g.fill(); g.stroke(); });
-  ISLANDS.forEach(isl => {
-    const pts = []; for (let i = 0; i < 40; i++) { const th = i / 40 * Math.PI * 2, r = islandR(isl, th); pts.push([isl.lat + r * Math.sin(th) / 60, isl.lon + r * Math.cos(th) / (60 * Math.cos(isl.lat * D2R))]); }
-    polyPath(g, pts); g.fill(); g.stroke();
-    if (big && view.zoom > (MODE === 'race' ? 60 : 0)) { g.fillStyle = '#20303a'; g.font = '10px system-ui'; g.fillText(isl.name, MX(isl.lon) + 4, MY(isl.lat)); g.fillStyle = '#d6cdb2'; }
-  });
   if (MODE === 'race') {
     const M = curMarks(); g.setLineDash([5, 5]); g.strokeStyle = 'rgba(255,255,255,0.4)'; g.lineWidth = 1.2; g.beginPath();
     let prev = [COURSE.start.lat, COURSE.start.lon]; g.moveTo(MX(prev[1]), MY(prev[0]));
     M.forEach(m => { gcPoints(prev, [m.lat, m.lon], 40).forEach(p => g.lineTo(MX(p[1]), MY(p[0]))); prev = [m.lat, m.lon]; }); g.stroke(); g.setLineDash([]);
     M.forEach((m, i) => { const done = i < player.mi; g.fillStyle = m.finish ? '#3dff9a' : done ? '#7a8a99' : '#ffb000'; g.strokeStyle = '#fff'; g.beginPath(); g.arc(MX(m.lon), MY(m.lat), 5, 0, Math.PI * 2); g.fill(); g.stroke(); g.font = 'bold 11px system-ui'; if (W >= 200) g.fillText(m.name.split(' · ')[0], MX(m.lon) + 7, MY(m.lat) + 4); });
   } else TRAIN_BUOYS.forEach(b => { g.fillStyle = b.done ? '#7a8a99' : '#ff9f1c'; g.beginPath(); g.arc(MX(b.lon), MY(b.lat), 4.5, 0, Math.PI * 2); g.fill(); g.font = 'bold 10px system-ui'; g.fillText(b.name, MX(b.lon) + 6, MY(b.lat) - 4); });
-  if (ROUTE.showIso && ROUTE.isos.length) {
-    g.strokeStyle = 'rgba(140,230,255,0.45)'; g.lineWidth = 1;
-    ROUTE.isos.forEach(iso => { g.beginPath(); let pk = null, px = 0, py = 0; iso.forEach(p => { const x = MX(p[1]), y = MY(p[0]); if (pk === null || p[2] - pk > 4 || Math.hypot(x - px, y - py) > 28) g.moveTo(x, y); else g.lineTo(x, y); pk = p[2]; px = x; py = y; }); g.stroke(); });
-  }
   if (big) active.forEach(b => { if (b.isPlayer || !b.route || !b.route.nodes) return; g.strokeStyle = b.color; g.globalAlpha = 0.35; g.setLineDash([3, 3]); g.lineWidth = 1; g.beginPath(); b.route.nodes.forEach((n, i) => i ? g.lineTo(MX(n.lon), MY(n.lat)) : g.moveTo(MX(n.lon), MY(n.lat))); g.stroke(); g.setLineDash([]); g.globalAlpha = 1; });
   if (ROUTE.nodes) {
     const R = ROUTE.nodes; g.strokeStyle = '#ff4fd8'; g.lineWidth = 2.6; g.beginPath(); R.forEach((n, i) => i ? g.lineTo(MX(n.lon), MY(n.lat)) : g.moveTo(MX(n.lon), MY(n.lat))); g.stroke();
@@ -3155,6 +3184,9 @@ function updateBoatVisual(b, rdt) {
   if (v.foilPos) { const F = v.foilPos; v.foilS.position.set(F[0] - F[3] * (1 - b.foilS), F[1] + F[4] * (1 - b.foilS), F[2]); v.foilP.position.set(-(F[0] - F[3] * (1 - b.foilP)), F[1] + F[4] * (1 - b.foilP), F[2]); }
   else if (cd.foils) { const k = cd.k; v.foilS.position.set((2.3 - 2.1 * (1 - b.foilS)) * k, (0.3 + 2.0 * (1 - b.foilS)) * k, -1.7 * k); v.foilP.position.set((-2.3 + 2.1 * (1 - b.foilP)) * k, (0.3 + 2.0 * (1 - b.foilP)) * k, -1.7 * k); }
   if (b.isGhost) return;
+  if (!b.isPlayer) { const dx = px - camera.position.x, dz = pz - camera.position.z, d = Math.hypot(dx, dz), L = 30 + (b.dspd || b.spd) * 6;
+    _wkS.center.set(px - fx * L * 0.5, 0, pz - fz * L * 0.5); _wkS.radius = L * 0.6 + 10;
+    const see = d < 2500 && _wkF.intersectsSphere(_wkS); v.wake.visible = see; if (!see) return; }
   updateWake(b, px, pz, fx, fz, rx, rz);
   if (Math.hypot(px - camera.position.x, pz - camera.position.z) < 1500) boatSpray(b, px, pz, fx, fz, rx, rz, hb * damp + b.lift, rdt);
 }
@@ -3428,6 +3460,7 @@ function frame(now) {
   oceanU.uTime.value = realT; oceanU.uAmp.value = seaAmp; oceanU.uSwell.value = swellAmp; oceanU.uG.value.set(GX % 2048, GZ % 2048);
   oceanFFTUpdate(rdt); const md = (a, L) => ((a % L) + L) % L; oceanU.uFG.value.set(md(GX, OCN.L[0]), md(GZ, OCN.L[0]), md(GX, OCN.L[1]), md(GZ, OCN.L[1])); oceanU.uHs.value = OCN.hs; updateHullContact();
   const wa = ((player.twd || 0) + 180) * D2R; oceanU.uWind.value.set(Math.sin(wa), -Math.cos(wa), tws);
+  camera.updateMatrixWorld(); _wkF.setFromProjectionMatrix(_wkM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   boats.forEach(b => { if (active.includes(b)) updateBoatVisual(b, rdt); }); updateGhost(rdt);
   updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(); updateAudio(rdt);
   hudAcc += rdt; mapAcc += rdt; polAcc += rdt; projAcc += rdt;
@@ -3436,6 +3469,7 @@ function frame(now) {
   if (mapAcc > 0.1) { mapAcc = 0; drawMap(); }
   if (polAcc > 0.2) { polAcc = 0; drawPolar(); }
   renderer.render(scene, camera);
+  if (JOBS.length) { const idle = !running || paused || MENU_CINE, used = performance.now() - now; runJobs(idle ? 12 : clamp(11 - used, 2.5, 8)); }
   requestAnimationFrame(frame);
 }
 resize(); { let c0 = 'imoca'; try { c0 = localStorage.getItem('gl3d_cls') || 'imoca'; } catch (e) {} setClass(c0); } setupMode('race', 'transat');
