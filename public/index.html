@@ -17,6 +17,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0b1a26;font-family:sy
 .row b{color:#fff;font-variant-numeric:tabular-nums;text-align:right}
 #tl{top:12px;left:12px;width:262px}
 #board{margin-top:8px;border-top:1px solid rgba(255,255,255,.08);padding-top:6px}
+#boardP{bottom:12px;display:none;padding:8px 12px}
+#boardP #board{margin-top:0;border-top:0;padding-top:0}
+#boardP .title{margin-bottom:4px}
 #board div{display:flex;align-items:center;gap:6px;padding:1px 0;font-size:12px;color:#cfe3f1;font-variant-numeric:tabular-nums}
 #board div .n{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #board div.me{color:#fff;font-weight:700}
@@ -252,6 +255,8 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
   <div id="board"></div>
   <div id="trainBox" style="display:none;margin-top:6px;color:#a9c3d6;font-size:12px;line-height:1.4">Passe à moins de 500 m des bouées orange, dans l'ordre que tu veux. Règle le vent en bas à droite.<div style="margin-top:4px"><button id="rstB" style="font-size:11px;padding:3px 8px">↻ Réinitialiser</button></div></div>
 </div>
+
+<div id="boardP" class="panel"><div class="title"><span id="boardT">CLASSEMENT</span></div></div>
 
 <div id="tr" class="panel">
   <div class="maptools">
@@ -2529,6 +2534,20 @@ function updateRouteBanner() {
   }
   RALERT.nowState = pl.turnNow;
 }
+// Classement : panneau à part, centré entre le panneau d'instruments (bas gauche) et la barre de commandes (bas centre)
+// quand l’écart fait au moins 160 px ; sinon (écran étroit, interface téléphone) il reste dans le panneau du haut.
+function placeBoard() {
+  const bd = $('board'), P = $('boardP'), bl = $('bl').getBoundingClientRect(), bc = $('bc').getBoundingClientRect();
+  const gap = bc.left - bl.right - 24, fits = !document.body.classList.contains('mobile') && MODE === 'race' && bl.width > 0 && gap >= 160;
+  if (fits) {
+    if (bd.parentNode !== P) P.appendChild(bd);
+    const w = Math.min(300, gap); P.style.display = 'block'; P.style.width = w + 'px'; P.style.left = Math.round(bl.right + 12 + (gap - w) / 2) + 'px';
+    P.style.maxHeight = Math.max(120, bl.height) + 'px'; P.style.overflow = 'auto'; $('boardT').textContent = T('CLASSEMENT', 'STANDINGS');
+  } else {
+    if (bd.parentNode !== $('tl')) $('tl').insertBefore(bd, $('trainBox'));
+    P.style.display = 'none';
+  }
+}
 function updateHUD() {
   const w = curWind(), twa = norm180(w.twd - player.hdg), a = Math.abs(twa);
   if (isMobile()) {
@@ -2555,8 +2574,10 @@ function updateHUD() {
       + (nmk ? row(T('Prochaine marque', 'Next mark'), `${mN(nmk).split(' · ')[0]} · ${gcDist(player.lat, player.lon, nmk.lat, nmk.lon).toFixed(nmk.finish && d < 100 ? 1 : 0)} nm`) : '')
       + row(T('Restant total', 'Distance left'), player.finished ? T('Arrivé ✓', 'Finished ✓') : d.toFixed(0) + ' nm') + row(T('Position', 'Lat / lon'), posTxt) + row(T('Temps réel joué', 'Real time played'), fmtClock(realRaceT));
     const lead = dtf(st.find(b => !b.finished && !b.atStop) || st[0]);
+    placeBoard();
     $('board').innerHTML = st.map((b, i) => `<div class="${b.isPlayer ? 'me' : ''}" title="${b.strat || ''}"><span>${i + 1}.</span><span class="dot" style="background:${b.color}"></span><span class="n">${b.name}${!b.isPlayer && b.routeJob ? ' <span style="color:#ff9fe9">⟳</span>' : ''}</span><span>${b.finished ? fmtDur(b.finishT) : b.atStop ? '⚓ ' + fmtDur(b.legT[0]) : (i === 0 ? dtf(b).toFixed(0) + ' nm' : '+' + (dtf(b) - lead).toFixed(1) + ' nm') + (LEG.n === 2 ? ` <span style="color:#7fa3bd">E1 ${b === st[0] ? fmtDur(b.legT[0]) : ((b.legT[0] - st[0].legT[0]) >= 0 ? '+' : '−') + fmtDur(Math.abs(b.legT[0] - st[0].legT[0]))}</span>` : '')}</span></div>`).join('') + ghostRow();
   } else {
+    placeBoard();
     const left = TRAIN_BUOYS.filter(b => !b.done); let near = null, nd = 1e9; left.forEach(b => { const dd = gcDist(player.lat, player.lon, b.lat, b.lon); if (dd < nd) { nd = dd; near = b; } });
     $('tlBody').innerHTML = row(T('Chrono', 'Time'), fmtClock(gameT)) + row(T('Loch', 'Log'), player.log.toFixed(2) + ' nm') + row(T('Bouées validées', 'Buoys rounded'), `${TRAIN_BUOYS.length - left.length} / ${TRAIN_BUOYS.length}`) + (near ? row(T('Bouée proche', 'Nearest buoy'), `${near.name} · ${nd.toFixed(2)} nm · ${Math.round(gcBrg(player.lat, player.lon, near.lat, near.lon))}°`) : row(T('Tour', 'Lap'), T('complet ✓', 'complete ✓')));
   }
