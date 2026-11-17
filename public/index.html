@@ -724,13 +724,13 @@ sky.renderOrder = -1; sky.frustumCulled = false; scene.add(sky);
 /* ----- Océan : houle longue + mer du vent (Gerstner), moutons, écume ; maillage polaire centré sur le bateau ----- */
 
 // type 0 = houle (pilotée par uSwell), 1 = mer du vent (uAmp) ; S = raideur Gerstner
-const WAVES = [
-  { ang: 1.75, len: 230, amp: 1.25, ph: 0.0, type: 0, S: 0.10 },
-  { ang: 2.05, len: 150, amp: 0.80, ph: 2.1, type: 0, S: 0.12 },
-  { ang: 1.20, len: 62, amp: 0.55, ph: 1.7, type: 1, S: 0.16 },
-  { ang: 2.30, len: 31, amp: 0.30, ph: 3.1, type: 1, S: 0.16 },
-  { ang: 0.60, len: 15, amp: 0.15, ph: 0.6, type: 1, S: 0.14 },
-  { ang: 1.55, len: 8.5, amp: 0.07, ph: 4.4, type: 1, S: 0.10 },
+const WAVES = [ // houle : spectre étroit (110 → 330 m, ±15°) → séries de vagues plus fortes, trains irréguliers ; la mer du vent vient de la FFT
+  { ang: 1.74, len: 330, amp: 0.80, ph: 0.0, type: 0, S: 0.16 },
+  { ang: 1.88, len: 262, amp: 0.72, ph: 2.1, type: 0, S: 0.17 },
+  { ang: 1.62, len: 214, amp: 0.58, ph: 4.0, type: 0, S: 0.18 },
+  { ang: 2.00, len: 176, amp: 0.45, ph: 1.3, type: 0, S: 0.18 },
+  { ang: 1.79, len: 141, amp: 0.33, ph: 5.2, type: 0, S: 0.17 },
+  { ang: 1.55, len: 112, amp: 0.22, ph: 3.3, type: 0, S: 0.15 },
 ];
 WAVES.forEach(w => { w.dx = Math.cos(w.ang); w.dz = Math.sin(w.ang); w.k = 2 * Math.PI / w.len; w.om = Math.sqrt(9.81 * w.k); w.Q = w.S / w.k; });
 let realT = 0, GX = 0, GZ = 0, seaAmp = 0.8, swellAmp = 0.8;
@@ -738,7 +738,7 @@ const wavePh = WAVES.map(() => 0);
 function waveH(x, z) {
   const d = Math.hypot(x, z), att = 1 - smooth(1200, 6000, d), attS = 1 - smooth(150, 500, d);
   let h = 0;
-  for (let i = 0; i < WAVES.length; i++) { const w = WAVES[i], a = w.amp * (w.type ? 0 : swellAmp) * (i >= 3 ? attS : 1); h += a * Math.sin((w.dx * x + w.dz * z) * w.k + w.om * realT + w.ph + wavePh[i]); }
+  for (let i = 0; i < WAVES.length; i++) { const w = WAVES[i], a = w.amp * (w.type ? 0 : swellAmp) * (w.type ? attS : 1); h += a * Math.sin((w.dx * x + w.dz * z) * w.k + w.om * realT + w.ph + wavePh[i]); }
   h += fftH(0, x, z) + fftH(1, x, z) * attS; // mer du vent (FFT)
   return h * att;
 }
@@ -799,7 +799,8 @@ function oceanSpectrum(U, dir, hs) {
 function oceanFFTUpdate(rdt, force) {
   const N = FFT_N, tws = player.tws || 10, U = Math.max(2, tws * 0.5144), dir = ((player.twd || 0) + 180) * D2R, hs = 1.5 * seaAmp;
   if (force || Math.abs(U - OCN.U) > 0.6 || Math.abs(norm180((dir - OCN.dir) * R2D)) > 5 || Math.abs(hs - OCN.hs) > 0.08) oceanSpectrum(U, dir, hs);
-  OCN.t += rdt || 0; const t = OCN.t, lam = OCN.lambda, decay = Math.exp(-(rdt || 0) / 2.2);
+  OCN.acc = (OCN.acc || 0) + (rdt || 0); if (!force && OCN.acc < 1 / 30) return; const dtF = OCN.acc; OCN.acc = 0;
+  OCN.t += dtF; const t = OCN.t, lam = OCN.lambda, decay = Math.exp(-dtF / 2.2);
   for (let c = 0; c < (GFX.level === 'low' ? 1 : 2); c++) {
     const kx = OCN.kx[c], kz = OCN.kz[c], kk = OCN.kk[c], w = OCN.w[c], hr = OCN.h0r[c], hi = OCN.h0i[c];
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const o = j * N + i, m = ((N - j) % N) * N + ((N - i) % N), k = kk[o];
@@ -877,7 +878,7 @@ const oceanMat = new THREE.ShaderMaterial({
       float att = 1.0 - smoothstep(1200.0, 6000.0, d), attS = 1.0 - smoothstep(150.0, 500.0, d);
       vec3 P = vec3(p0.x, 0.0, p0.y); float crest = 0.0;
       for (int i = 0; i < ${NW}; i++) {
-        float a = uW[i].w * (uWp[i].z > 0.5 ? uGerS : uSwell) * (i >= 3 ? attS : 1.0) * att;
+        float a = uW[i].w * (uWp[i].z > 0.5 ? uGerS * attS : uSwell) * att;
         float th = dot(uW[i].xy, p0) * uW[i].z + uWp[i].x * uTime + uWp[i].y + uPh[i];
         float s = sin(th), c = cos(th);
         P.y += a * s; P.x += uWp[i].w * uW[i].z * a * uW[i].x * c * 6.0; P.z += uWp[i].w * uW[i].z * a * uW[i].y * c * 6.0;
@@ -906,11 +907,12 @@ const oceanMat = new THREE.ShaderMaterial({
     uniform sampler2D uSdf; uniform vec2 uSdfC; uniform float uSdfS; uniform float uSdfOn;
     varying vec3 vWorld; varying float vAtt; varying float vAttS; varying float vCrest; varying vec2 vP0;
     void main(){
-      vec2 p = vWorld.xz; float dx = 0.0, dz = 0.0, foamF = 0.0;
+      vec2 p = vWorld.xz; float dx = 0.0, dz = 0.0, foamF = 0.0, swS = 0.0;
       for (int i = 0; i < ${NW}; i++) {
-        float a = uW[i].w * (uWp[i].z > 0.5 ? uGerS : uSwell) * (i >= 3 ? vAttS : 1.0) * vAtt;
+        float a = uW[i].w * (uWp[i].z > 0.5 ? uGerS * vAttS : uSwell) * vAtt;
         float c = a * uW[i].z * cos(dot(uW[i].xy, p) * uW[i].z + uWp[i].x * uTime + uWp[i].y + uPh[i]);
-        dx += c * uW[i].x; dz += c * uW[i].y;
+        float ks = uWp[i].z > 0.5 ? 1.0 : 2.2 * (1.0 - smoothstep(2500.0, 9000.0, length(cameraPosition.xz - p))); // houle : pentes accentuées (lisibilité des longues ondulations)
+        dx += c * uW[i].x * ks; dz += c * uW[i].y * ks; swS += c * ks;
       }
       float camD = length(cameraPosition - vWorld);
       if (uFOn > 0.5) { // pentes de la mer FFT (différences finies) et écume des crêtes déferlantes
@@ -942,11 +944,11 @@ const oceanMat = new THREE.ShaderMaterial({
       float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
       vec3 r = reflect(-v, n); r.y = abs(r.y);
       vec3 deep = vec3(0.005, 0.06, 0.12), shallow = vec3(0.03, 0.32, 0.38);
-      float hh = clamp(vWorld.y * 0.22 / max(uSwell + uAmp, 0.4) + 0.5, 0.0, 1.0);
+      float hh = clamp(vWorld.y * 0.24 / max(uSwell + uAmp, 0.4) + 0.5, 0.0, 1.0), trough = 1.0 - smoothstep(0.0, 0.45, hh);
       float light = (0.1 + 0.9 * uDay) * (1.0 - 0.45 * uCloud), sunUp = smoothstep(-0.03, 0.06, uSun.y);
-      vec3 water = mix(deep, shallow, hh * 0.6) * (0.5 + 0.5 * max(dot(n, uSun), 0.0)) * light * (1.0 - gust * 0.18);
+      vec3 water = mix(deep, shallow, hh * 0.7) * (0.5 + 0.5 * max(dot(n, uSun), 0.0)) * light * (1.0 - gust * 0.18) * (1.0 - 0.28 * trough * vAtt);
       // diffusion sous la surface sur les crêtes, à contre-jour
-      float sss = clamp(vCrest, 0.0, 1.0) * pow(max(dot(normalize(vec3(-v.x, 0.0, -v.z)), normalize(vec3(uSun.x, 0.0, uSun.z))), 0.0), 2.0);
+      float sss = clamp(max(vCrest, (hh - 0.62) * 2.6), 0.0, 1.0) * pow(max(dot(normalize(vec3(-v.x, 0.0, -v.z)), normalize(vec3(uSun.x, 0.0, uSun.z))), 0.0), 2.0);
       water += vec3(0.02, 0.3, 0.26) * sss * 0.55 * vAtt * uDay * (1.0 - 0.6 * uCloud);
       vec3 col = mix(water, sky(r), fres * 0.9);
       float clr = 1.0 - 0.85 * uCloud, sd = max(dot(r, uSun), 0.0);
@@ -1000,7 +1002,7 @@ const ocean = new THREE.Mesh(makeOceanGeo(), oceanMat); ocean.frustumCulled = fa
 // Applique un niveau graphique : résolution, ombres, maillage de la mer, densité des particules
 function applyGfx(level) {
   const lv = level === 'auto' || !GFX_PRESETS[level] ? autoGfx() : level, P = GFX_PRESETS[lv]; GFX.level = lv; GFX.halo = SETTINGS.halo; GFX.shore = SETTINGS.shore;
-  const dpr = window.devicePixelRatio || 1; renderer.setPixelRatio(P.pr < 1 ? P.pr : Math.min(dpr, P.pr, document.body.classList.contains('mobile') ? 1.5 : 2));
+  const dpr = window.devicePixelRatio || 1; GFX.pr = P.pr < 1 ? P.pr : Math.min(dpr, P.pr, document.body.classList.contains('mobile') ? 1.5 : 2); renderer.setPixelRatio(GFX.pr * (typeof PERF !== 'undefined' ? PERF.scale : 1));
   renderer.shadowMap.enabled = !!P.shadows; sunLight.castShadow = !!P.shadows;
   if (P.shadows && sunLight.shadow.mapSize.x !== P.shadows) { sunLight.shadow.mapSize.set(P.shadows, P.shadows); if (sunLight.shadow.map) { sunLight.shadow.map.dispose(); sunLight.shadow.map = null; } }
   scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { m.needsUpdate = true; }); });
@@ -3215,20 +3217,57 @@ function updateWorld(rdt) {
   TRAIN_BUOYS.forEach((b, i) => markAt(buoyVis[i], b.lat, b.lon, b.done ? 0x6f7f8f : 0xff9f1c, MODE === 'train', 0.27, b.done ? 0 : 0.6));
   updateShoreField(rdt);
 }
-const RL_MAX = 800, rlGeo = new THREE.BufferGeometry(); rlGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(RL_MAX * 3), 3));
-const routeLine = new THREE.Line(rlGeo, new THREE.LineBasicMaterial({ color: 0xff4fd8, transparent: true, opacity: 0.9 })); routeLine.frustumCulled = false; scene.add(routeLine);
-const arrowShape = new THREE.Shape(); [[0, 9], [5.5, 1], [2.2, 1], [2.2, -8], [-2.2, -8], [-2.2, 1], [-5.5, 1]].forEach((p, i) => i ? arrowShape.lineTo(p[0], p[1]) : arrowShape.moveTo(p[0], p[1]));
+const RL_MAX = 900, rlGeo = new THREE.BufferGeometry(), rlPos = new Float32Array(RL_MAX * 2 * 3), rlAux = new Float32Array(RL_MAX * 2 * 2);
+rlGeo.setAttribute('position', new THREE.BufferAttribute(rlPos, 3)); rlGeo.setAttribute('aux', new THREE.BufferAttribute(rlAux, 2));
+{ const idx = new Uint32Array((RL_MAX - 1) * 6); for (let i = 0; i < RL_MAX - 1; i++) { const a = i * 2; idx.set([a, a + 1, a + 2, a + 1, a + 3, a + 2], i * 6); } rlGeo.setIndex(new THREE.BufferAttribute(idx, 1)); }
+const routeMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: { uCol: { value: new THREE.Color(0xff4fd8) }, uT: { value: 0 }, uFog: oceanU.uFog },
+  vertexShader: `attribute vec2 aux; varying vec2 vA; varying float vB; varying float vD;
+    void main(){ vA = aux; vB = length(position.xz); vec4 wp = modelMatrix * vec4(position, 1.0); vD = length(cameraPosition - wp.xyz); gl_Position = projectionMatrix * viewMatrix * wp; }`,
+  fragmentShader: `uniform vec3 uCol; uniform float uT; uniform float uFog; varying vec2 vA; varying float vB; varying float vD;
+    void main(){
+      float e = abs(vA.y);
+      float body = 1.0 - smoothstep(0.62, 1.0, e), core = 1.0 - smoothstep(0.0, 0.32, e);
+      // chevrons qui avancent vers la destination (période ∝ distance caméra pour rester lisibles)
+      float per = clamp(vD * 0.06, 9.0, 900.0), ph = fract((vA.x - e * per * 0.32) / per - uT * 0.45);
+      float chev = smoothstep(0.0, 0.06, ph) * (1.0 - smoothstep(0.30, 0.38, ph));
+      float a = body * (0.28 + 0.45 * chev) + core * 0.25;
+      a *= smoothstep(10.0, 34.0, vB) * (1.0 - smoothstep(30000.0, 90000.0, vD));
+      vec3 c = mix(uCol, vec3(1.0), core * 0.35 + chev * 0.15);
+      gl_FragColor = vec4(c, a * (1.0 - 0.6 * (1.0 - exp(-vD * uFog))));
+    }`,
+});
+const routeLine = new THREE.Mesh(rlGeo, routeMat); routeLine.frustumCulled = false; routeLine.renderOrder = 3; scene.add(routeLine);
+const arrowShape = new THREE.Shape(); [[0, 9], [5.5, 1], [2.2, 1], [2.2, -8], [-2.2, -8], [-2.2, 1], [-5.5, 1]].forEach((p, i) => i ? arrowShape.lineTo(p[0] * 0.55, p[1] * 0.55) : arrowShape.moveTo(p[0] * 0.55, p[1] * 0.55));
 const arrowGeo = new THREE.ShapeGeometry(arrowShape); arrowGeo.rotateX(-Math.PI / 2);
-const guideArrow = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({ color: 0xff4fd8, transparent: true, opacity: 0.75, depthTest: false, side: THREE.DoubleSide, fog: false })); guideArrow.renderOrder = 6; scene.add(guideArrow);
+const guideArrow = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({ color: 0xff4fd8, transparent: true, opacity: 0.7, depthTest: false, side: THREE.DoubleSide, fog: false })); guideArrow.renderOrder = 6; scene.add(guideArrow);
+const RL_P = [];
 function updateGuide() {
   const R = ROUTE.nodes, adv = routeAdvice();
   if (!R || !adv) { routeLine.visible = false; guideArrow.visible = false; return; }
-  const arr = rlGeo.attributes.position.array; let n = 0;
-  for (let i = 0; i < R.length - 1 && n < RL_MAX - 1; i++) { const k = MODE === 'race' ? 6 : 2; for (let j = 0; j < k && n < RL_MAX - 1; j++) { const f = j / k, p = rel(R[i].lat + (R[i + 1].lat - R[i].lat) * f, R[i].lon + (R[i + 1].lon - R[i].lon) * f); arr[n * 3] = p[0]; arr[n * 3 + 1] = 2; arr[n * 3 + 2] = p[1]; n++; } }
-  const pe = rel(R[R.length - 1].lat, R[R.length - 1].lon); arr[n * 3] = pe[0]; arr[n * 3 + 1] = 2; arr[n * 3 + 2] = pe[1]; n++;
-  rlGeo.setDrawRange(0, n); rlGeo.attributes.position.needsUpdate = true; routeLine.visible = true;
-  const h = adv.hdg * D2R, ax = Math.sin(h) * 48, az = -Math.cos(h) * 48;
-  guideArrow.position.set(ax, waveH(ax, az) + 1.4, az); guideArrow.rotation.y = -h; guideArrow.visible = true;
+  // points de la route en coordonnées scène, à partir du segment le plus proche du bateau (la partie déjà parcourue n'est plus tracée)
+  RL_P.length = 0; let best = 0, bd = Infinity;
+  const pts = R.map(q => rel(q.lat, q.lon));
+  for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz || 1, t = clamp(-(a[0] * dx + a[1] * dz) / l2, 0, 1), d = Math.hypot(a[0] + dx * t, a[1] + dz * t); if (d < bd) { bd = d; best = i + t; } }
+  const i0 = Math.floor(best), f0 = best - i0, a0 = pts[i0], b0 = pts[Math.min(i0 + 1, pts.length - 1)];
+  const push = (x, z) => { if (RL_P.length < RL_MAX * 2) RL_P.push(x, z); };
+  const seg = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]), dm = Math.hypot(a[0], a[1]), step = clamp(dm * 0.04, 18, 4000), n = Math.min(60, Math.max(1, Math.ceil(L / step)));
+    for (let k = 1; k <= n; k++) push(a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n); };
+  const start = [a0[0] + (b0[0] - a0[0]) * f0, a0[1] + (b0[1] - a0[1]) * f0]; push(start[0], start[1]); seg(start, b0);
+  for (let i = i0 + 1; i < pts.length - 1; i++) seg(pts[i], pts[i + 1]);
+  const n = RL_P.length / 2; if (n < 2) { routeLine.visible = false; guideArrow.visible = false; return; }
+  const cx = camera.position.x, cz = camera.position.z; let s = 0;
+  for (let i = 0; i < n; i++) {
+    const x = RL_P[i * 2], z = RL_P[i * 2 + 1], ip = Math.max(0, i - 1), inx = Math.min(n - 1, i + 1);
+    let tx = RL_P[inx * 2] - RL_P[ip * 2], tz = RL_P[inx * 2 + 1] - RL_P[ip * 2 + 1]; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+    if (i) s += Math.hypot(x - RL_P[i * 2 - 2], z - RL_P[i * 2 - 1]);
+    const dc = Math.hypot(x - cx, z - cz), hw = clamp(0.9 + dc * 0.0042, 0.9, 260), y = (Math.hypot(x, z) < 6000 ? waveH(x, z) : 0) + 0.9 + dc * 0.0007;
+    const o = i * 6; rlPos[o] = x - tz * hw; rlPos[o + 1] = y; rlPos[o + 2] = z + tx * hw; rlPos[o + 3] = x + tz * hw; rlPos[o + 4] = y; rlPos[o + 5] = z - tx * hw;
+    const q = i * 4; rlAux[q] = s; rlAux[q + 1] = -1; rlAux[q + 2] = s; rlAux[q + 3] = 1;
+  }
+  rlGeo.setDrawRange(0, (n - 1) * 6); rlGeo.attributes.position.needsUpdate = true; rlGeo.attributes.aux.needsUpdate = true; routeLine.visible = true; routeMat.uniforms.uT.value = realT;
+  const h = adv.hdg * D2R, ax = Math.sin(h) * 34, az = -Math.cos(h) * 34;
+  guideArrow.position.set(ax, waveH(ax, az) + 1.1, az); guideArrow.rotation.y = -h; guideArrow.visible = true;
 }
 function updateParticles(rdt, bx, bz) {
   const w = curWind(), a = (w.twd + 180) * D2R, vx = Math.sin(a), vz = -Math.cos(a), sp_ = w.tws * KN * 3.2, len = 5 + w.tws * 0.7;
@@ -3347,8 +3386,18 @@ function updateCamera() {
 }
 
 let last = performance.now(), hudAcc = 0, mapAcc = 0, polAcc = 0, projAcc = 0;
+// résolution adaptative : si l'image passe sous ~48 i/s pendant 1 s, la définition de rendu baisse par paliers (jusqu'à 60 %) ;
+// elle remonte quand la marge revient (5 s consécutives à la cadence de l'écran). Ignoré onglet masqué / gros à-coups.
+const PERF = { acc: 0, n: 0, win: 0, scale: 1, good: 0 };
+function perfAdapt(ms) {
+  if (ms > 120 || document.hidden) return; PERF.acc += ms; PERF.n++; PERF.win += ms; if (PERF.win < 1000) return;
+  const avg = PERF.acc / PERF.n; PERF.acc = PERF.n = PERF.win = 0; let sc = PERF.scale;
+  if (avg > 21 && sc > 0.6) { sc = Math.max(0.6, sc - 0.1); PERF.good = 0; }
+  else if (avg < 17.6) { if (++PERF.good >= 5 && sc < 1) { sc = Math.min(1, sc + 0.05); PERF.good = 0; } } else PERF.good = 0;
+  if (sc !== PERF.scale) { PERF.scale = sc; renderer.setPixelRatio(GFX.pr * sc); }
+}
 function frame(now) {
-  const rdt = Math.min(0.1, (now - last) / 1000); last = now; realT += rdt;
+  perfAdapt(now - last); const rdt = Math.min(0.1, (now - last) / 1000); last = now; realT += rdt;
   handleInput(rdt);
   if (running && !paused) {
     if (!player.finished) realRaceT += rdt;
