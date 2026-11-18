@@ -884,6 +884,27 @@ function fftH(c, x, z) {
   return (a * (1 - fu) + b * fu) * (1 - fv) + (d * (1 - fu) + e * fu) * fv;
 }
 /* ----- Contact eau / coque : empreinte de flottaison mesurée sur la géométrie de chaque classe (16 demi-largeurs de l'étrave au tableau) ----- */
+/* Couvercle d'occultation de l'eau : plan horizontal invisible (profondeur seule) tendu à l'intérieur de la coque, sous le pont.
+   Dessiné après les bateaux et avant l'océan (renderOrder 1 < 2) : l'eau située sous ce plan, à l'intérieur de la coque, n'est plus
+   dessinée (cockpit, cabine vue par le rouf), alors que l'eau qui passe par-dessus le pont reste visible. */
+const V_MASK_ON = true;
+const MASK_MAT = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
+const MASK_Y = { imoca: 1.0, c40: 0.42, mini: 0.42, proto: 0.42 }; // unités du modèle (Class40 = Mini ×1,875)
+function waterMask(V, capY) {
+  const root = V.root, excl = new Set();
+  [V.foilS, V.foilP, V.keel, V.mast, V.boomPivot, V.bowWave, V.hd, V.vane, V.mainMesh, V.sheets, V.wake].concat(V.heads || []).forEach(o => o && o.traverse && o.traverse(c => excl.add(c)));
+  if (V.mask) { root.remove(V.mask); V.mask.geometry.dispose(); V.mask = null; }
+  const qp = root.position.clone(), qq = root.quaternion.clone(); root.position.set(0, 0, 0); root.quaternion.identity(); root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m = new THREE.Matrix4(), v3 = new THREE.Vector3(), B = new Map(), dz = 0.3;
+  root.traverseVisible(o => { if (!o.isMesh || excl.has(o) || o.isSprite) return; const pos = o.geometry && o.geometry.attributes.position; if (!pos) return; m.multiplyMatrices(inv, o.matrixWorld);
+    for (let i = 0; i < pos.count; i++) { v3.fromBufferAttribute(pos, i).applyMatrix4(m); if (v3.y < capY - 0.6 || v3.y > capY + 0.05) continue; const k = Math.round(v3.z / dz); B.set(k, Math.max(B.get(k) || 0, Math.abs(v3.x))); } });
+  root.position.copy(qp); root.quaternion.copy(qq); root.updateMatrixWorld(true);
+  const ks = [...B.keys()].sort((a, b) => a - b); if (ks.length < 4) return;
+  const pts = ks.map(k => [B.get(k) * 0.95, k * dz]), sh = new THREE.Shape();
+  sh.moveTo(0, -pts[0][1]); pts.forEach(([x, z]) => sh.lineTo(x, -z)); sh.lineTo(0, -pts[pts.length - 1][1]); for (let j = pts.length - 1; j >= 0; j--) sh.lineTo(-pts[j][0], -pts[j][1]);
+  const g = new THREE.ShapeGeometry(sh); g.rotateX(-Math.PI / 2); g.translate(0, capY, 0);
+  const mk = new THREE.Mesh(g, MASK_MAT); mk.renderOrder = 1; mk.castShadow = mk.receiveShadow = false; root.add(mk); V.mask = mk; V.maskKey = V.stl || 'param';
+}
 function hullFootprint(V) {
   if (V.fp) return V.fp;
   const root = V.root, excl = new Set();
@@ -1052,7 +1073,7 @@ const oceanMat = new THREE.ShaderMaterial({
       gl_FragColor = vec4(col, 1.0);
     }`,
 });
-const ocean = new THREE.Mesh(makeOceanGeo(), oceanMat); ocean.frustumCulled = false; scene.add(ocean);
+const ocean = new THREE.Mesh(makeOceanGeo(), oceanMat); ocean.frustumCulled = false; ocean.renderOrder = 2; scene.add(ocean);
 // Applique un niveau graphique : résolution, ombres, maillage de la mer, densité des particules
 function applyGfx(level) {
   const lv = level === 'auto' || !GFX_PRESETS[level] ? autoGfx() : level, P = GFX_PRESETS[lv]; GFX.level = lv; GFX.halo = SETTINGS.halo; GFX.shore = SETTINGS.shore;
@@ -1089,7 +1110,7 @@ function rotAxis(p, o, k, ang) { // rotation de p autour de l'axe (o, k unitaire
   return [o[0] + vx * c + (k[1] * vz - k[2] * vy) * sn + k[0] * d, o[1] + vy * c + (k[2] * vx - k[0] * vz) * sn + k[1] * d, o[2] + vz * c + (k[0] * vy - k[1] * vx) * sn + k[2] * d];
 }
 // angle d'écoute (deg) → points ; renvoie la position du point d'écoute pour les écoutes
-function updateSailGeo(geo, D, angDeg, side, hoist, flutter, t, seed) {
+function updateSailGeo(geo, D, angDeg, side, hoist, flutter, t, seed, chord = 1) {
   const T = D.T, H = D.H, C = D.C, HA = D.HA || D.H, pos = geo.attributes.position.array;
   const kx = H[0] - T[0], ky = H[1] - T[1], kz = H[2] - T[2], kl = Math.hypot(kx, ky, kz), k = [kx / kl, ky / kl, kz / kl];
   const hz = Math.max(0.05, hoist), lee = -side; let o = 0, clew = null;
@@ -1098,11 +1119,12 @@ function updateSailGeo(geo, D, angDeg, side, hoist, flutter, t, seed) {
     const L = [T[0] + kx * vh, T[1] + ky * vh, T[2] + kz * vh];
     const E0 = [C[0] + (HA[0] - C[0]) * vh, C[1] + (HA[1] - C[1]) * vh, C[2] + (HA[2] - C[2]) * vh];
     const E = rotAxis(E0, T, k, ang);
-    const ex = E[0] - L[0], ey = E[1] - L[1], ez = E[2] - L[2], ch = Math.hypot(ex, ey, ez) || 1;
+    // chord < 1 : voile partiellement enroulée (la chute se rapproche de l'étai)
+    const ex = (E[0] - L[0]) * chord, ey = (E[1] - L[1]) * chord, ez = (E[2] - L[2]) * chord, ch = Math.hypot(ex, ey, ez) || 1;
     let nx = k[1] * ez - k[2] * ey, ny = k[2] * ex - k[0] * ez, nz = k[0] * ey - k[1] * ex; const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
     if (nx * lee < 0) { nx = -nx; ny = -ny; nz = -nz; }
     let cv = D.kind === 'main' ? (0.35 + 0.65 * Math.min(1, v * 3)) * (1 - 0.35 * v) : D.kind === 'spi' ? 0.55 + 0.6 * Math.sin(Math.PI * Math.min(1, v * 1.05)) : (1 - 0.4 * v);
-    cv *= D.camber * (hoist < 0.98 ? 0.4 + 0.6 * hoist : 1);
+    cv *= D.camber * (hoist < 0.98 ? 0.4 + 0.6 * hoist : 1) * (chord < 1 ? chord * chord : 1);
     for (let i = 0; i <= SNU; i++) {
       const u = i / SNU, sh = Math.sin(Math.PI * Math.pow(u, 0.85));
       let off = cv * ch * sh;
@@ -1241,6 +1263,7 @@ const MAT = {
   bottom: new THREE.MeshStandardMaterial({ color: 0x1f2328, roughness: 0.6, side: THREE.DoubleSide }),
   dark: new THREE.MeshStandardMaterial({ color: 0x15181c, roughness: 0.4, metalness: 0.4 }),
   roof: new THREE.MeshStandardMaterial({ color: 0xeef0f2, roughness: 0.45 }),
+  roofD: new THREE.MeshStandardMaterial({ color: 0x4f565e, roughness: 0.9, side: THREE.DoubleSide }), // rouf importé : même teinte que le pont (le dessus est partagé entre les deux pièces)
   glass: new THREE.MeshStandardMaterial({ color: 0x0f1a24, roughness: 0.15, metalness: 0.6, side: THREE.DoubleSide }),
   main: new THREE.MeshStandardMaterial({ color: 0x40464e, roughness: 0.55, metalness: 0.15, side: THREE.DoubleSide }),
   foc: new THREE.MeshStandardMaterial({ color: 0xf3f3ee, roughness: 0.75, side: THREE.DoubleSide }),
@@ -1331,7 +1354,7 @@ function applyImocaModel(V) {
   const M = (V.isPlayer && GFX.level !== 'low' ? IMOCA_MODEL.hi : IMOCA_MODEL.lo) || IMOCA_MODEL.hi || IMOCA_MODEL.lo; if (!M || V.stl === M) return;
   if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
   V.param.forEach(o => o.visible = false); const G = M.geo, list = [], m3 = (geo, mat, parent = V.root) => { if (!geo) return null; const m = new THREE.Mesh(geo, mat); parent.add(m); list.push(m); return m; };
-  m3(G.hull_deck, MAT.deck); m3(COCKPIT_TUB(), MAT.deck); m3(G.hull_roof, MAT.roof); m3(G.hull_topS, V.mats.livS); m3(G.hull_topP, V.mats.livP); m3(G.hull_bottom, MAT.bottom); m3(G.hull_ends, V.mats.hullMat);
+  m3(G.hull_deck, MAT.deck); m3(COCKPIT_TUB(), MAT.deck); m3(G.hull_roof, MAT.roofD); m3(G.hull_topS, V.mats.livS); m3(G.hull_topP, V.mats.livP); m3(G.hull_bottom, MAT.bottom); m3(G.hull_ends, V.mats.hullMat);
   V.keel.position.set(...M.meta.keelPivot); m3(G.keel, V.mats.accMat, V.keel);
   m3(G.foil, MAT.foil, V.foilS); m3(G.foil, MAT.foil, V.foilP);
   [1, -1].forEach(k => { const r = m3(G.rudder, MAT.bottom); r.scale.x = k; });
@@ -1367,8 +1390,9 @@ function makeBoat(hull, accent, name, isPlayer) {
   const keel = new THREE.Group(); keel.position.set(0, -0.55, 0.4); root.add(keel);
   const fin = new THREE.Mesh(KEEL_FIN, accMat); keel.add(fin); param.push(fin);
   const bulb = new THREE.Mesh(BULB_GEO, accMat); bulb.scale.set(0.95, 0.95, 4.2); bulb.position.set(0, -4.45, 0.35); keel.add(bulb); param.push(bulb);
-  const mast = add(MAST_GEO, MAT.dark, 0, 1.21 + 14.25, -0.5); mast.scale.set(1, 1, 1.9);
-  [[10.5, 3.4, 1.8], [20, 1.6, 1.0]].forEach(([y, w, sw]) => [1, -1].forEach(k => { const L = Math.hypot(w, sw), s2 = add(SPREAD_GEO, MAT.dark, k * w / 2, y, -0.5 + sw / 2); s2.scale.x = L; s2.rotation.y = -k * Math.atan2(sw, w); }));
+  // mât et barres de flèche : hors de `param`, ils restent visibles avec le modèle importé (qui n'a pas de gréement)
+  const mast = add(MAST_GEO, MAT.dark, 0, 1.21 + 14.25, -0.5); mast.scale.set(1, 1, 1.9); param.pop();
+  [[10.5, 3.4, 1.8], [20, 1.6, 1.0]].forEach(([y, w, sw]) => [1, -1].forEach(k => { const L = Math.hypot(w, sw), s2 = add(SPREAD_GEO, MAT.dark, k * w / 2, y, -0.5 + sw / 2); s2.scale.x = L; s2.rotation.y = -k * Math.atan2(sw, w); param.pop(); }));
   root.add(new THREE.LineSegments(RIG_GEO, MAT.rig));
   const sprit = add(SPRIT_GEO, accMat, 0, 1.55, -10.9); sprit.rotation.x = Math.PI / 2; param.pop(); // le bout-dehors reste avec le modèle importé
   const boomPivot = new THREE.Group(); boomPivot.position.set(0, 3.1, -0.12); root.add(boomPivot);
@@ -1397,7 +1421,7 @@ function makeBoat(hull, accent, name, isPlayer) {
 }
 
 
-const CD_IMOCA = { surf: 0, sails: SAIL_DEFS, boomPivot: [0, 3.1, -0.12], boomEnd: [0, 3.1, 8.4], trav: [0.8, 1.25, 7.9], leads: [[1.6, 1.5, 1.2], [2.6, 1.35, 2.6], [2.5, 1.2, 7.6]], foils: true, cant: true, mastRot: 0.8, k: 1, bw: 1, heel: 0.8 };
+const CD_IMOCA = { furlers: true, surf: 0, sails: SAIL_DEFS, boomPivot: [0, 3.1, -0.12], boomEnd: [0, 3.1, 8.4], trav: [0.8, 1.25, 7.9], leads: [[1.6, 1.5, 1.2], [2.6, 1.35, 2.6], [2.5, 1.2, 7.6]], foils: true, cant: true, mastRot: 0.8, k: 1, bw: 1, heel: 0.8 };
 /* ----- Mini 6.50 série (6,50 × 3,00 m, mât ~12 m, quille fixe, safrans jumeaux sur le tableau, long bout-dehors) ----- */
 const SAIL_DEFS_MINI = {
   main: { T: [0, 1.55, -0.45], H: [0, 12.0, -0.5], C: [0, 1.6, 2.85], HA: [0, 11.75, 0.95], camber: 0.085, twist: 9, min: 1, max: 30, kind: 'main' },
@@ -1407,7 +1431,7 @@ const SAIL_DEFS_MINI = {
 };
 const CD_MINI = { sails: SAIL_DEFS_MINI, boomPivot: [0, 1.5, -0.45], boomEnd: [0, 1.5, 2.85], trav: [0.35, 0.6, 2.95], leads: [[0.78, 0.68, 0.2], [1.3, 0.62, 1.2], [1.25, 0.6, 3.05]], foils: false, cant: false, mastRot: 0, k: 0.36, bw: 0.55, heel: 1.15, surf: 1 };
 const CD_PROTO = { ...CD_MINI, foils: true, cant: true, mastRot: 0.6, heel: 1.0, surf: 0.6 };
-const C40S = 12.19 / 6.5, CD_C40 = { ...CD_MINI, surf: 0.7 };
+const C40S = 12.19 / 6.5, CD_C40 = { ...CD_MINI, surf: 0.7, furlers: true };
 useHull('mini');
 function miniCoachGeo() { const sh = new THREE.Shape(); sh.moveTo(0.35, 0.6); sh.lineTo(0.35, 0.95); sh.quadraticCurveTo(-0.6, 1.0, -1.25, 0.94); sh.quadraticCurveTo(-1.65, 0.86, -1.75, 0.66); sh.lineTo(-1.75, 0.6); sh.closePath();
   const g = new THREE.ExtrudeGeometry(sh, { depth: 1.5, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 2, curveSegments: 8 }); g.rotateY(-Math.PI / 2); g.translate(0.75, 0, 0); return g; }
@@ -3245,6 +3269,43 @@ async function showAnalysis() {
 /* ===================== RENDU 3D ===================== */
 let refCos = 1;
 function rel(lat, lon) { return [(lon - player.lon) * 60 * NM * refCos, -(lat - player.lat) * 60 * NM]; }
+/* Voiles d'avant pendant un changement de voile (animation visuelle seule, la physique ne change pas) :
+   - foc et gennaker sur enrouleur (IMOCA, Class40) : la nouvelle se déroule pendant que l'ancienne s'enroule ; enroulées, elles restent sur leur étai ;
+   - Mini : foc/génois hissés depuis le sac puis bordés, affalés à l'inverse ;
+   - spi : hissé dans sa chaussette, qui remonte et le libère ; à l'affalage, la chaussette redescend puis la voile tombe.
+   La nouvelle voile commence à se déployer avant que l'ancienne soit rangée (comme un vrai changement « en peeling »).
+   Durée réelle 3,5 à 10 s, quelle que soit l'accélération du temps. */
+const HEAD_KEYS = ['foc', 'gen', 'spi'];
+function updateHeads(b, v, cd, SD, tr, side, flutter, seed, rdt) {
+  const A = v.sa || (v.sa = { from: b.sail, to: b.sail, q: 1, man: null, stowed: [] }), furl = !!cd.furlers;
+  if (b.man && b.man.type === 'sail' && b.man !== A.man) { A.man = b.man; A.from = b.man.fromSail; A.to = b.man.toSail; A.q = 0; A.T = clamp(b.man.dur / Math.max(1, accel), 3.5, 10); }
+  if (A.q < 1) A.q = Math.min(1, A.q + rdt / A.T); else A.from = A.to = b.sail;
+  let clew = null;
+  for (let i = 0; i < 3; i++) {
+    const m = v.heads[i], spi = i === 2;
+    let dep = A.q >= 1 ? (i === b.sail ? 1 : 0) : i === A.to ? clamp(A.q / 0.6, 0, 1) : i === A.from ? 1 - clamp((A.q - 0.35) / 0.6, 0, 1) : 0;
+    dep = dep * dep * (3 - 2 * dep);
+    if (dep <= 0.001 && (spi || !furl)) { m.visible = false; A.stowed[i] = false; if (i === b.sail) clew = null; continue; }
+    m.visible = true;
+    const D = SD[HEAD_KEYS[i]], ang = D.min + (D.max - D.min) * tr;
+    if (dep <= 0.001) { // enroulée sur son étai : géométrie figée, recalculée seulement en changeant d'état
+      if (!A.stowed[i]) { updateSailGeo(m.geometry, D, 0, side, 1, 0, 0, seed, 0.035); A.stowed[i] = true; }
+      continue;
+    }
+    A.stowed[i] = false;
+    let hoist = 1, chord = 1, fl = flutter;
+    if (dep < 1) {
+      if (spi) { hoist = clamp(dep / 0.5, 0.05, 1); chord = 0.07 + 0.93 * clamp((dep - 0.5) / 0.5, 0, 1); }
+      else if (furl) chord = 0.035 + 0.965 * dep;
+      else { hoist = clamp(dep / 0.45, 0.05, 1); chord = 0.12 + 0.88 * clamp((dep - 0.35) / 0.65, 0, 1); }
+      fl = Math.max(flutter, 1.4 * (1 - dep) + 0.3);
+    }
+    const c = updateSailGeo(m.geometry, D, ang * (0.4 + 0.6 * dep), side, hoist, fl, realT, seed + 2 + i, chord);
+    if (i === b.sail) clew = c;
+  }
+  if (!clew) { const D = SD[HEAD_KEYS[b.sail]]; clew = [D.C[0], D.C[1], D.C[2]]; }
+  return clew;
+}
 function updateBoatVisual(b, rdt) {
   const dh = norm180(b.hdg - b.dispHdg); b.dispHdg = norm360(b.dispHdg + dh * Math.min(1, rdt * 3));
   b.odo += b.spd * KN * rdt * VF;
@@ -3279,6 +3340,7 @@ function updateBoatVisual(b, rdt) {
     M.vr += (om * om * 0.8 * (tR - M.r) - 2 * ze * om * M.vr) * dt; M.r += M.vr * dt; }
   v.root.position.set(px, M.y * damp + b.lift - 0.1, pz);
   v.root.rotation.set(M.p * damp + b.lift * 0.025 - (b.surfF - 1) * 0.12, -h, M.r * damp + b.heel * D2R);
+  if (!b.isGhost && V_MASK_ON && v.maskKey !== (v.stl || 'param')) waterMask(v, MASK_Y[CLS.id] || 0.5);
   v.keel.rotation.z = b.cant;
   // réglages : faseyement si trop choqué, face au vent, pendant un virement ou un changement de voile
   const tr = b.trim, ease = tr - topt(a), turning = isTurnMan(b.man) && b.man.t / b.man.dur < 0.3;
@@ -3290,9 +3352,7 @@ function updateBoatVisual(b, rdt) {
   if (near) {
     const seed = b.isPlayer ? 0 : px * 0.01;
     updateSailGeo(v.mainMesh.geometry, dm, mainAng, side, 1 - 0.16 * (b.reef || 0), flutter * 0.6, realT, seed);
-    const key = ['foc', 'gen', 'spi'][b.sail], D = SD[key], hAng = D.min + (D.max - D.min) * tr;
-    v.heads.forEach((m, i) => m.visible = i === b.sail);
-    const clew = updateSailGeo(v.heads[b.sail].geometry, D, hAng, side, b.hoist, flutter, realT, seed + 2);
+    const clew = updateHeads(b, v, cd, SD, tr, side, flutter, seed, rdt);
     // écoutes : grand-voile (bôme → chariot), voile d'avant (point d'écoute → poulie sous le vent)
     const be = rotAxis(cd.boomEnd, cd.boomPivot, [0, 1, 0], -side * mainAng * D2R), L0 = cd.leads[b.sail], lead = [-side * L0[0], L0[1], L0[2]];
     v.sheets.geometry.attributes.position.array.set([be[0], be[1], be[2], -side * cd.trav[0], cd.trav[1], cd.trav[2], clew[0], clew[1], clew[2], lead[0], lead[1], lead[2]]);
@@ -3304,7 +3364,7 @@ function updateBoatVisual(b, rdt) {
   v.awa += norm180((awa - v.awa) * R2D) * D2R * Math.min(1, rdt * 4); v.vane.rotation.y = -v.awa + Math.sin(realT * 7 + px) * 0.03 * (1 + (b.sq || 0) * 3);
   if (near) {
     tmpV.set(px, 14, pz).sub(camera.position).normalize(); const back = Math.max(0, tmpV.dot(SUN)), bl = back * back * 0.55 * ENV.sunUp * (1 - 0.7 * ENV.cloud);
-    v.mainMesh.material.emissiveIntensity = bl * 0.6; v.heads[b.sail].material.emissiveIntensity = bl;
+    v.mainMesh.material.emissiveIntensity = bl * 0.6; v.heads.forEach(h => { if (h.visible) h.material.emissiveIntensity = bl; });
   }
   // vague d'étrave le long de la coque
   const bw = v.bowWave.material.uniforms; bw.uH.value = clamp((b.dspd - 3 * cd.k) * 0.075, 0, 1.7) * cd.bw * (1 - Math.min(0.65, b.lift * 0.7)); bw.uStr.value = clamp((b.dspd - 2 * cd.k) / (9 * cd.k + 2), 0, 1); bw.uOdo.value = b.odo; bw.uTime.value = realT;
