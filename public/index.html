@@ -1093,7 +1093,7 @@ function applyGfx(level) {
 /* Voiles : points d'amure, de drisse et d'écoute réels ; la voile pivote autour de son guindant (étai / mât),
    forme recalculée à chaque image (creux, vrillage, faseyement, envoi / affalage le long de l'étai) */
 const SAIL_DEFS = {
-  main: { T: [0, 3.2, -0.12], H: [0, 29.3, -0.12], C: [0, 3.35, 8.4], HA: [0, 29.0, 2.9], camber: 0.085, twist: 9, min: 1, max: 30, kind: 'main' },
+  main: { T: [0, 3.2, -0.12], H: [0, 29.3, -0.12], C: [0, 3.35, 8.4], HA: [0, 28.7, 4.3], roach: 0.11, camber: 0.085, twist: 9, min: 1, max: 30, kind: 'main' },
   foc:  { T: [0, 1.5, -7.0], H: [0, 20.4, -0.85], C: [0, 2.3, 1.8], camber: 0.10, twist: 9, min: 8, max: 36, kind: 'jib' },
   gen:  { T: [0, 1.65, -9.1], H: [0, 28.9, -0.85], C: [0, 2.7, 2.3], camber: 0.12, twist: 10, min: 8, max: 40, kind: 'jib' },
   spi:  { T: [0, 1.55, -12.7], H: [0, 29.2, -0.8], C: [0, 5.5, 6.8], camber: 0.24, twist: 12, min: 20, max: 82, kind: 'spi' },
@@ -1117,7 +1117,8 @@ function updateSailGeo(geo, D, angDeg, side, hoist, flutter, t, seed, chord = 1)
   for (let j = 0; j <= SNV; j++) {
     const v = j / SNV, vh = v * hz, ang = -side * (angDeg + D.twist * v) * D2R;
     const L = [T[0] + kx * vh, T[1] + ky * vh, T[2] + kz * vh];
-    const E0 = [C[0] + (HA[0] - C[0]) * vh, C[1] + (HA[1] - C[1]) * vh, C[2] + (HA[2] - C[2]) * vh];
+    const E00 = [C[0] + (HA[0] - C[0]) * vh, C[1] + (HA[1] - C[1]) * vh, C[2] + (HA[2] - C[2]) * vh], rc = 1 + (D.roach || 0) * Math.sin(Math.PI * Math.min(1, v * 1.08));
+    const E0 = [L[0] + (E00[0] - L[0]) * rc, L[1] + (E00[1] - L[1]) * rc, L[2] + (E00[2] - L[2]) * rc]; // rond de chute
     const E = rotAxis(E0, T, k, ang);
     // chord < 1 : voile partiellement enroulée (la chute se rapproche de l'étai)
     const ex = (E[0] - L[0]) * chord, ey = (E[1] - L[1]) * chord, ez = (E[2] - L[2]) * chord, ch = Math.hypot(ex, ey, ez) || 1;
@@ -1250,10 +1251,11 @@ function railGeo(st = [0.1, 0.22, 0.34, 0.46, 0.58, 0.7, 0.8], RH = 0.62, PB = 0
 }
 const RAIL_GEO = railGeo();
 const MAST_GEO = new THREE.CylinderGeometry(0.15, 0.24, 28.5, 10), BOOM_GEO = new THREE.CylinderGeometry(0.1, 0.17, 8.6, 8), SPRIT_GEO = new THREE.CylinderGeometry(0.09, 0.14, 3.6, 8);
-const COACH_GEO = coachroofGeo(), COCK_GEO = new THREE.BoxGeometry(3.2, 0.25, 2.0), SPREAD_GEO = new THREE.BoxGeometry(1, 0.09, 0.26);
+const OUTRIG_GEO = new THREE.BoxGeometry(1.9, 0.12, 0.22), COACH_GEO = coachroofGeo(), COCK_GEO = new THREE.BoxGeometry(3.2, 0.25, 2.0), SPREAD_GEO = new THREE.BoxGeometry(1, 0.09, 0.26);
 function rigGeo() {
   const MH = [0, 29.6, -0.5], pos = [], L = (a, b) => pos.push(...a, ...b);
-  [1, -1].forEach(k => { const c = [k * 2.8, 1.1, 0.9], a = [k * 3.4, 10.5, 1.3], b = [k * 1.6, 20, 0.5]; L(c, a); L(a, b); L(b, MH); L(a, [0, 10.5, -0.5]); L([k * 2.6, 0.95, 8.6], [0, 27.5, -0.3]); });
+  // IMOCA : haubans repris en bout d'outriggers (bras de pont ≈ 1,6 m hors bordé), deux étages de barres de flèche, bastaques au tableau
+  [1, -1].forEach(k => { const c = [k * 4.35, 1.62, 0.75], a = [k * 2.6, 10.5, 1.1], b = [k * 1.3, 20, 0.4]; L(c, a); L(a, b); L(b, MH); L(c, [0, 6.2, -0.45]); L(a, [0, 14.5, -0.5]); L([k * 2.45, 1.05, 8.9], [0, 27.5, -0.3]); L([k * 2.45, 1.05, 8.9], [0, 21.5, -0.4]); });
   L([0, 1.6, -9.1], [0, 29.1, -0.8]); L([0, 1.45, -7.0], [0, 20.6, -0.8]); L([0, 1.5, -12.7], [0, 0.55, -9.0]);
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g;
 }
@@ -1350,6 +1352,18 @@ function COCKPIT_TUB() {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
   return COCKPIT_TUB_G = g;
 }
+// livet du modèle importé (bord du pont, par station) → filières + chandeliers + balcon ; winches sur le pont et le rouf
+function stlDeckKit(G) {
+  const g = G.hull_topS; if (!g) return null; const P = g.attributes.position.array, st = [];
+  for (let z = -7.6; z <= 8.2; z += 1.75) { let bx = 0, by = 0; for (let i = 0; i < P.length; i += 3) if (Math.abs(P[i + 2] - z) < 0.3 && P[i] > bx) { bx = P[i]; by = P[i + 1]; } if (bx > 0.3) st.push([bx, by, z]); }
+  if (st.length < 4) return null; const pos = [], L = (a, b) => pos.push(...a, ...b), RH = 0.62;
+  [1, -1].forEach(k => { let pT = null, pM = null; st.forEach(([x, y, z]) => { const xi = k * (x - 0.07), T = [xi, y + RH, z], Mi = [xi, y + RH * 0.5, z]; L([xi, y, z], T); if (pT) { L(pT, T); L(pM, Mi); } pT = T; pM = Mi; });
+    const b = st[0]; L([k * (b[0] - 0.07), b[1] + RH, b[2]], [k * 0.35, b[1] + RH, b[2] - 0.9]); L([k * 0.35, b[1] + RH, b[2] - 0.9], [k * 0.35, b[1], b[2] - 0.9]); });
+  const b = st[0]; L([-0.35, b[1] + RH, b[2] - 0.9], [0.35, b[1] + RH, b[2] - 0.9]);
+  const rail = new THREE.BufferGeometry(); rail.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const winches = [[1.95, 1.9, 4.9], [1.95, 1.88, 6.6], [-1.95, 1.9, 4.9], [-1.95, 1.88, 6.6], [0.85, 2.33, 2.6], [-0.85, 2.33, 2.6]];
+  return { rail, winches };
+}
 function applyImocaModel(V) {
   const M = (V.isPlayer && GFX.level !== 'low' ? IMOCA_MODEL.hi : IMOCA_MODEL.lo) || IMOCA_MODEL.hi || IMOCA_MODEL.lo; if (!M || V.stl === M) return;
   if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
@@ -1359,6 +1373,11 @@ function applyImocaModel(V) {
   m3(G.foil, MAT.foil, V.foilS); m3(G.foil, MAT.foil, V.foilP);
   [1, -1].forEach(k => { const r = m3(G.rudder, MAT.bottom); r.scale.x = k; });
   V.foilPos = [...M.meta.foilRoot, 1.5, 1.1]; V.sprit.position.y = M.meta.bowY - 0.1;
+  // accastillage posé sur le pont importé : filières et chandeliers le long du livet, balcon avant, winches, colonne de moulin
+  const K = M.kit || (M.kit = stlDeckKit(G)); if (K) {
+    const r = new THREE.LineSegments(K.rail, MAT.rail); V.root.add(r); list.push(r);
+    if (V.isPlayer) K.winches.forEach(p => { const w = new THREE.Mesh(WINCH_GEO, MAT.winch); w.position.set(...p); V.root.add(w); list.push(w); });
+    if (V.isPlayer) { const ped = new THREE.Mesh(PED_GEO, MAT.winch); ped.position.set(0, 0.485 + 0.42, 6.3); V.root.add(ped); list.push(ped); } }
   if (V.isPlayer) list.forEach(o => { o.castShadow = true; o.receiveShadow = true; });
   if (V.ghost) list.forEach(o => { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; });
   V.stlMeshes = list; V.stl = M; V.fp = null;
@@ -1392,8 +1411,9 @@ function makeBoat(hull, accent, name, isPlayer) {
   const bulb = new THREE.Mesh(BULB_GEO, accMat); bulb.scale.set(0.95, 0.95, 4.2); bulb.position.set(0, -4.45, 0.35); keel.add(bulb); param.push(bulb);
   // mât et barres de flèche : hors de `param`, ils restent visibles avec le modèle importé (qui n'a pas de gréement)
   const mast = add(MAST_GEO, MAT.dark, 0, 1.21 + 14.25, -0.5); mast.scale.set(1, 1, 1.9); param.pop();
-  [[10.5, 3.4, 1.8], [20, 1.6, 1.0]].forEach(([y, w, sw]) => [1, -1].forEach(k => { const L = Math.hypot(w, sw), s2 = add(SPREAD_GEO, MAT.dark, k * w / 2, y, -0.5 + sw / 2); s2.scale.x = L; s2.rotation.y = -k * Math.atan2(sw, w); param.pop(); }));
+  [[10.5, 2.6, 1.6], [20, 1.3, 0.9]].forEach(([y, w, sw]) => [1, -1].forEach(k => { const L = Math.hypot(w, sw), s2 = add(SPREAD_GEO, MAT.dark, k * w / 2, y, -0.5 + sw / 2); s2.scale.x = L; s2.rotation.y = -k * Math.atan2(sw, w); param.pop(); }));
   root.add(new THREE.LineSegments(RIG_GEO, MAT.rig));
+  [1, -1].forEach(k => { const o = new THREE.Mesh(OUTRIG_GEO, MAT.dark); o.position.set(k * 3.5, 1.68, 0.75); o.rotation.z = -k * 0.07; root.add(o); });
   const sprit = add(SPRIT_GEO, accMat, 0, 1.55, -10.9); sprit.rotation.x = Math.PI / 2; param.pop(); // le bout-dehors reste avec le modèle importé
   const boomPivot = new THREE.Group(); boomPivot.position.set(0, 3.1, -0.12); root.add(boomPivot);
   const boom = new THREE.Mesh(BOOM_GEO, MAT.dark); boom.rotation.x = Math.PI / 2; boom.position.z = 4.3; boomPivot.add(boom);
