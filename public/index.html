@@ -402,7 +402,16 @@ const POLYS = [
   [[43.0,9.42],[42.75,9.48],[42.55,9.53],[42.3,9.56],[42.05,9.47],[41.85,9.42],[41.65,9.36],[41.5,9.3],[41.38,9.2],[41.39,9.1],[41.5,8.95],[41.63,8.85],[41.75,8.7],[41.92,8.62],[42.05,8.58],[42.25,8.55],[42.4,8.6],[42.55,8.72],[42.65,8.95],[42.7,9.2],[42.85,9.33],[43.0,9.35]],
   [[41.25,9.15],[41.2,9.45],[41.05,9.58],[40.9,9.62],[40.6,9.8],[40.3,9.68],[39.95,9.68],[39.6,9.65],[39.2,9.58],[39.1,9.45],[39.2,9.1],[38.95,8.85],[38.88,8.6],[39.05,8.38],[39.4,8.38],[39.75,8.45],[40.0,8.4],[40.4,8.4],[40.6,8.15],[40.85,8.2],[41.05,8.25],[40.95,8.55],[40.95,8.8],[41.1,9.0]],
   [[10.7,-61.5],[10.6,-62.5],[10.6,-64],[10.5,-66],[11.5,-69.8],[12.2,-71.9],[11.0,-74.2],[8.5,-77],[-5,-80],[-5,-35],[-2,-44],[0,-50],[2,-51.5],[5.6,-54],[6.0,-57],[7.5,-58.5],[8.6,-60.0],[9.8,-61.0],[10.1,-61.6]],
-].map(pts => { let a = 90, b = -90, c = 180, d = -180; pts.forEach(p => { a = Math.min(a, p[0]); b = Math.max(b, p[0]); c = Math.min(c, p[1]); d = Math.max(d, p[1]); }); return { pts, bb: [a, b, c, d], mesh: null, ref: null }; });
+  // océan Indien sud : Afrique australe, Madagascar, Australie (sud-ouest), Tasmanie, îles subantarctiques
+  [[-17.0,11.8],[-22.5,14.4],[-28.6,16.4],[-31.5,18.2],[-32.8,17.9],[-33.9,18.42],[-34.36,18.48],[-34.1,18.85],[-34.45,19.3],[-34.83,20.0],[-34.4,21.4],[-34.0,23.5],[-34.0,25.6],[-33.6,26.9],[-32.6,28.6],[-31.0,30.2],[-29.8,31.1],[-28.5,32.4],[-26.8,32.9],[-25.0,33.5],[-17.0,37.0],[-17.0,11.8]],
+  [[-12.0,49.3],[-15.5,50.3],[-19.0,48.8],[-22.5,47.7],[-25.1,47.0],[-25.5,45.2],[-23.5,43.6],[-20.5,44.3],[-16.2,44.4],[-14.5,47.9]],
+  [[-21.8,114.1],[-24.0,113.4],[-26.4,113.5],[-28.8,114.6],[-31.0,115.3],[-32.05,115.74],[-33.4,115.6],[-33.6,115.0],[-34.37,115.13],[-35.0,116.6],[-35.03,117.9],[-34.0,120.0],[-33.86,121.9],[-33.9,123.5],[-32.3,126.0],[-31.6,128.9],[-31.5,131.2],[-32.1,133.5],[-33.0,134.2],[-34.7,135.4],[-33.0,137.6],[-34.9,137.8],[-35.6,138.4],[-35.6,139.6],[-37.5,140.0],[-38.3,141.5],[-38.8,144.0],[-39.1,146.3],[-37.8,149.9],[-20.0,149.0],[-14.0,129.0],[-21.8,114.1]],
+  [[-40.7,144.7],[-41.0,148.2],[-43.0,148.0],[-43.6,146.9],[-43.4,145.9],[-41.9,145.2]],
+  [[-46.25,51.65],[-46.35,52.1],[-46.48,51.95],[-46.45,51.6]],
+  [[-37.78,77.5],[-37.88,77.6],[-37.9,77.47]], [[-38.68,77.5],[-38.75,77.56],[-38.76,77.46]],
+  // zone d'exclusion des glaces (ZEA) : interdite, routage et barre la contournent
+  { zea: true, pts: [[-48.2,8],[-47.6,25],[-47.2,40],[-47.0,52],[-46.8,64],[-46.0,78],[-45.4,92],[-45.8,106],[-45.6,118],[-46.5,132],[-66,132],[-66,8]] },
+].map(q => { const pts = q.pts || q; let a = 90, b = -90, c = 180, d = -180; pts.forEach(p => { a = Math.min(a, p[0]); b = Math.max(b, p[0]); c = Math.min(c, p[1]); d = Math.max(d, p[1]); }); return { pts, bb: [a, b, c, d], mesh: null, ref: null, zea: !!q.zea }; });
 
 // [nom, lat, lon, rx nm, ry nm, altitude m, rotation rad]
 const RACE_ISLANDS = [
@@ -433,6 +442,7 @@ function islandR(isl, th) {
   return re * (1 + 0.16 * Math.sin(3 * th + s) + 0.09 * Math.sin(5 * th + 2.3 * s) + 0.05 * Math.sin(9 * th + 3.7 * s));
 }
 function inPoly(lat, lon, pts) { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const yi = pts[i][0], xi = pts[i][1], yj = pts[j][0], xj = pts[j][1]; if (((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) c = !c; } return c; }
+const zeaAt = (lat, lon) => POLYS.some(p => p.zea && lat >= p.bb[0] && lat <= p.bb[1] && lon >= p.bb[2] && lon <= p.bb[3] && inPoly(lat, lon, p.pts));
 function isLand(lat, lon) {
   for (const isl of ISLANDS) {
     const dy = (lat - isl.lat) * 60; if (Math.abs(dy) > isl.rmax) continue;
@@ -460,39 +470,58 @@ let IN_STEP = false;
 function parisDay() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
 function hash32(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function hrand(a, b) { let h = Math.imul((a ^ 0x9e3779b9) >>> 0, 0x85ebca6b) ^ Math.imul((b + 0x7f4a7c15) >>> 0, 0xc2b2ae35); h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; h = Math.imul(h, 0x297a2d39); h ^= h >>> 15; return (h >>> 0) / 4294967296; }
-function highCenter(t) { const d = (t + WX_OFF) / 86400; return [35 + 2.5 * Math.sin(d * 0.7 + 0.5), -33 + 7 * Math.sin(d * 0.45)]; }
-function lowCenters(t) { const d = (t + WX_OFF) / 86400, out = []; for (let i = 0; i < 3; i++) { const ph = (((d * 12 + i * 30) % 90) + 90) % 90; out.push({ i, ph, lat: 46 + 4 * Math.sin(i * 2.1 + d * 0.3) + ph * 0.1, lon: -72 + ph, depth: 24 * Math.sin(Math.PI * ph / 90) }); } return out; }
+const SOUTH = () => COURSE.ocean === 'south';
+function highCenter(t) { const d = (t + WX_OFF) / 86400; if (SOUTH()) return [-31 + 2 * Math.sin(d * 0.6 + 1), 72 + 14 * Math.sin(d * 0.37)]; return [35 + 2.5 * Math.sin(d * 0.7 + 0.5), -33 + 7 * Math.sin(d * 0.45)]; }
+/* Océan Indien sud (« quarantièmes rugissants ») : anticyclone des Mascareignes vers 30° S, train de 4 dépressions creuses
+   qui filent vers l'est entre 45 et 58° S (≈ 14° de longitude par jour), creux circumpolaire vers 64° S → vent d'ouest soutenu.
+   Hémisphère sud : les fronts froids s'étirent au NNW des dépressions, les fronts chauds vers l'ENE, les dorsales descendent vers le SSE. */
+function lowCentersS(d) { const out = []; for (let i = 0; i < 4; i++) { const ph = (((d * 14 + i * 36) % 144) + 144) % 144; out.push({ i, ph, lat: -50 - 4 * Math.sin(i * 1.7 + d * 0.35) - ph * 0.035, lon: -6 + ph, depth: 33 * Math.sin(Math.PI * ph / 144) }); } return out; }
+function lowCenters(t) { const d = (t + WX_OFF) / 86400, out = []; if (SOUTH()) return lowCentersS(d); for (let i = 0; i < 3; i++) { const ph = (((d * 12 + i * 30) % 90) + 90) % 90; out.push({ i, ph, lat: 46 + 4 * Math.sin(i * 2.1 + d * 0.3) + ph * 0.1, lon: -72 + ph, depth: 24 * Math.sin(Math.PI * ph / 90) }); } return out; }
 /* Systèmes météo à l'instant t (mis en cache : le routage interroge des milliers de points au même instant).
    - anticyclone des Açores et dépression d'Islande, plus compacts qu'avant ;
    - 3 dépressions mobiles d'ouest, chacune avec son front froid (talweg étroit vers le SSW) et son front chaud (vers l'ESE) ;
    - une dorsale entre deux dépressions successives, qui remonte de l'anticyclone vers le NNE ;
    - une goutte froide (petite dépression isolée, lente) entre Açores et Ibérie, une partie du temps ;
    - deux ondes tropicales qui traversent les alizés d'est en ouest ; le pot-au-noir reste près de 5° N. */
-const WXC = { t: NaN, s: null };
+const WXC = { t: NaN, s: null, o: '' };
 function wxSystems(t) {
-  if (t === WXC.t) return WXC.s;
+  const oc = COURSE.ocean || 'atl'; if (t === WXC.t && oc === WXC.o) return WXC.s; WXC.o = oc;
   const d = (t + WX_OFF) / 86400, lows = lowCenters(t), fronts = [], ridges = [], waves = [];
+  const S0 = SOUTH(), dk = S0 ? 33 : 24;
   for (const L of lows) {
-    const k = L.depth / 24; if (k < 0.12) continue;
-    const bc = 208 + 12 * Math.sin(d * 0.8 + L.i * 1.7), lc = 650 * (0.45 + 0.55 * k), bw = 112 + 10 * Math.sin(d * 0.6 + L.i), lw = 340 * k;
+    const k = L.depth / dk; if (k < 0.12) continue;
+    let bc = 208 + 12 * Math.sin(d * 0.8 + L.i * 1.7), lc = 650 * (0.45 + 0.55 * k), bw = 112 + 10 * Math.sin(d * 0.6 + L.i), lw = 340 * k;
+    if (S0) { bc = 180 - bc + 360; bw = 180 - bw; lc *= 1.15; }
     const cc = llAt(L.lat, L.lon, bc, lc * 0.55), cw = llAt(L.lat, L.lon, bw, lw * 0.55);
     fronts.push({ cold: true, lat0: L.lat, lon0: L.lon, lat: cc[0], lon: cc[1], brg: bc, len: lc, sa: lc / 2.1, sc: 110, amp: 0.2 * L.depth, k });
     fronts.push({ cold: false, lat0: L.lat, lon0: L.lon, lat: cw[0], lon: cw[1], brg: bw, len: lw, sa: lw / 2.2, sc: 120, amp: 0.12 * L.depth, k });
   }
-  for (let i = 0; i < 3; i++) {
+  if (S0) for (let i = 0; i < 4; i++) { const ph = (((d * 14 + i * 36 + 18) % 144) + 144) % 144, a = 9 * Math.sin(Math.PI * ph / 144);
+    if (a > 1) ridges.push({ lat: -40 - ph * 0.03 - 2 * Math.sin(d * 0.4 + i), lon: -6 + ph, brg: 162 - 8 * Math.sin(d * 0.5 + i * 2), sa: 560, sc: 170, amp: a }); }
+  else for (let i = 0; i < 3; i++) {
     const ph = (((d * 12 + i * 30 + 15) % 90) + 90) % 90, a = 8.5 * Math.sin(Math.PI * ph / 90);
     if (a > 1) ridges.push({ lat: 44 + ph * 0.08 + 2 * Math.sin(d * 0.4 + i), lon: -72 + ph, brg: 18 + 8 * Math.sin(d * 0.5 + i * 2), sa: 520, sc: 165, amp: a });
   }
-  const ca = 10 * Math.max(0, Math.sin(d * 0.23 + 2.1)), cut = ca > 1.5 ? { lat: 36.5 + 3 * Math.sin(d * 0.21), lon: -21 + 8 * Math.sin(d * 0.13 + 1), amp: ca } : null;
-  for (let k = 0; k < 2; k++) { const x = (((d * 6.5 + k * 26) % 52) + 52) % 52, a = 2.8 * Math.sin(Math.PI * x / 52); waves.push({ lat: 13.5, lon: -16 - x, brg: 8, sa: 420, sc: 100, amp: a }); }
+  const ca = S0 ? 0 : 10 * Math.max(0, Math.sin(d * 0.23 + 2.1)), cut = ca > 1.5 ? { lat: 36.5 + 3 * Math.sin(d * 0.21), lon: -21 + 8 * Math.sin(d * 0.13 + 1), amp: ca } : null;
+  if (!S0) for (let k = 0; k < 2; k++) { const x = (((d * 6.5 + k * 26) % 52) + 52) % 52, a = 2.8 * Math.sin(Math.PI * x / 52); waves.push({ lat: 13.5, lon: -16 - x, brg: 8, sa: 420, sc: 100, amp: a }); }
   for (const o of fronts.concat(ridges, waves)) { const b = o.brg * D2R; o.sb = Math.sin(b); o.cb = Math.cos(b); o.ia = 1 / (2 * o.sa * o.sa); o.ic = 1 / (2 * o.sc * o.sc); o.r2 = 14 * 2 * Math.max(o.sa, o.sc) ** 2; }
   return WXC.t = t, WXC.s = { d, hc: highCenter(t), lows, fronts, ridges, cut, waves };
 }
 // gaussiennes rapides (cos de la latitude du point, rejet précoce loin du système) : pressure() est appelée 4 fois par calcul de vent
 function gq(lat, lon, cl, cLat, cLon, sLat, sLon) { const dy = (lat - cLat) * 60; if (dy * dy > 28 * sLat * sLat) return 0; const dx = (lon - cLon) * 60 * cl, q = dy * dy / (2 * sLat * sLat) + dx * dx / (2 * sLon * sLon); return q > 14 ? 0 : Math.exp(-q); }
 function gqAx(lat, lon, cl, o) { const dy = (lat - o.lat) * 60; if (dy * dy > o.r2) return 0; const dx = (lon - o.lon) * 60 * cl, u = dx * o.sb + dy * o.cb, v = dx * o.cb - dy * o.sb, q = u * u * o.ia + v * v * o.ic; return q > 14 ? 0 : Math.exp(-q); }
+function pressureS(lat, lon, S, cl) {
+  const hc = S.hc; let p = 1012 + 15 * gq(lat, lon, cl, hc[0], hc[1], 420, 900) + 9 * gq(lat, lon, cl, -31, 2, 400, 700) + 7 * gq(lat, lon, cl, -33, 128, 380, 640);
+  p -= 26 * Math.exp(-(((lat + 63) / 12) ** 2));   // creux circumpolaire
+  for (const L of S.lows) if (L.depth > 0.5) p -= L.depth * gq(lat, lon, cl, L.lat, L.lon, 270, 380);
+  for (const F of S.fronts) p -= F.amp * gqAx(lat, lon, cl, F);
+  for (const R of S.ridges) p += R.amp * gqAx(lat, lon, cl, R);
+  p += 1.8 * Math.sin(lat / 5 + S.d * 1.1) * Math.sin(lon / 6 - S.d * 0.8);
+  return p;
+}
 function pressure(lat, lon, t) {
   const S = wxSystems(t), hc = S.hc, cl = Math.cos(lat * D2R);
+  if (SOUTH()) return pressureS(lat, lon, S, cl);
   let p = 1011 + 17 * gq(lat, lon, cl, hc[0], hc[1], 430, 720);
   p -= 12 * gq(lat, lon, cl, 61, -25, 470, 620);
   p -= 8 * Math.exp(-(((lat - 5) / 11) ** 2));
@@ -526,9 +555,9 @@ function windRace(lat, lon, t) {
   const gy = (pN - pS) / (2 * e * 60) * 100;
   const gx = (pE - pW) / (2 * e * 60 * cl) * 100;
   const G = Math.hypot(gx, gy) + 1e-9, ca = 0.9397, sa = 0.342;
-  const ve = (-gy * ca - gx * sa) / G, vn = (gx * ca - gy * sa) / G;
-  const tws = clamp(WIND_K * G * 0.707 / Math.max(Math.sin(Math.abs(lat) * D2R), 0.26), 1.5, 45), h = (t + WX_OFF) / 3600;
-  const zone = Math.max(smooth(6, 13, lat) * smooth(28, 20, lat), smooth(1008, 994, pc) * 0.9, wxConv(lat, lon, t), 0.12);
+  const hs = lat >= 0 ? 1 : -1, ve = (-hs * gy * ca - gx * sa) / G, vn = (hs * gx * ca - gy * sa) / G; // hémisphère sud : circulation inversée autour des centres
+  const S0 = SOUTH(), tws = clamp(WIND_K * (S0 ? 1.25 : 1) * G * 0.707 / Math.max(Math.sin(Math.abs(lat) * D2R), 0.26), 1.5, S0 ? 55 : 45), h = (t + WX_OFF) / 3600;
+  const zone = Math.max(smooth(6, 13, lat) * smooth(28, 20, lat), smooth(S0 ? 990 : 1008, S0 ? 970 : 994, pc) * 0.9, wxConv(lat, lon, t), S0 ? 0.3 : 0.12);
   const w0 = { twd: norm360(Math.atan2(ve, vn) * R2D + 180), tws, p: pc };
   if (COURSE.coastal && COURSE.clim) climBlend(w0, COURSE.clim, lat, lon, h);
   return applySquall(w0, (lon + h * 0.25) * 4, lat * 4 + h * 0.03, zone);
@@ -1784,6 +1813,11 @@ const COASTAL = [
   { id: 'antigua', name: 'Antigua & Barbuda', title: 'CÔTIER · ANTIGUA & BARBUDA', zone: 'Antilles (alizés)', zoneEn: 'West Indies (trade winds)', region: 'carib', nm: 105, start: { lat: 16.98, lon: -62.0 }, firstWp: [17.82, -61.82], clim: { twd: 80, tws: 17, k: 0.5 },
     marks: [{ name: 'Barbuda (nord)', en: 'Barbuda (north)', lat: 17.82, lon: -61.82, r: 0.8 }, { name: 'Antigua (est)', en: 'Antigua (east)', lat: 17.08, lon: -61.6, r: 0.8 }, { name: 'Arrivée · English Harbour', en: 'Finish · English Harbour', lat: 16.92, lon: -61.75, r: 0.8, finish: true }], box: [16.8, 17.95, -62.15, -61.45] },
 ];
+// Grand large dans l'océan Indien sud : quarantièmes rugissants, dépressions en série, mer très formée, zone des glaces
+COURSES.indien = { id: 'indien', ocean: 'south', sea: 1.45, swellMin: 1.5, name: 'Océan Indien : Le Cap → Fremantle', en: 'Indian Ocean: Cape Town → Fremantle', title: 'OCÉAN INDIEN · LE CAP → FREMANTLE (QUARANTIÈMES RUGISSANTS)',
+  start: { lat: -33.8, lon: 18.1 }, firstWp: [-35.6, 17.6],
+  marks: [{ name: 'Arrivée · Fremantle', en: 'Finish · Fremantle', lat: -32.05, lon: 115.55, r: 3, finish: true }],
+  accels: [60, 120, 300, 420, 600], defAccel: 300, accelsMini: [120, 300, 600, 900], defAccelMini: 600, box: [-50, -26, 12, 122] };
 COASTAL.forEach(c => { c.coastal = true; COURSES[c.id] = c; });
 // régions (pour varier le tirage du défi du jour)
 COASTAL.forEach(c => { if (!c.region) c.region = c.id === 'galante' ? 'carib' : c.id === 'iroise' ? 'atl' : 'manche'; });
@@ -1820,6 +1854,7 @@ function getBest() { try { return parseFloat(localStorage.getItem(bestKey())) ||
 let LG = null; const LG0 = { lat: -6, lon: -92, step: 0.5, rows: 136, cols: 244 };
 function buildLandGrid() {
   if (MODE !== 'race') { LG = null; return; }
+  Object.assign(LG0, COURSE.ocean === 'south' ? { lat: -67, lon: 4, step: 0.5, rows: 104, cols: 260 } : { lat: -6, lon: -92, step: 0.5, rows: 136, cols: 244 });
   const { lat, lon, step, rows, cols } = LG0, raw = new Uint8Array(rows * cols);
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (isLand(lat + (r + 0.5) * step, lon + (c + 0.5) * step)) raw[r * cols + c] = 1;
   ISLANDS.forEach(isl => { const dl = isl.rmax / 60, dn = isl.rmax / (60 * Math.cos(isl.lat * D2R)); for (let la = isl.lat - dl; la <= isl.lat + dl + step; la += step) for (let lo = isl.lon - dn; lo <= isl.lon + dn + step; lo += step) { const r = Math.floor((la - lat) / step), c = Math.floor((lo - lon) / step); if (r >= 0 && c >= 0 && r < rows && c < cols) raw[r * cols + c] = 1; } });
@@ -2495,7 +2530,7 @@ function drawWxFeatures(g, t, fcC) {
   g.save(); g.lineJoin = 'round';
   for (const F of S.fronts) {
     if (F.k < 0.3) continue;
-    const pts = line(F.lat0, F.lon0, F.brg, 25, F.len * 0.95), col = F.cold ? '#5aa9ff' : '#ff6b6b', nb = (F.brg - 90) * D2R;
+    const pts = line(F.lat0, F.lon0, F.brg, 25, F.len * 0.95), col = F.cold ? '#5aa9ff' : '#ff6b6b', nb = (F.brg + (SOUTH() ? 90 : -90)) * D2R;
     g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 2; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke();
     // symboles côté où avance le front, tous les ~22 px
     let acc = 11; for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], L = Math.hypot(x1 - x0, y1 - y0); if (L < 0.1) continue; const ux = (x1 - x0) / L, uy = (y1 - y0) / L;
@@ -2578,7 +2613,11 @@ function drawLandLayer() {
 function drawLand(g) {
   const big = $('tr').classList.contains('big');
   g.fillStyle = '#d6cdb2'; g.strokeStyle = '#7d735a'; g.lineWidth = 1;
-  if (MODE === 'race') POLYS.forEach(p => { polyPath(g, p.pts); g.fill(); g.stroke(); });
+  if (MODE === 'race') POLYS.forEach(p => { if (p.zea) return; polyPath(g, p.pts); g.fill(); g.stroke(); });
+  if (MODE === 'race' && COURSE.ocean === 'south') POLYS.forEach(p => { if (!p.zea) return; g.save(); polyPath(g, p.pts); g.fillStyle = 'rgba(255,70,70,0.16)'; g.fill(); g.clip();
+    g.strokeStyle = 'rgba(255,90,90,0.35)'; g.lineWidth = 1; for (let x = -mapCv._h; x < mapCv._w; x += 9) { g.beginPath(); g.moveTo(x, mapCv._h); g.lineTo(x + mapCv._h, 0); g.stroke(); } g.restore();
+    g.strokeStyle = '#ff6464'; g.lineWidth = 1.6; g.setLineDash([6, 4]); polyPath(g, p.pts); g.stroke(); g.setLineDash([]);
+    const q = p.pts[3]; g.fillStyle = '#ffb0b0'; g.font = '10px system-ui'; g.textAlign = 'left'; g.fillText(T('Zone d\'exclusion des glaces', 'Ice exclusion zone'), MX(q[1]), MY(q[0]) + 14); });
   ISLANDS.forEach(isl => {
     const pts = []; for (let i = 0; i < 40; i++) { const th = i / 40 * Math.PI * 2, r = islandR(isl, th); pts.push([isl.lat + r * Math.sin(th) / 60, isl.lon + r * Math.cos(th) / (60 * Math.cos(isl.lat * D2R))]); }
     polyPath(g, pts); g.fill(); g.stroke();
@@ -2822,7 +2861,7 @@ function courseThumb(c, W = 300, H = 170, extra) {
   const cLa = (la0 + la1) / 2, cLo = (lo0 + lo1) / 2, X = lo => W / 2 + (lo - cLo) * cl * s, Y = la => H / 2 - (la - cLa) * s;
   const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#0d4a6e'); gr.addColorStop(1, '#0a3350'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
   const om = MODE, oi = ISLANDS; MODE = 'race'; ISLANDS = RACE_ISL_ALL || (RACE_ISL_ALL = mkIslands(RACE_ISLANDS));
-  try { const st = 2; for (let y = 0; y < H; y += st) for (let x = 0; x < W; x += st) { const la = cLa - (y + 1 - H / 2) / s, lo = cLo + (x + 1 - W / 2) / (cl * s); if (isLand(la, lo)) { g.fillStyle = '#5f7f4e'; g.fillRect(x, y, st, st); } } }
+  try { const st = 2; for (let y = 0; y < H; y += st) for (let x = 0; x < W; x += st) { const la = cLa - (y + 1 - H / 2) / s, lo = cLo + (x + 1 - W / 2) / (cl * s); if (isLand(la, lo)) { g.fillStyle = zeaAt(la, lo) ? '#7a2c35' : '#5f7f4e'; g.fillRect(x, y, st, st); } } }
   finally { MODE = om; ISLANDS = oi; }
   const pts = [[c.start.lat, c.start.lon]].concat(c.marks.map(m => [m.lat, m.lon]));
   g.setLineDash([4, 4]); g.strokeStyle = 'rgba(255,209,102,.85)'; g.lineWidth = 1.5; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(X(p[1]), Y(p[0])) : g.moveTo(X(p[1]), Y(p[0]))); g.stroke(); g.setLineDash([]);
@@ -2890,7 +2929,8 @@ function showMenu(view = 'home') {
     if (SOLO_TAB === 'ocean') html += `<div class="modes three">
       <div class="mode"><h2>⛵ Transat</h2><p>${T('Bretagne → Guadeloupe, ≈ 3 300 nm face à 5 bateaux qui se routent eux aussi.', 'Brittany → Guadeloupe, ≈ 3,300 nm against 5 boats that route too.')} ${CLS.id === 'imoca' ? T('11 à 13 jours de course, <b>≥ 38 min de jeu</b>.', '11 to 13 days of racing, <b>≥ 38 min of play</b>.') : T('≈ 15 à 22 jours de course, <b>≥ 30 min de jeu</b>.', '≈ 15 to 22 days of racing, <b>≥ 30 min of play</b>.')}${recTxt('transat')}</p><button id="goRace" data-default>${T('Prendre le départ', 'Start')}</button></div>
       <div class="mode"><h2>🏝→🌴 Mini Transat</h2><p>${T('Les Sables → La Palma → Saint-François, ≈ 4 000 nm en 2 étapes, classement au temps cumulé. ≈ 45 à 70 min de jeu.', 'Les Sables → La Palma → Saint-François, ≈ 4,000 nm in 2 legs, ranked on cumulative time. ≈ 45 to 70 min of play.')}${recTxt('minitransat')}</p><button id="goMiniT">${T('Prendre le départ', 'Start')}</button></div>
-      <div class="mode"><h2>🗼 Fastnet</h2><p>${T('Solent → phare du Fastnet → Cherbourg, ≈ 620 nm. Côtes, cailloux et dépressions de Manche. ≈ 30 à 70 min de jeu.', 'Solent → Fastnet lighthouse → Cherbourg, ≈ 620 nm. Coasts, rocks and Channel lows. ≈ 30 to 70 min of play.')}${recTxt('fastnet')}</p><button id="goFast">${T('Prendre le départ', 'Start')}</button></div></div>`;
+      <div class="mode"><h2>🗼 Fastnet</h2><p>${T('Solent → phare du Fastnet → Cherbourg, ≈ 620 nm. Côtes, cailloux et dépressions de Manche. ≈ 30 à 70 min de jeu.', 'Solent → Fastnet lighthouse → Cherbourg, ≈ 620 nm. Coasts, rocks and Channel lows. ≈ 30 to 70 min of play.')}${recTxt('fastnet')}</p><button id="goFast">${T('Prendre le départ', 'Start')}</button></div>
+      <div class="mode"><h2>🌊 ${T('Océan Indien', 'Indian Ocean')}</h2><p>${T('Le Cap → Fremantle, ≈ 4 700 nm dans les quarantièmes rugissants : dépressions en série, mer très formée, zone des glaces à respecter. ≈ 40 à 60 min de jeu.', 'Cape Town → Fremantle, ≈ 4,700 nm in the Roaring Forties: back-to-back lows, huge seas, ice exclusion zone. ≈ 40 to 60 min of play.')}${recTxt('indien')}</p><button id="goIndien">${T('Prendre le départ', 'Start')}</button></div></div>`;
     else if (SOLO_TAB === 'coast') { const regs = ['all', ...Object.keys(REGION_NAMES).filter(r => COASTAL.some(c => c.region === r))];
       html += `<div class="chips" style="margin:8px 0">${regs.map(r => `<button class="chip ${REG_F === r ? 'on' : ''}" data-reg="${r}">${r === 'all' ? T('Toutes les mers', 'All seas') : T(...REGION_NAMES[r])}</button>`).join('')}</div>
       <p style="font-size:13px">${T('5 à 20 min de jeu, météo et heure de départ tirées au sort, 5 bots.', '5 to 20 min of play, random weather and start time, 5 bots.')}</p>
@@ -2915,6 +2955,7 @@ function showMenu(view = 'home') {
   $('card').querySelectorAll('[data-coast]').forEach(bt => bt.onclick = () => { const c = COURSES[bt.dataset.coast]; solo(); initAudio(); launch(ldInfo(c), () => setupMode('race', c.id), T(`Départ : ${cN(c)} ! ${c.marks.length - 1} marque${c.marks.length > 2 ? 's' : ''} à virer, ≈ ${c.nm} nm.`, `Start: ${cN(c)}! ${c.marks.length - 1} mark${c.marks.length > 2 ? 's' : ''} to round, ≈ ${c.nm} nm.`)); });
   on('goMiniT', () => { solo(); initAudio(); launch(ldInfo(COURSES.minitransat), () => setupMode('race', 'minitransat'), T('Départ de la Mini Transat ! Étape 1 : Les Sables → La Palma (≈ 1 350 nm).', 'Mini Transat start! Leg 1: Les Sables → La Palma (≈ 1,350 nm).')); });
   on('goRace', () => { solo(); initAudio(); launch(ldInfo(COURSES.transat), () => setupMode('race', 'transat'), T('Départ de la transat ! Le routage vers l\'arrivée se calcule (ligne rose sur la carte).', 'Transat start! Routing to the finish is being computed (pink line on the map).')); });
+  on('goIndien', () => { solo(); initAudio(); launch(ldInfo(COURSES.indien), () => setupMode('race', 'indien'), T('Départ du Cap ! Plonge vers les quarantièmes : le vent d\'ouest et la houle t\'attendent, la zone des glaces (en rouge) est interdite.', 'Cape Town start! Dive south to the Forties: westerlies and big seas ahead, the ice zone (red) is off limits.')); });
   on('goFast', () => { solo(); initAudio(); launch(ldInfo(COURSES.fastnet), () => setupMode('race', 'fastnet'), T('Départ du Fastnet ! Cap à l\'ouest dans la Manche, le phare du Fastnet est à ≈ 300 nm.', 'Fastnet start! Head west down the Channel, the Fastnet lighthouse is ≈ 300 nm away.')); });
   on('goTrain', () => { solo(); initAudio(); launch({ t: T('Navigation libre', 'Free sailing'), s: CLS.name + T(' · archipel d\'entraînement', ' · training archipelago') }, () => setupMode('train'), T('Navigation libre : valide les bouées, teste manœuvres, routeur, voiles et foils', 'Free sailing: round the buoys, try manoeuvres, router, sails and foils')); });
   if ($('goLoad')) $('goLoad').onclick = () => { initAudio(); launch({ t: T('Reprise de la partie', 'Resuming game'), s: svCourse }, () => restoreGame(sv), T('Partie reprise', 'Game resumed')); };
@@ -3044,7 +3085,7 @@ const lvlName = n => T(n, LEVELS_EN[n] || n), awardLbl = x => x;
 function loadProfile() { try { const p = JSON.parse(localStorage.getItem('gl3d_profile')); if (p && typeof p.pts === 'number') return p; } catch (e) {} return { pts: 0, races: 0, wins: 0, podiums: 0, hist: [] }; }
 function saveProfile(p) { try { localStorage.setItem('gl3d_profile', JSON.stringify(p)); } catch (e) {} }
 function levelOf(pts) { let i = 0; while (i < LEVELS.length - 1 && pts >= LEVELS[i + 1][0]) i++; const min = LEVELS[i][0], nx = LEVELS[i + 1]; return { i, name: LEVELS[i][1], min, next: nx ? nx[0] : null, nextName: nx ? nx[1] : null, prog: nx ? (pts - min) / (nx[0] - min) : 1 }; }
-const courseBase = () => COURSE.coastal ? Math.round(60 + COURSE.nm) : ({ fastnet: 250, transat: 400, minitransat: 500 })[COURSE.id] || 150;
+const courseBase = () => COURSE.coastal ? Math.round(60 + COURSE.nm) : ({ fastnet: 250, transat: 400, minitransat: 500, indien: 550 })[COURSE.id] || 150;
 function awardPoints(rank, prevBest) {
   const N = active.length, base = courseBase(), f = N > 1 ? (N - rank) / (N - 1) : 1, items = [[T(`${ord(rank)} sur ${N}`, `${ord(rank)} of ${N}`), Math.round(base * (0.25 + 0.75 * f))]];
   if (rank === 1) items.push([T('Victoire', 'Win'), Math.round(base * 0.25)]); else if (rank <= 3) items.push(['Podium', Math.round(base * 0.1)]);
@@ -3226,7 +3267,7 @@ const awardHtml = A => `<div class="award"><div class="tot">+${A.total} pts</div
 function renderResults() {
   if (DAILY.on && player.daily) return renderDailyResults();
   const st = standings(), r = st.indexOf(player) + 1, best = getBest();
-  const A = player.award; $('card').innerHTML = `<h1>${COURSE.coastal ? cN(COURSE) : COURSE.id === 'fastnet' ? 'Fastnet' : COURSE.id === 'minitransat' ? 'Mini Transat' : 'Transat'} — <span>${ord(r)}</span> / ${active.length}</h1>
+  const A = player.award; $('card').innerHTML = `<h1>${COURSE.coastal ? cN(COURSE) : COURSE.id === 'fastnet' ? 'Fastnet' : COURSE.id === 'minitransat' ? 'Mini Transat' : COURSE.id === 'indien' ? T('Océan Indien', 'Indian Ocean') : 'Transat'} — <span>${ord(r)}</span> / ${active.length}</h1>
     <p>${T('Temps de course', 'Race time')} : <b>${fmtDur(player.finishT)}</b> · ${player.log.toFixed(0)} ${T('nm parcourus', 'nm sailed')} · ${fmtClock(realRaceT)} ${T('de jeu', 'of play')}${best ? ` · ${T('meilleur temps', 'best time')} : ${fmtDur(best)}` : ''}. ${T('La flotte continue, le classement se met à jour.', 'The fleet sails on, standings keep updating.')}</p>
     ${A ? awardHtml(A) + careerBadge() : ''}
     <table>${st.map((b, i) => `<tr class="${b.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="background:${b.color}"></span> ${b.isPlayer ? T('Vous', 'You') : b.name}</td><td style="color:#7fa3bd">${b.strat ? T(b.strat, b.strat.replace('Routage toutes les', 'Routes every').replace(' h', ' h')) : ''}</td><td style="color:#7fa3bd">${b.legT && b.legT.length ? 'E1 ' + fmtDur(b.legT[0]) + (b.finished ? ' · E2 ' + fmtDur(b.finishT - b.legT[0]) : '') : ''}</td><td style="text-align:right">${b.finished ? fmtDur(b.finishT) : T('en mer · ', 'at sea · ') + dtf(b).toFixed(0) + ' nm'}</td></tr>`).join('')}</table>
@@ -3481,7 +3522,7 @@ function updateWorld(rdt) {
         const ax = (p.pts[j][1] - player.lon) * 60 * cl, ay = (p.pts[j][0] - player.lat) * 60, bx = (p.pts[i][1] - player.lon) * 60 * cl, by = (p.pts[i][0] - player.lat) * 60;
         const L = (bx - ax) ** 2 + (by - ay) ** 2 || 1, t = clamp(-(ax * (bx - ax) + ay * (by - ay)) / L, 0, 1); md = Math.min(md, Math.hypot(ax + t * (bx - ax), ay + t * (by - ay)));
       }
-      if (md < 40) { if (!p.mesh || gcDist(p.ref[0], p.ref[1], player.lat, player.lon) > 60) { if (p.mesh) { scene.remove(p.mesh); p.mesh.geometry.dispose(); } p.ref = [player.lat, player.lon]; p.mesh = buildPolyMesh(p, player.lat, player.lon); } p.near = true; }
+      if (md < 40 && !p.zea) { if (!p.mesh || gcDist(p.ref[0], p.ref[1], player.lat, player.lon) > 60) { if (p.mesh) { scene.remove(p.mesh); p.mesh.geometry.dispose(); } p.ref = [player.lat, player.lon]; p.mesh = buildPolyMesh(p, player.lat, player.lon); } p.near = true; }
       else p.near = false;
     });
   }
@@ -3718,9 +3759,10 @@ function frame(now) {
   refCos = Math.cos(player.lat * D2R);
   const hv = player.dispHdg * D2R, v = player.spd * KN * VF, bvx = Math.sin(hv) * v, bvz = -Math.cos(hv) * v; GX += bvx * rdt; GZ += bvz * rdt;
   const tws = player.tws || 10;
-  seaAmp += (clamp(tws / 18, 0.3, 2.1) - seaAmp) * Math.min(1, rdt * 0.25);
-  const lowB = MODE === 'race' ? smooth(1010, 984, player.pres || 1013) : 0;
-  swellAmp += (clamp((0.45 + tws / 26) * (1 + 0.55 * lowB), 0.5, 2.6) - swellAmp) * Math.min(1, rdt * 0.08);
+  const SEA = MODE === 'race' ? COURSE.sea || 1 : 1;
+  seaAmp += (clamp(tws / 18 * SEA, 0.3, 2.1 * SEA) - seaAmp) * Math.min(1, rdt * 0.25);
+  const lowB = MODE === 'race' ? (SOUTH() ? smooth(1000, 965, player.pres || 1013) : smooth(1010, 984, player.pres || 1013)) : 0;
+  swellAmp += (clamp(Math.max(MODE === 'race' ? COURSE.swellMin || 0 : 0, (0.45 + tws / 26) * (1 + 0.55 * lowB) * SEA), 0.5, 2.6 * SEA) - swellAmp) * Math.min(1, rdt * 0.08);
   for (let i = 0; i < NW; i++) { const w = WAVES[i]; wavePh[i] = ((w.dx * GX + w.dz * GZ) * w.k) % (Math.PI * 2); oceanU.uPh.value[i] = wavePh[i]; }
   updateEnv(rdt);
   oceanU.uTime.value = realT; oceanU.uAmp.value = seaAmp; oceanU.uSwell.value = swellAmp; oceanU.uG.value.set(GX % 2048, GZ % 2048);
