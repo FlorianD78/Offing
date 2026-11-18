@@ -1679,6 +1679,16 @@ const spMat = new THREE.ShaderMaterial({
 const spPoints = new THREE.Points(spGeo, spMat); spPoints.frustumCulled = false; spPoints.renderOrder = 2; scene.add(spPoints);
 function spawn(x, y, z, vx, vy, vz, life, size) { const i = sp.head; sp.head = (sp.head + 1) % SP_N; sp.x[i] = x; sp.y[i] = y; sp.z[i] = z; sp.vx[i] = vx; sp.vy[i] = vy; sp.vz[i] = vz; sp.life[i] = 0; sp.max[i] = life; sp.size[i] = size; }
 const rnd = (a, b) => a + Math.random() * (b - a);
+/* Gerbe d'impact : deux nappes d'eau arrachées de part et d'autre de l'étrave, projetées vers l'extérieur et un peu vers l'avant,
+   rasantes (≈ 15 à 35° au-dessus de l'horizontale) ; plus l'impact est fort, plus elles partent loin. Les gouttes près de la coque
+   sont fines, celles du bord de la nappe plus grosses. P(lx, ly, lz) : repère bateau → monde ; z0..z1 : portion de coque touchée. */
+function sideSheet(P, y, fx, fz, rx, rz, bv, power, sz, cnt, z0, z1, hw) {
+  for (let n = 0; n < cnt; n++) {
+    const s = n & 1 ? 1 : -1, u = Math.random(), lz = -(z0 + (z1 - z0) * u), half = hw * (0.35 + 0.65 * u), p = P(s * half, 0, lz);
+    const out = (4 + 7 * Math.random()) * power * sz * (1.15 - 0.45 * u), up = (1.2 + 2.6 * Math.random()) * power * sz, fwd = bv * (0.55 + 0.25 * Math.random()) + out * 0.35 * (1 - u);
+    spawn(p[0], y + 0.15 * sz, p[2], fx * fwd + rx * s * out, up, fz * fwd + rz * s * out, rnd(0.7, 1.5), (0.3 + 0.9 * Math.random() * (0.4 + Math.random())) * sz);
+  }
+}
 function boatSpray(b, px, pz, fx, fz, rx, rz, hb, rdt) {
   const k = b.vis.cd.k, sz = 0.55 + 0.45 * k, sp0 = b.dspd || b.spd, bv = sp0 * KN, side = (b.twa || 0) >= 0 ? 1 : -1, P = (lx, ly, lz) => [px + (rx * lx - fx * lz) * k, ly, pz + (rz * lx - fz * lz) * k];
   // étrave : gerbe continue des deux bords
@@ -1690,8 +1700,7 @@ function boatSpray(b, px, pz, fx, fz, rx, rz, hb, rdt) {
   b.slamCd -= rdt; const dh = (hb - b.prevHb) / Math.max(rdt, 1e-3); b.prevHb = hb;
   if (dh > (0.9 + 0.3 / Math.max(seaAmp, 0.3)) * (0.6 + 0.4 * k) && sp0 > 7 * k + 1.5 && b.slamCd <= 0 && b.lift < 0.8) {
     b.slamCd = 0.7 + Math.random() * 0.5; const power = clamp(dh / 3 * (sp0 / (18 * k + 2)), 0.3, 1.4), cnt = Math.round((30 + 50 * power) * sz);
-    for (let k = 0; k < cnt; k++) { const s = Math.random() < 0.5 ? 1 : -1, p = P(s * rnd(0.6, 2.2), 0, -rnd(6.5, 9)); const out = rnd(2, 5) * power;
-      spawn(p[0], hb + 0.4 * k, p[2], fx * bv * 0.75 + rx * s * out * sz, rnd(3, 7.5) * power * sz, fz * bv * 0.75 + rz * s * out * sz, rnd(0.8, 1.6), rnd(0.4, 1.1) * sz); }
+    sideSheet(P, hb, fx, fz, rx, rz, bv, power, sz, cnt, 5.5, 9, 2.2);
     if (b.isPlayer) { sfxSplash(power); camKick = Math.min(0.6, camKick + power * 0.35); }
   }
   // foil : gerbe en bout de foil quand le bateau vole
@@ -3387,16 +3396,16 @@ function bowImpact(b, v, M, fp, px, pz, fx, fz, rx, rz, rdt) {
     b.surfF = (b.surfF || 1) * (1 - Math.min(0.3, e * 0.16) * Math.min(1, rdt * 3)); // il « bute » dans la vague
     if (b.impCd <= 0 && sp > 3 * k + 1 && e > 0.12) {
       const power = clamp(e * 0.7 + sp / (25 * k + 5), 0.35, 1.6), cnt = Math.round((50 + 90 * power) * sz); b.impCd = 1.1 + Math.random() * 0.6;
-      for (let n = 0; n < cnt; n++) { const s = Math.random() < 0.5 ? 1 : -1, p = P(s * rnd(0, 2.2), 0, -rnd(5.5, 9.2));
-        spawn(p[0], wh + rnd(0.1, 0.9) * k, p[2], fx * bv * rnd(0.15, 0.55) + rx * s * rnd(0.5, 3.5) * power * sz, rnd(2.5, 8) * power * sz, fz * bv * rnd(0.15, 0.55) + rz * s * rnd(0.5, 3.5) * power * sz, rnd(0.9, 1.9), rnd(0.5, 1.4) * sz); }
+      sideSheet(P, wh, fx, fz, rx, rz, bv, power * 1.15, sz, Math.round(cnt * 0.8), 4.5, 9, 2.4);
+      for (let n = 0, m = Math.round(cnt * 0.2); n < m; n++) { const s = Math.random() < 0.5 ? 1 : -1, p = P(s * rnd(0, 1.6), 0, -rnd(6.5, 9)); // eau verte qui balaie le pont
+        spawn(p[0], wh + rnd(0.2, 0.6) * k, p[2], fx * bv * rnd(0.2, 0.5) + rx * s * rnd(0.3, 1.5) * sz, rnd(1, 2.5) * power * sz, fz * bv * rnd(0.2, 0.5) + rz * s * rnd(0.3, 1.5) * sz, rnd(0.8, 1.4), rnd(0.5, 1.2) * sz); }
       if (b.isPlayer) { sfxSplash(Math.min(1.4, power)); camKick = Math.min(0.9, camKick + power * 0.5); }
     }
   } else if (wasHigh && clear < 0.25 * k && vrel < -2.5 && b.impCd <= 0 && sp > 4 * k + 1) {
     // retombée de l'étrave après une crête : claquement
     const power = clamp(-vrel / 6 * (0.5 + sp / (20 * k + 4)), 0.3, 1.4), cnt = Math.round((40 + 60 * power) * sz); b.impCd = 0.9 + Math.random() * 0.5; b.bowMax = 0;
     M.vp += power * 0.25; M.vy += power * 0.4;
-    for (let n = 0; n < cnt; n++) { const s = Math.random() < 0.5 ? 1 : -1, p = P(s * rnd(0.8, 2.4), 0, -rnd(4.5, 8.5));
-      spawn(p[0], wh + 0.2 * k, p[2], fx * bv * 0.7 + rx * s * rnd(3, 7) * power * sz, rnd(2, 5.5) * power * sz, fz * bv * 0.7 + rz * s * rnd(3, 7) * power * sz, rnd(0.7, 1.4), rnd(0.4, 1.1) * sz); }
+    sideSheet(P, wh, fx, fz, rx, rz, bv, power * 1.2, sz, cnt, 3.5, 8.5, 2.6);
     if (b.isPlayer) { sfxSplash(power); camKick = Math.min(0.8, camKick + power * 0.45); }
   }
 }
