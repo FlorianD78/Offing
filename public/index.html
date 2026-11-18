@@ -3326,6 +3326,39 @@ function updateHeads(b, v, cd, SD, tr, side, flutter, seed, rdt) {
   if (!clew) { const D = SD[HEAD_KEYS[b.sail]]; clew = [D.C[0], D.C[1], D.C[2]]; }
   return clew;
 }
+/* Impacts de la mer sur l'étrave (visuel + son, la physique ne change pas) :
+   - vague qui monte au-dessus du pont d'étrave (le bateau « plante » dans la houle) : le nez est relevé et le bateau soulevé
+     proportionnellement à l'enfoncement, paquet de mer qui balaie le pont, coup dans la caméra, léger ralentissement apparent ;
+   - étrave qui retombe sur l'eau après une crête (vitesse relative de chute > 2,5 m/s) : claquement, gerbe latérale.
+   Le calcul se fait sur la mer complète (houle + vagues du vent), pas sur la mer filtrée qui pilote le mouvement de la coque. */
+const _bw = new THREE.Vector3();
+function bowImpact(b, v, M, fp, px, pz, fx, fz, rx, rz, rdt) {
+  if (!fp || b.lift > 0.9) return;
+  const R = v.root, sc = R.scale.x, fb = v.stl ? v.stl.meta.bowY : 0.85 * v.cd.k, sp = b.dspd || b.spd, bv = sp * KN, k = v.cd.k, sz = 0.55 + 0.45 * k;
+  R.updateMatrixWorld(); _bw.set(0, fb / sc, -fp.bow * 0.88 / sc); R.localToWorld(_bw);
+  const wh = waveH(_bw.x, _bw.z), clear = _bw.y - wh, vrel = b.bowClear === undefined ? 0 : (clear - b.bowClear) / Math.max(rdt, 1e-3);
+  const wasHigh = (b.bowMax || 0) > 0.55 * k; b.bowClear = clear; b.bowMax = clear > 0 ? Math.max((b.bowMax || 0) * Math.exp(-rdt * 0.8), clear) : 0;
+  b.impCd = (b.impCd || 0) - rdt; const P = (lx, ly, lz) => [px + (rx * lx - fx * lz) * k, ly, pz + (rz * lx - fz * lz) * k];
+  const imm = 0.3 * k - clear; // eau au-dessus du pont d'étrave (l'étrave « ouvre » ≈ 30 cm de vague)
+  if (imm > 0) {
+    const e = Math.min(imm, 2.5 * k) / k;
+    M.vp += e * (1.4 + sp * 0.04) * rdt * 5; M.vy += e * 2.2 * rdt * 5;            // la flottabilité de l'avant relève le nez et soulage le bateau
+    b.surfF = (b.surfF || 1) * (1 - Math.min(0.3, e * 0.16) * Math.min(1, rdt * 3)); // il « bute » dans la vague
+    if (b.impCd <= 0 && sp > 3 * k + 1 && e > 0.12) {
+      const power = clamp(e * 0.7 + sp / (25 * k + 5), 0.35, 1.6), cnt = Math.round((50 + 90 * power) * sz); b.impCd = 1.1 + Math.random() * 0.6;
+      for (let n = 0; n < cnt; n++) { const s = Math.random() < 0.5 ? 1 : -1, p = P(s * rnd(0, 2.2), 0, -rnd(5.5, 9.2));
+        spawn(p[0], wh + rnd(0.1, 0.9) * k, p[2], fx * bv * rnd(0.15, 0.55) + rx * s * rnd(0.5, 3.5) * power * sz, rnd(2.5, 8) * power * sz, fz * bv * rnd(0.15, 0.55) + rz * s * rnd(0.5, 3.5) * power * sz, rnd(0.9, 1.9), rnd(0.5, 1.4) * sz); }
+      if (b.isPlayer) { sfxSplash(Math.min(1.4, power)); camKick = Math.min(0.9, camKick + power * 0.5); }
+    }
+  } else if (wasHigh && clear < 0.25 * k && vrel < -2.5 && b.impCd <= 0 && sp > 4 * k + 1) {
+    // retombée de l'étrave après une crête : claquement
+    const power = clamp(-vrel / 6 * (0.5 + sp / (20 * k + 4)), 0.3, 1.4), cnt = Math.round((40 + 60 * power) * sz); b.impCd = 0.9 + Math.random() * 0.5; b.bowMax = 0;
+    M.vp += power * 0.25; M.vy += power * 0.4;
+    for (let n = 0; n < cnt; n++) { const s = Math.random() < 0.5 ? 1 : -1, p = P(s * rnd(0.8, 2.4), 0, -rnd(4.5, 8.5));
+      spawn(p[0], wh + 0.2 * k, p[2], fx * bv * 0.7 + rx * s * rnd(3, 7) * power * sz, rnd(2, 5.5) * power * sz, fz * bv * 0.7 + rz * s * rnd(3, 7) * power * sz, rnd(0.7, 1.4), rnd(0.4, 1.1) * sz); }
+    if (b.isPlayer) { sfxSplash(power); camKick = Math.min(0.8, camKick + power * 0.45); }
+  }
+}
 function updateBoatVisual(b, rdt) {
   const dh = norm180(b.hdg - b.dispHdg); b.dispHdg = norm360(b.dispHdg + dh * Math.min(1, rdt * 3));
   b.odo += b.spd * KN * rdt * VF;
@@ -3361,6 +3394,7 @@ function updateBoatVisual(b, rdt) {
   v.root.position.set(px, M.y * damp + b.lift - 0.1, pz);
   v.root.rotation.set(M.p * damp + b.lift * 0.025 - (b.surfF - 1) * 0.12, -h, M.r * damp + b.heel * D2R);
   if (!b.isGhost && V_MASK_ON && v.maskKey !== (v.stl || 'param')) waterMask(v, MASK_Y[CLS.id] || 0.5);
+  if (!b.isGhost && Math.hypot(px - camera.position.x, pz - camera.position.z) < 900) bowImpact(b, v, M, fp, px, pz, fx, fz, rx, rz, rdt);
   v.keel.rotation.z = b.cant;
   // réglages : faseyement si trop choqué, face au vent, pendant un virement ou un changement de voile
   const tr = b.trim, ease = tr - topt(a), turning = isTurnMan(b.man) && b.man.t / b.man.dur < 0.3;
