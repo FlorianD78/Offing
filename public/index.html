@@ -498,7 +498,7 @@ function gaussAx(lat, lon, cLat, cLon, sa, sc, brg) {
 const llAt = (lat, lon, brg, dist) => { const b = brg * D2R, la = lat + Math.cos(b) * dist / 60; return [la, lon + Math.sin(b) * dist / (60 * Math.cos(((lat + la) / 2) * D2R))]; };
 let WX_OFF = 0, START_H = 13;
 /* ----- Défi du jour : même météo, mêmes prévisions et même hasard pour tous les joueurs du jour ; simulation à pas fixe, ordres enregistrés ----- */
-const DSTEP = 1, ENGINE_VER = 8; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
+const DSTEP = 1, ENGINE_VER = 9; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
 const DAILY = { on: false, day: '', seed: 0, K: 0, acc: 0, log: null, lastCtl: null };
 let IN_STEP = false;
 function parisDay() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
@@ -2141,7 +2141,11 @@ function balUpdate(b, w, a, twa, dt, pl) {
   const q = (1 - smooth(0.12 * tol, 0.38 * tol, dP)) * smooth(wMin - 0.5, wMin + 2, w.tws);   // trop sur l'avant ou vent trop juste : décollage lent ou impossible
   b.fly = can ? clamp(b.fly + (q > 0.02 ? q / P.rate : -1 / 40) * dt, 0, 1) : clamp(b.fly - dt / 30, 0, 1);
   // portance obtenue : partielle dans l'eau, totale en vol ; au vent → moins de gîte, foil moins efficace ; sous le vent → un peu plus de puissance
-  let k = (0.3 + 0.7 * b.fly) * (1 - 0.35 * smooth(0.05, 0.8, dH)) * (1 + 0.04 * smooth(0, 0.3, -dH)) * (1 - 0.12 * Math.min(1, (dP / 0.4) ** 2) * b.fly);
+  /* Rendement des foils : la zone stable n'est pas la plus rapide. Le pic de rendement est un peu sur l'avant et un peu
+     sous le vent du centre de stabilité (plus de puissance, plus de risque) ; il bouge avec la houle comme le reste.
+     Au pic (+0,1 vers l'avant, 0,1 sous le vent) : 100 % de la portance, mais ≈ 2,5× plus de plantages ; au centre de la zone stable ≈ 93 % ; réglage prudent (auto) ≈ 85 %. */
+  const effF = 0.85 + 0.15 * Math.exp(-(((dP - 0.1) / (0.14 * tol)) ** 2) - (((dH + 0.1) / (0.25 * tol)) ** 2));
+  let k = (0.3 + 0.7 * b.fly) * (1 - (1 - effF) * (0.4 + 0.6 * b.fly)); b.foilEff = effF;
   b.flyK = k; b.balEff = 1 - 0.02 * Math.min(1, dP * dP + dH * dH) * (1 - b.fly);
   if (b.crashT > 0) b.balEff *= 0.75; // le bateau se vautre après un plantage
   if (b.fly > 0.4) {
@@ -2438,7 +2442,7 @@ function applyAdvice() {
 
 /* ===================== SAUVEGARDE AUTOMATIQUE ===================== */
 const SAVE_KEY = 'gl3d_save_v3';
-const BFIELDS = ['pens', 'reef', 'atStop', 'legT', 'legStart', 'gRec', 'gRecT', 'lat', 'lon', 'hdg', 'dispHdg', 'spd', 'sail', 'trim', 'foilP', 'foilS', 'tgtP', 'tgtS', 'mode', 'lockTwa', 'man', 'queue', 'hoist', 'cant', 'autoSail', 'autoTrim', 'autoFoil', 'penT', 'penF', 'penDur', 'penLabel', 'finished', 'finishT', 'prevTwa', 'track', 'trackT', 'nextDecision', 'heel', 'lift', 'log', 'mi', 'grounded', 'twa', 'tws', 'twd', 'mx', 'my', 'ms', 'autoBal', 'fly', 'crashT', 'crashHeat', 'crashes', 'balDP', 'balDH', 'flyK', 'balEff'];
+const BFIELDS = ['pens', 'reef', 'atStop', 'legT', 'legStart', 'gRec', 'gRecT', 'lat', 'lon', 'hdg', 'dispHdg', 'spd', 'sail', 'trim', 'foilP', 'foilS', 'tgtP', 'tgtS', 'mode', 'lockTwa', 'man', 'queue', 'hoist', 'cant', 'autoSail', 'autoTrim', 'autoFoil', 'penT', 'penF', 'penDur', 'penLabel', 'finished', 'finishT', 'prevTwa', 'track', 'trackT', 'nextDecision', 'heel', 'lift', 'log', 'mi', 'grounded', 'twa', 'tws', 'twd', 'mx', 'my', 'ms', 'autoBal', 'fly', 'crashT', 'crashHeat', 'crashes', 'balDP', 'balDH', 'flyK', 'balEff', 'foilEff'];
 let lastSaveReal = 0;
 function saveGame() {
   if (!running || gameT < 1) return;
@@ -2874,7 +2878,7 @@ function updateBalUI() {
   const pv = base - 4 * P.mx, po = base - 4 * mxO; gauge('gPitch', pv, po, 0.56 * tol, -5, 5, (pv >= 0 ? '+' : '') + pv.toFixed(1) + '°');
   const hb = P.heelIdeal || Math.abs(P.heel || 0) || 15, hv = Math.max(0, hb - 7 * (P.my - 0.5)), ho = Math.max(0, hb - 7 * (myO - 0.5));
   gauge('gHeel', hv, ho, 1.1 * tol, 0, 30, hv.toFixed(0) + '°');
-  $('flyTxt').textContent = P.crashT > 0 ? T('💥 Planté — redécollage dans ', '💥 Crashed — take-off in ') + Math.ceil(P.crashT / 60) + ' min' : P.fly > 0.85 ? T('✈ En vol', '✈ Flying') : P.fly > 0.03 ? T('Décollage ', 'Taking off ') + Math.round(P.fly * 100) + ' %' : T('Dans l\'eau', 'In the water');
+  $('flyTxt').textContent = P.crashT > 0 ? T('💥 Planté — redécollage dans ', '💥 Crashed — take-off in ') + Math.ceil(P.crashT / 60) + ' min' : P.fly > 0.85 ? T('✈ En vol', '✈ Flying') + ' · ' + T('rendement ', 'efficiency ') + Math.round((P.foilEff || 1) * 100) + ' %' : P.fly > 0.03 ? T('Décollage ', 'Taking off ') + Math.round(P.fly * 100) + ' %' : T('Dans l\'eau', 'In the water');
 }
 function setBal(mx, ms) { player.mx = Math.round(clamp(mx, -1, 1) * 20) / 20; player.ms = Math.round(clamp(ms, -1, 1) * 20) / 20; player.my = player.ms * ((player.twa || 0) >= 0 ? 1 : -1); player.autoBal = false; if (CLS.foils) updateBalUI(); }
 function updateHUD() {
@@ -2938,7 +2942,7 @@ function updateHUD() {
     const moving = Math.abs(v - tg) > 0.01; el.textContent = `${isMobile() ? (nm === 'Bâbord' ? 'Bd' : 'Tb') : nm} ${moving ? (tg > v ? '⇣ ' : '⇡ ') + Math.round(v * 100) + '%' : (v > 0.5 ? '▼ baissé' : '▲ relevé')}`;
     el.classList.remove('good', 'bad'); const cls = (v > 0.5 || tg > 0.5) ? (isLee && useful ? 'good' : (!isLee ? 'bad' : '')) : ''; if (cls) el.classList.add(cls);
   });
-  const lee = leeP ? player.foilP : player.foilS, wnd = leeP ? player.foilS : player.foilP, ff = foilFactor(lee, wnd, a, w.tws);
+  const lee = leeP ? player.foilP : player.foilS, wnd = leeP ? player.foilS : player.foilP, ff = foilFactor(lee * (CLS.foils && player.flyK !== undefined ? player.flyK : 1), wnd, a, w.tws);
   if (CLS.reef) { const br = bestReef(a, w.tws), pr = plannedReef(player), rr = reefRel(player.reef || 0, a, w.tws);
     $('reefTxt').textContent = (player.reef || 0) + T(' ris', ' reef') + (pr !== (player.reef || 0) ? ' → ' + pr : '');
     $('reefP').classList.toggle('good', br > pr); $('reefM').classList.toggle('good', br < pr);
