@@ -11,7 +11,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0b1a26;font-family:sy
 #c:active{cursor:grabbing}
 .panel{position:fixed;background:rgba(8,22,36,.76);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:10px 12px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
 .title{display:flex;justify-content:space-between;align-items:center;gap:6px;font-weight:800;letter-spacing:.1em;font-size:11.5px;color:#7fd1ff;margin-bottom:6px}
-.title .btns{display:flex;gap:4px}
+.title .btns{display:flex;gap:4px;flex:none}
+#tl>.title{flex-wrap:wrap;row-gap:6px}#tl>.title #tlTitle{flex:1 1 100%;line-height:1.35;order:2}#tl>.title .btns{order:1;width:100%;justify-content:flex-end}
+#tl>.title .btns button{flex:1;padding:3px 0}
 .title button{padding:2px 8px;font-size:11px;letter-spacing:0}
 .row{display:flex;justify-content:space-between;gap:8px;padding:2px 0;color:#a9c3d6}
 .row b{color:#fff;font-variant-numeric:tabular-nums;text-align:right}
@@ -54,6 +56,26 @@ button.bad{background:rgba(255,80,80,.25);border-color:#ff6b6b}
 .lbl{font-size:11px;color:#7fa3bd;letter-spacing:.06em;min-width:52px;text-align:left}
 .foil{flex:1;font-size:12px;padding:5px 6px}
 #foilHint{font-size:11px;color:#a9c3d6;margin:2px 0 4px}
+body.cls-mini #balLine,body.cls-mini #balP{display:none!important}
+#balP{bottom:12px;display:none;padding:8px 10px 9px;width:220px}
+#balP #balLine{display:grid!important;grid-template-columns:auto 1fr;grid-template-areas:'lbl lbl' 'pad g' 'pad auto';gap:6px 8px!important;margin:0;align-items:center}
+#balP #balLine .lbl{grid-area:lbl;min-width:0;font-weight:700;color:#7fd0ff}#balP #balPad{grid-area:pad;width:96px;height:96px}#balP .balG{grid-area:g;min-width:0}#balP #balAuto{grid-area:auto}
+#balP .balG .g>span{width:44px}#balP .balG .g em{width:34px}
+body.balp:not(.cls-mini) #balP{display:block}
+#balLine{gap:8px!important}
+#balPad{position:relative;width:92px;height:62px;flex:none;border-radius:9px;border:1px solid rgba(255,255,255,.16);background:radial-gradient(ellipse 22% 46% at 50% 50%,rgba(255,255,255,.13),rgba(255,255,255,.04) 60%,transparent 61%),rgba(8,22,36,.65);touch-action:none;cursor:crosshair}
+#balPad span{position:absolute;font-size:8px;line-height:8px;color:#7fa3bd;pointer-events:none;text-align:center}
+#balPad .t{top:2px;left:0;right:0}#balPad .b{bottom:2px;left:0;right:0}#balPad .l{left:3px;top:24px}#balPad .r{right:3px;top:24px}
+#balDot{position:absolute;width:13px;height:13px;border-radius:50%;background:#ffd34d;box-shadow:0 0 0 2px rgba(0,0,0,.35),0 0 8px rgba(255,211,77,.6);transform:translate(-50%,-50%);pointer-events:none}
+#balPad.auto #balDot{background:#8fd3ff;box-shadow:0 0 0 2px rgba(0,0,0,.35),0 0 8px rgba(143,211,255,.6)}
+.balG{display:flex;flex-direction:column;gap:4px;min-width:150px;flex:1}
+.balG .g{display:flex;align-items:center;gap:6px;font-size:10px;color:#a9c3d6}
+.balG .g>span{width:46px}.balG .g em{font-style:normal;width:40px;text-align:right;color:#fff;font-variant-numeric:tabular-nums}
+.balG .st span{width:auto;color:#fff;font-weight:600}
+.gb{position:relative;flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.1)}
+.gb i{position:absolute;top:0;bottom:0;border-radius:4px;background:rgba(93,255,158,.32)}
+.gb b{position:absolute;top:-3px;width:3px;height:14px;border-radius:2px;background:#fff;transform:translateX(-50%)}
+#balAuto.on{background:#1e6fa8;color:#fff}
 body.cls-mini #foilLine,body.cls-mini #aFoil{display:none!important}
 body:not(.has-reef) #reefLine{display:none!important}
 .career{margin:10px 0 4px;padding:10px 12px;border-radius:12px;background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.3);font-size:13px}.career b{color:#ffd166}.career span{color:#a9c3d6;font-size:12px}
@@ -82,7 +104,7 @@ body:not(.has-reef) #reefLine{display:none!important}
 .assist button{font-size:10.5px;padding:4px 2px}
 .accel{display:flex;gap:4px;margin-top:6px;align-items:center}
 .accel span{font-size:11px;color:#7fa3bd;margin-right:2px}
-.accel button{flex:1;padding:4px 0;font-size:11px}
+.accel button{flex:1;padding:4px 0;font-size:10.5px;white-space:nowrap;letter-spacing:-.01em}
 #trainWind{margin-top:6px;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;font-size:11px;color:#a9c3d6}
 #trainWind .r{display:flex;align-items:center;gap:6px;margin:3px 0}
 #trainWind input{flex:1}
@@ -175,6 +197,10 @@ tr.me td{color:#fff;font-weight:700;background:rgba(255,93,115,.12)}
 .advice{background:rgba(255,79,216,.1);border:1px solid rgba(255,79,216,.3);border-radius:8px;padding:5px 7px;margin-top:4px}
 .rbtns{display:flex;gap:4px;margin-top:5px}
 .rbtns button{flex:1;font-size:11px;padding:4px 4px}
+.rmodes{display:flex;margin-top:5px;border:1px solid rgba(255,79,216,.35);border-radius:7px;overflow:hidden}
+.rmodes button{flex:1;font-size:11px;padding:4px 2px;border:0;border-radius:0;background:transparent}
+.rmodes button+button{border-left:1px solid rgba(255,79,216,.25)}
+.rmodes button.on{background:rgba(255,79,216,.28);color:#fff;font-weight:700}
 button:disabled{opacity:.4;cursor:default}
 #man{height:20px;margin-top:5px;position:relative;border-radius:6px;background:rgba(255,255,255,.05);overflow:hidden;font-size:11px;line-height:20px;color:#ffe2bd}
 #manbar{position:absolute;left:0;top:0;bottom:0;width:0}
@@ -235,10 +261,6 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
   body.mobile .mtabs small{display:none}
 }
 </style>
-<script type="module">
-  import { inject } from 'https://cdn.jsdelivr.net/npm/@vercel/analytics@1/dist/index.mjs';
-  inject();
-</script>
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -248,6 +270,7 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
   <div id="tlBody"></div>
   <div id="router">
     <div class="rtitle">🧭 ROUTEUR</div>
+    <div class="rmodes" id="rModes"><button data-m="attack" title="Attaque : cherche la vitesse (vent fort, zones de vol), quitte à rallonger la route">⚡ Attaque</button><button data-m="normal" title="Normal : route la plus rapide sur la polaire">Normal</button><button data-m="safe" title="Prudent : route plus courte et plus directe, moins de manœuvres, évite la brise forte et les grains">🛡 Prudent</button></div>
     <div id="rInfo"></div>
     <div class="rbtns"><button id="rFinish">🏁 Vers l'arrivée</button><button id="rPick" title="Choisir un point sur la carte">📍 Point</button><button id="rClear" title="Effacer la route">✕</button></div>
     <div class="rbtns"><button id="rApply" title="Régler l'angle au vent conseillé (K)">Appliquer le cap</button><button id="rFollow" title="Suivre la route automatiquement (L) — coûte 1,5 %">Pilote routeur</button></div>
@@ -307,6 +330,16 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
     <button id="reefP" title="Prendre un ris (I)">+ ris</button>
   </div>
   <div id="foilHint">–</div>
+  <div class="line" id="balLine">
+    <span class="lbl" title="Matossage : déplace le poids à bord (Z/S avant-arrière, W/E bâbord-tribord, U auto)">MATOS.</span>
+    <div id="balPad" title="Glisse le point : haut = avant, bas = arrière, gauche = bâbord, droite = tribord"><span class="t">avant</span><span class="b">arrière</span><span class="l">bâ-<br>bord</span><span class="r">tri-<br>bord</span><div id="balDot"></div></div>
+    <div class="balG">
+      <div class="g"><span>Assiette</span><div class="gb" id="gPitch"><i></i><b></b></div><em id="gPitchTxt">–</em></div>
+      <div class="g"><span>Gîte</span><div class="gb" id="gHeel"><i></i><b></b></div><em id="gHeelTxt">–</em></div>
+      <div class="g st"><span id="flyTxt">–</span></div>
+    </div>
+    <button id="balAuto" title="Matossage automatique prudent : le moins de plantages, rendement des foils limité à 75 % (U)">Auto</button>
+  </div>
   <div class="line" id="trimLine">
     <span class="lbl">ÉCOUTE</span>
     <span style="font-size:10px;color:#7fa3bd">bordé</span>
@@ -327,12 +360,14 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
   </div>
 </div>
 
+<div id="balP" class="panel"></div>
+
 <div id="br" class="panel">
   <canvas id="polar"></canvas>
   <div class="sails" id="sails"></div>
   <div class="assist">
     <button id="aSail" title="Choix automatique de la voile (A) — coûte 1,5 % de vitesse">Voile auto</button>
-    <button id="aTrim" title="Réglage automatique de l'écoute (R) — coûte 1,5 %">Écoute auto</button>
+    <button id="aTrim" title="Réglage automatique de l'écoute (R) — 80 % d'efficacité au plus">Écoute auto</button>
     <button id="aFoil" title="Gestion automatique des foils (G) — coûte 1,5 %">Foils auto</button>
   </div>
   <div class="accel" id="accel"><span>Temps</span></div>
@@ -464,7 +499,7 @@ function gaussAx(lat, lon, cLat, cLon, sa, sc, brg) {
 const llAt = (lat, lon, brg, dist) => { const b = brg * D2R, la = lat + Math.cos(b) * dist / 60; return [la, lon + Math.sin(b) * dist / (60 * Math.cos(((lat + la) / 2) * D2R))]; };
 let WX_OFF = 0, START_H = 13;
 /* ----- Défi du jour : même météo, mêmes prévisions et même hasard pour tous les joueurs du jour ; simulation à pas fixe, ordres enregistrés ----- */
-const DSTEP = 1, ENGINE_VER = 4; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
+const DSTEP = 1, ENGINE_VER = 11; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
 const DAILY = { on: false, day: '', seed: 0, K: 0, acc: 0, log: null, lastCtl: null };
 let IN_STEP = false;
 function parisDay() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
@@ -751,8 +786,8 @@ function bestFull(a, tws) { return capV(baseSpeed(a, tws) * Math.max(1, foilFact
 const PT = new Map();
 function bestFast(a, tws) { const k = Math.round(tws * 2); let t = PT.get(k); if (!t) { t = new Float32Array(181); for (let i = 0; i <= 180; i++) t[i] = bestFull(i, k / 2); PT.set(k, t); } const i = Math.min(179, Math.floor(a)), f = a - i; return t[i] + (t[i + 1] - t[i]) * f; }
 function speedOf(b, twa, tws) {
-  const a = Math.abs(twa); const lee = twa >= 0 ? b.foilP : b.foilS, wnd = twa >= 0 ? b.foilS : b.foilP;
-  return capV(baseSpeed(a, tws) * sailEff(b.sail, a, tws) * trimEff(b.trim, a) * foilFactor(lee, wnd, a, tws) * reefRel(b.reef || 0, a, tws));
+  const a = Math.abs(twa); const lee = twa >= 0 ? b.foilP : b.foilS, wnd = twa >= 0 ? b.foilS : b.foilP, fk = CLS.foils && b.flyK !== undefined ? b.flyK : 1;
+  return capV(baseSpeed(a, tws) * sailEff(b.sail, a, tws) * trimEff(b.trim, a) * foilFactor(lee * fk, wnd, a, tws) * reefRel(b.reef || 0, a, tws) * (b.balEff || 1));
 }
 function vmgOpt(tws, up) { let best = -1, ang = up ? 45 : 150; for (let a = up ? 30 : 95; a <= (up ? 90 : 180); a += 0.5) { const v = bestFull(a, tws) * Math.cos(a * D2R) * (up ? 1 : -1); if (v > best) { best = v; ang = a; } } return { ang, vmg: best }; }
 
@@ -1846,13 +1881,16 @@ const raceTime = b => (b.legT || []).reduce((x, y) => x + y, 0) + (b.atStop ? 0 
 const curMarks = () => COURSE.marks;
 
 /* ===================== FLOTTE ===================== */
+/* Niveaux des concurrents (vitesse relative à des réglages parfaits, assistances comprises côté joueur, mesurée vent et mer imposés) :
+   joueur tout-auto ≈ 0,77 · joueur manuel centré ≈ 1,00 (IMOCA) · réglage fin au pic ≈ 1,03.
+   Les bots s'étagent de 0,79 à 0,975 : le tout-auto lutte avec la queue de flotte, le manuel soigné vise le podium, le réglage fin la victoire. */
 const BOAT_DEFS = [
   { name: 'Vous', hull: 0xd62839, acc: 0xff5d73, player: true },
-  { name: 'Albatros', hull: 0x1d3557, acc: 0x4ea8de, skill: 0.955, every: 6, hyst: 0.06, strat: 'Routage toutes les 6 h' },
-  { name: 'Sterne', hull: 0xf4a261, acc: 0xe76f51, skill: 0.95, every: 12, hyst: 0.1, strat: 'Routage toutes les 12 h' },
-  { name: 'Fou de Bassan', hull: 0x2a9d8f, acc: 0x8ad9c9, skill: 0.965, every: 9, hyst: 0.05, strat: 'Routage toutes les 9 h' },
-  { name: 'Puffin', hull: 0xffd60a, acc: 0x222222, skill: 0.94, every: 24, hyst: 0.12, strat: 'Routage toutes les 24 h' },
-  { name: 'Goéland', hull: 0x6a4c93, acc: 0xc77dff, skill: 0.958, every: 18, hyst: 0.08, strat: 'Routage toutes les 18 h' },
+  { name: 'Albatros', hull: 0x1d3557, acc: 0x4ea8de, skill: 0.975, every: 6, hyst: 0.06, strat: 'Routage toutes les 6 h · régleur d’élite' },
+  { name: 'Sterne', hull: 0xf4a261, acc: 0xe76f51, skill: 0.885, every: 12, hyst: 0.1, strat: 'Routage toutes les 12 h · bon régleur' },
+  { name: 'Fou de Bassan', hull: 0x2a9d8f, acc: 0x8ad9c9, skill: 0.93, every: 9, hyst: 0.05, strat: 'Routage toutes les 9 h · très bon régleur' },
+  { name: 'Puffin', hull: 0xffd60a, acc: 0x222222, skill: 0.79, every: 24, hyst: 0.12, strat: 'Routage toutes les 24 h · régleur prudent' },
+  { name: 'Goéland', hull: 0x6a4c93, acc: 0xc77dff, skill: 0.835, every: 18, hyst: 0.08, strat: 'Routage toutes les 18 h · régleur moyen' },
 ];
 const boats = BOAT_DEFS.map(d => ({
   name: d.name, isPlayer: !!d.player, skill: d.skill || 1, hyst: d.hyst || 0, every: d.every || 12, strat: d.strat, color: hexCss(d.player ? d.acc : d.hull),
@@ -1934,7 +1972,8 @@ function resetBoat(b, lat, lon, hdg) {
   Object.assign(b, { daily: null, award: null, net: null, follow: false, lat, lon, hdg, dispHdg: hdg, spd: 0, reef: 0, pens: 0, atStop: false, legT: [], legStart: 0, gRec: [], gRecT: -1e9, sail: 1, trim: 0.25, foilP: 0, foilS: 0, tgtP: 0, tgtS: 0, mode: 'cap', lockTwa: 60, man: null, queue: [], hoist: 1, cant: 0,
     autoSail: !b.isPlayer, autoTrim: !b.isPlayer, autoFoil: !b.isPlayer, penT: 0, penF: 1, penDur: 1, penLabel: '', finished: false, finishT: 0, prevTwa: null,
     track: [[lat, lon]], trackT: 0, nextDecision: Math.random() * 600, heel: 0, lift: 0, twa: 0, tws: 10, twd: 0, grounded: false, log: 0, mi: 0,
-    route: null, nextRoute: null, escT: 0, routeJob: null, odo: 0, prevHb: 0, slamCd: 1 });
+    route: null, nextRoute: null, escT: 0, routeJob: null, odo: 0, prevHb: 0, slamCd: 1,
+    mx: -0.1, my: 0.5, ms: 0.5, autoBal: true, fly: 0, crashT: 0, crashHeat: 0, crashes: 0, balDP: 0, balDH: 0, flyK: 1, balEff: 1, crashFx: 0 });
 }
 function buildMarkVis() {
   markVis.forEach(v => { scene.remove(v.g); scene.remove(v.halo.g); }); markVis = [];
@@ -2034,8 +2073,8 @@ function onMarkRounded(b, m) {
     if (ROUTE.dest && ROUTE.dest.mi === b.mi - 1) startRouting(markDest(b.mi));
   } else { if (b.nextRoute && b.nextRoute.mi === b.mi) { b.route = b.nextRoute; b.route.t0 = gameT - botEvery(b) * 3600 * 0.7; } b.nextDecision = 0; }
 }
-const ctlOf = b => [b.mode, b.mode === 'twa' ? b.lockTwa : b.hdg, b.trim, b.autoSail ? 1 : 0, b.autoTrim ? 1 : 0, b.autoFoil ? 1 : 0, b.follow ? 1 : 0, b.tgtP, b.tgtS];
-function applyCtl(b, c, w) { b.mode = c[0]; if (c[0] === 'twa') b.lockTwa = c[1]; else b.hdg = c[1]; b.trim = c[2]; b.autoSail = !!c[3]; b.autoTrim = !!c[4]; b.autoFoil = !!c[5]; b.follow = !!c[6]; b.tgtP = c[7]; b.tgtS = c[8]; }
+const ctlOf = b => [b.mode, b.mode === 'twa' ? b.lockTwa : b.hdg, b.trim, b.autoSail ? 1 : 0, b.autoTrim ? 1 : 0, b.autoFoil ? 1 : 0, b.follow ? 1 : 0, b.tgtP, b.tgtS, b.mx, b.ms, b.autoBal ? 1 : 0];
+function applyCtl(b, c, w) { b.mode = c[0]; if (c[0] === 'twa') b.lockTwa = c[1]; else b.hdg = c[1]; b.trim = c[2]; b.autoSail = !!c[3]; b.autoTrim = !!c[4]; b.autoFoil = !!c[5]; b.follow = !!c[6]; b.tgtP = c[7]; b.tgtS = c[8]; if (c.length > 9) { b.mx = c[9]; b.ms = c[10]; b.autoBal = !!c[11]; } }
 function dailyStep() {
   const P = player;
   if (!P.finished && !P.atStop) {
@@ -2067,6 +2106,65 @@ function replayDaily(log) {
   if (R.finished) R.gRec.push([Math.round(R.finishT), +R.lat.toFixed(5), +R.lon.toFixed(5), Math.round(R.hdg), +R.spd.toFixed(1), R.sail, R.mi, 0, R.reef || 0]);
   return { T: R.finished ? R.finishT : null, trace: R.gRec, pens: R.pens || 0 };
 }
+/* ===== Matossage et vol (IMOCA, Proto à foils) =====
+   Le skipper déplace le poids : mx (−1 arrière … +1 avant) et my (−1 sous le vent … +1 au vent), instantané.
+   Une position idéale (mxO, myO) dépend de la mer, de la vitesse, de l'allure, et dérive lentement avec le temps.
+   - Décollage : il faut le foil sous le vent baissé, assez de vitesse et un bon réglage avant/arrière : trop sur l'avant
+     le bateau ne décolle pas ; trop sur l'arrière il décolle mais « décroche de l'arrière » (risque de retombée).
+   - En vol : trop sous le vent → décrochage du foil, le bateau plante ; trop au vent → moins de gîte, le foil porte moins.
+     L'écart avant/arrière fixe la fréquence des plantages ; au-delà de la vitesse critique le foil décroche (survitesse).
+   - Plantage : vitesse ÷ 2, le bateau se vautre 1 à 2 min avant de pouvoir redécoller ; les plantages répétés
+     rendent le décollage plus exigeant. Tirages déterministes pour le défi du jour.
+   - Mode auto (prudent) : un peu en arrière et au vent de l'idéal → le moins de plantages, pas la meilleure vitesse. */
+const BAL = { imoca: { tol: 1, vs: 31, rate: 100, wk: 1 }, proto: { tol: 1.3, vs: 23, rate: 70, wk: 0.78 } }; // rate : durée d'un décollage complet (s de course)
+/* Vent minimal pour voler (IMOCA) : ≈ 12 nd au travers, 13,5-14 au portant, 16-18 au près ; ×0,78 pour le Proto.
+   Décollage (≈ 1 min 40) : 0-10 s le bateau accélère, 10-30 s les foils portent fort, 30-60 s la coque se soulève, 1-2 min vol stable. */
+const FLY_TWS = [[40, 18], [55, 17], [70, 14.5], [85, 12], [115, 12], [135, 13.5], [180, 14]];
+function flyTws(a) { for (let i = 1; i < FLY_TWS.length; i++) { const [a1, w1] = FLY_TWS[i], [a0, w0] = FLY_TWS[i - 1]; if (a <= a1) return w0 + (w1 - w0) * clamp((a - a0) / (a1 - a0), 0, 1); } return 14; }
+function balTargets(b, a, tws) {
+  const sea = clamp((tws - 10) / 22, 0, 1.2) * (MODE === 'race' ? COURSE.sea || 1 : 1), fast = clamp(((b.spd || 0) - 16) / 14, 0, 1), dr = gameT / 2700 + b.lat * 4 + b.lon * 3;
+  // la houle déséquilibre le bateau : composante rapide (périodes 45 et 75 min de course), d'autant plus forte que la mer est formée
+  const t = gameT, wX = (0.08 + 0.32 * sea) * (0.6 * Math.sin(t / 700 + 1.3 + b.lat * 3) + 0.4 * Math.sin(t / 430 + b.lon * 7)), wY = (0.05 + 0.22 * sea) * (0.6 * Math.sin(t / 820 + b.lon * 2) + 0.4 * Math.sin(t / 510 + b.lat * 5));
+  const sX = clamp(0.25 - 0.3 * sea - 0.28 * smooth(110, 160, a) - 0.22 * fast + 0.16 * Math.sin(dr), -0.85, 0.7), sY = clamp(0.5 - 0.35 * smooth(120, 165, a) + 0.22 * sea + 0.14 * Math.sin(dr * 0.81 + 1.3), -0.4, 0.95);
+  return { mxO: clamp(sX + wX, -0.95, 0.85), myO: clamp(sY + wY, -0.5, 1), sX, sY, wX, wY, sea };
+}
+function balUpdate(b, w, a, twa, dt, pl) {
+  const P = BAL[CLS.id]; if (!P || b.finished) { b.flyK = 1; b.balEff = 1; b.fly = 0; return; }
+  const BT = balTargets(b, a, w.tws), { mxO, myO, sea } = BT, tol = P.tol;
+  // auto prudent : suit la tendance, ne compense qu'en partie (75 %) les à-coups de la houle, garde de la marge en arrière et au vent (plus si la mer est forte)
+  // le joueur règle le poids en bâbord/tribord (ms) : au vent = tribord quand le vent vient de tribord (twa > 0) ; après un virement il faut le déplacer
+  const sgn = twa >= 0 ? 1 : -1;
+  if (b.autoBal) { b.mx = Math.round(clamp(BT.sX + 0.75 * BT.wX - 0.05 - 0.04 * sea, -1, 1) * 20) / 20; b.my = Math.round(clamp(BT.sY + 0.75 * BT.wY + 0.18 + 0.12 * sea, -1, 1) * 20) / 20; b.ms = b.my * sgn; }
+  else if (pl) b.my = clamp((b.ms === undefined ? b.my * sgn : b.ms) * sgn, -1, 1);
+  if (!pl && !b.replay) { if (b.balOX === undefined) { b.balOX = (Math.random() - 0.5) * 0.16; b.balOY = (Math.random() - 0.5) * 0.12; } b.mx = clamp(BT.sX + 0.6 * BT.wX - 0.04 - 0.05 * sea + b.balOX, -1, 1); b.my = clamp(BT.sY + 0.6 * BT.wY + 0.1 + 0.05 * sea + b.balOY, -1, 1); } // concurrents : réglés à peu près, chacun à sa façon
+  const dP = b.mx - mxO, dH = b.my - myO; b.balDP = dP; b.balDH = dH;
+  const lee = twa >= 0 ? b.foilP : b.foilS, fb = foilBoost(a, w.tws), F = CLS.foil;
+  b.crashHeat = (b.crashHeat || 0) * Math.exp(-dt / 3600); if (b.crashT > 0) b.crashT -= dt;
+  const wMin = flyTws(a) * P.wk + 1.2 * b.crashHeat;
+  const can = lee > 0.9 && fb > 0.06 && a >= 40 && !isTurnMan(b.man) && !(b.man && b.man.type === 'foil') && b.crashT <= 0 && b.spd >= F.v0 * (pl ? Math.min(1, b.costK || 1) : 1) && w.tws >= wMin - 0.5; // vitesse de décollage rapportée au potentiel : les assistances freinent mais n'empêchent pas de voler
+  const q = (1 - smooth(0.12 * tol, 0.38 * tol, dP)) * smooth(wMin - 0.5, wMin + 2, w.tws);   // trop sur l'avant ou vent trop juste : décollage lent ou impossible
+  b.fly = can ? clamp(b.fly + (q > 0.02 ? q / P.rate : -1 / 40) * dt, 0, 1) : clamp(b.fly - dt / 30, 0, 1);
+  // portance obtenue : partielle dans l'eau, totale en vol ; au vent → moins de gîte, foil moins efficace ; sous le vent → un peu plus de puissance
+  /* Rendement des foils : la zone stable n'est pas la plus rapide. Le pic de rendement est un peu sur l'avant et un peu
+     sous le vent du centre de stabilité (plus de puissance, plus de risque) ; il bouge avec la houle comme le reste.
+     Au pic (+0,1 vers l'avant, 0,1 sous le vent) : 100 % de la portance, mais ≈ 2× plus de plantages ; au centre de la zone stable ≈ 85 % ; loin : 70 % ; mode auto : 75 % au plus. */
+  let effF = 0.7 + 0.3 * Math.exp(-(((dP - 0.1) / (0.14 * tol)) ** 2) - (((dH + 0.1) / (0.25 * tol)) ** 2));
+  if (b.autoBal && pl) effF = Math.min(effF, 0.75); // matossage auto : rendement plafonné à 75 % — le réglage manuel fin est récompensé
+  let k = (0.3 + 0.7 * b.fly) * (1 - (1 - effF) * (0.4 + 0.6 * b.fly)); b.foilEff = effF;
+  b.flyK = k; b.balEff = 1 - 0.02 * Math.min(1, dP * dP + dH * dH) * (1 - b.fly);
+  if (b.crashT > 0) b.balEff *= 0.75; // le bateau se vautre après un plantage
+  if (b.fly > 0.4) {
+    const tF = dP > 0 ? (dP / (0.14 * tol)) ** 2 : 0, tA = dP < 0 ? (dP / (0.2 * tol)) ** 2 : 0, tL = dH < 0 ? (dH / (0.16 * tol)) ** 2 : 0, tV = b.spd > P.vs ? (b.spd - P.vs) / 1.3 : 0;
+    const lam = Math.min(20, 0.04 * (0.4 + 1.2 * sea) * Math.exp(tF + tA + tL + tV - 2.5 * clamp(dH, 0, 0.3)) * b.fly);
+    const r = DAILY.on && pl ? hrand(DAILY.seed ^ 0x7c2a, DAILY.K) : Math.random();
+    if (r < 1 - Math.exp(-lam * dt / 3600)) {
+      const m = Math.max(tF, tA, tL, tV), cause = m === tV && tV > 0 ? 'speed' : m === tF && tF > 0 ? 'nose' : m === tA && tA > 0 ? 'tail' : m === tL && tL > 0 ? 'lee' : 'sea';
+      b.fly = 0; b.spd *= 0.4; b.crashT = 150 + 150 * Math.min(1, sea); b.crashHeat += 1; b.crashes = (b.crashes || 0) + 1; b.crashFx = 1; b.crashCause = cause; // plantages ≈ 3× plus rares qu’avant (v10), mais plus longs à digérer : même coût moyen, des événements qui comptent
+      if (b.isPlayer && running) { const L = { speed: T('survitesse, le foil a décroché', 'overspeed, the foil stalled'), nose: T('trop de poids sur l\'avant, le nez a enfourné', 'too much weight forward, the bow dug in'), tail: T('trop de poids sur l\'arrière, l\'arrière a décroché', 'too much weight aft, the stern stalled'), lee: T('trop de poids sous le vent, le foil a décroché', 'too much weight to leeward, the foil stalled'), sea: T('la mer a eu raison du vol', 'the sea knocked you off the foil') };
+        toast(`💥 ${T('Le bateau a planté', 'Crash')} : ${L[cause]}`, 3000); }
+    }
+  }
+}
 function stepBoat(b, dt) {
   const w = wind(b.lat, b.lon, gameT); b.tws = w.tws; b.twd = w.twd; b.sq = w.sq || 0; b.pres = w.p || 1013;
   if (b.atStop) { b.spd = 0; return; }
@@ -2095,11 +2193,12 @@ function stepBoat(b, dt) {
     const idle = !b.man && !b.queue.length;
     if (b.autoSail && CLS.reef && idle && !b.queue.length) { const br = bestReef(a, w.tws); if (br !== (b.reef || 0) && reefRel(b.reef || 0, a, w.tws) < (pl ? 0.985 : 0.975)) requestMan(b, { type: 'reef', toReef: br }); }
     if (b.autoSail) { if (idle && !b.queue.length) { const bs = bestSail(a, w.tws); if (bs !== b.sail && sailEff(bs, a, w.tws) > sailEff(b.sail, a, w.tws) * (pl ? 1.03 : 1.04)) requestMan(b, { type: 'sail', toSail: bs }); } if (pl) cost *= ASSIST; }
-    if (b.autoTrim) { b.trim = topt(a); if (pl) cost *= ASSIST; }
+    if (b.autoTrim) { b.trim = topt(a); if (pl) cost *= 0.8; } // écoute auto : 80 % d'efficacité au plus — régler à la main paie
     if (b.autoFoil) {
       if (idle) { const fb = foilBoost(a, w.tws), lee = twa >= 0 ? b.tgtP : b.tgtS, on = fb > 0.03 ? 1 : fb < 0.01 ? 0 : lee; const P = twa >= 0 ? on : 0, S = twa < 0 ? on : 0; if (P !== b.tgtP || S !== b.tgtS) { b.tgtP = P; b.tgtS = S; requestMan(b, { type: 'foil', P, S }); } }
       if (pl) cost *= ASSIST;
     }
+    b.costK = cost; if (CLS.foils) balUpdate(b, w, a, twa, dt, pl);
     let target = speedOf(b, twa, w.tws) * b.skill * cost * mf;
     if (w.tws > CLS.seaT && a < 70) target *= Math.max(0.55, 1 - (w.tws - CLS.seaT) * CLS.seaK);
     // Mini : sous spi dans la brise, risque de départ au lof (le bateau se couche, le spi faseye, grosse perte de vitesse)
@@ -2171,7 +2270,7 @@ function showStopover() {
 function rankOf(b) { return standings().indexOf(b) + 1; }
 
 /* ===================== ROUTAGE (isochrones) + ordonnanceur de calculs ===================== */
-const ROUTE = { dest: null, busy: false, nodes: null, isos: [], eta: 0, t0: 0, follow: false, showIso: true, err: '', steps: 0, lastAuto: 0, pick: false, job: null };
+const ROUTE = { mode: (() => { try { const m = localStorage.getItem('offing.rmode'); return m === 'attack' || m === 'safe' ? m : 'normal'; } catch (e) { return 'normal'; } })(), dest: null, busy: false, nodes: null, isos: [], eta: 0, t0: 0, follow: false, showIso: true, err: '', steps: 0, lastAuto: 0, pick: false, job: null };
 // File de calculs de routage (joueur + concurrents). Exécutée par tranches dans frame(), dans le temps restant de l'image :
 // le routage ne bloque plus le rendu (avant : tranches de 14 ms enchaînées par setTimeout → saccades sur les grandes traversées).
 const JOBS = []; let jobsT = 0;
@@ -2187,6 +2286,29 @@ function runJobs(budget = 14) {
 // onglet en arrière-plan : rAF est suspendu, le calcul continue doucement
 setInterval(() => { if (document.hidden && JOBS.length) runJobs(30); }, 250);
 function cancelAllJobs() { JOBS.forEach(j => j.cancelled = true); boats.forEach(b => b.routeJob = null); }
+// distance restante sur la route, rallongement par rapport à l'orthodromie, vitesse moyenne prévue
+function routeStats() {
+  const R = ROUTE.nodes; if (!R || R.length < 2) return null;
+  if (_rs.nodes === R && Math.abs(gameT - _rs.g) < 600) return _rs.v;
+  let i = 1; while (i < R.length - 1 && R[i].t <= gameT) i++;
+  let d = gcDist(player.lat, player.lon, R[i].lat, R[i].lon); for (let j = i + 1; j < R.length; j++) d += gcDist(R[j - 1].lat, R[j - 1].lon, R[j].lat, R[j].lon);
+  const last = R[R.length - 1], direct = gcDist(player.lat, player.lon, last.lat, last.lon), left = Math.max(60, ROUTE.eta - gameT);
+  _rs.v = { d, over: direct > 1 ? d / direct - 1 : 0, v: d / (left / 3600) }; _rs.nodes = R; _rs.g = gameT; return _rs.v;
+}
+const _rs = { nodes: null, g: 0, v: null };
+const RMODE_NM = { attack: ['⚡ Attaque', '⚡ Attack'], normal: ['Normal', 'Normal'], safe: ['🛡 Prudent', '🛡 Safe'] };
+function routeStatsRow() {
+  const r = routeStats(); if (!r) return '';
+  const nm = RMODE_NM[ROUTE.nmode || 'normal'], pend = ROUTE.busy && ROUTE.mode !== (ROUTE.nmode || 'normal');
+  return `<div class="row"><span>${T('Route', 'Route')} <span class="muted">${T(nm[0], nm[1])}</span></span><b>${Math.round(r.d * (MODE === 'race' ? 1 : 10)) / (MODE === 'race' ? 1 : 10)} nm · ${r.v.toFixed(1)} ${T('nds', 'kn')}</b></div>`
+    + `<div class="row"><span class="muted">${T('Rallonge', 'Extra distance')}</span><b class="muted">+${Math.round(r.over * 100)} %${pend ? ' · ' + T('recalcul…', 'recomputing…') : ''}</b></div>`;
+}
+function setRouteMode(m) {
+  if (!RMODE_NM[m] || ROUTE.mode === m) return; ROUTE.mode = m; try { localStorage.setItem('offing.rmode', m); } catch (e) {}
+  updRModes(); toast(T('Routeur : ', 'Router: ') + T(RMODE_NM[m][0], RMODE_NM[m][1]), 1400);
+  if (ROUTE.dest) startRouting(ROUTE.dest);
+}
+function updRModes() { document.querySelectorAll('#rModes button').forEach(b => b.classList.toggle('on', b.dataset.m === ROUTE.mode)); }
 function clearRoute() { if (ROUTE.job) ROUTE.job.cancelled = true; Object.assign(ROUTE, { dest: null, busy: false, nodes: null, isos: [], err: '', follow: false, pick: false, job: null }); }
 // Pilote routeur « anti-échouement » : si la terre est à moins de ~0,3 nm sur le cap voulu, il s'écarte vers le large (même bord si possible)
 function pilotSafe(b, h, twd) {
@@ -2199,12 +2321,22 @@ function pilotSafe(b, h, twd) {
   return h;
 }
 function segLandLL(la1, lo1, la2, lo2, nm) { const n = Math.max(1, Math.ceil(nm / (MODE === 'race' ? (COURSE.coastal ? 0.2 : 1.5) : 0.1))); for (let i = 1; i <= n; i++) { const f = i / n; if (landFast(la1 + (la2 - la1) * f, lo1 + (lo2 - lo1) * f)) return true; } return false; }
-function makeRouteState(dest, b, keepIsos) {
+/* Profils du routeur : coût généralisé = temps réel + pénalité (s). L'ETA affichée reste le temps réel.
+   Attaque : bonus dans le vent fort et la zone de vol des foils (vitesse avant tout, route plus longue acceptée), couloir plus large.
+   Prudent : pénalise l'écart à la route directe (route plus courte), la brise forte et les grains, double le coût des manœuvres, couloir resserré.
+   Normal : coût = temps (routage historique, utilisé aussi par les bots). */
+const RMODES = { attack: { ang: 95, dk: 1.3, dc: 70, tack: 0 }, safe: { ang: 65, dk: 1.08, dc: 30, tack: 1 } };
+function rPen(m, a, tws, off, sq, s, sref) {
+  // attaque : récompense les bords plus rapides que la moyenne du front (angles de débridé, brise), et la zone de vol des foilers
+  if (m === 'attack') { const fz = CLS.foils ? smooth(-1.5, 1.5, tws - flyTws(a) * ((BAL[CLS.id] || {}).wk || 1)) : smooth(14, 22, tws); return -(0.35 * clamp((s - sref) / sref, -0.5, 0.5) + (CLS.foils ? 0.1 : 0.04) * fz); }
+  return 0.3 * smooth(25, 38, tws) + 0.14 * (1 - Math.cos(off * D2R)) + 0.12 * (sq || 0);
+}
+function makeRouteState(dest, b, keepIsos, mode) {
   const race = MODE === 'race', t0 = b.t !== undefined ? b.t : gameT, w0 = windFc(b.lat, b.lon, t0), short = race && COURSE.id === 'fastnet', coast = race && COURSE.coastal;
   const s0 = { lat: b.lat, lon: b.lon, t: t0, parent: null, twa: norm180(w0.twd - b.hdg), hdg: b.hdg, tws: w0.tws };
   const cl0 = Math.cos(s0.lat * D2R), Xd = (dest.lon - s0.lon) * 60 * cl0, Yd = (dest.lat - s0.lat) * 60;
   // concurrents au large : secteurs d'isochrone ×1,3 → 20 à 40 % de calcul en moins, ETA quasi identique (≤ 1 %)
-  return { coarse: race && !coast && !keepIsos, Xd, Yd, D0: Math.hypot(Xd, Yd), brg0: Math.atan2(Xd, Yd) * R2D, dest, race, short, dt: race ? (coast ? 600 : short ? 2700 : 7200) : 120, maxSteps: race ? (coast ? 360 : 480) : 400, tackLoss: race ? (CLS.foils ? 150 : 60) : 30, s0, front: [s0], step: 0, cl0, isos: [], keepIsos };
+  return { coarse: race && !coast && !keepIsos, Xd, Yd, D0: Math.hypot(Xd, Yd), brg0: Math.atan2(Xd, Yd) * R2D, dest, race, short, dt: race ? (coast ? 600 : short ? 2700 : 7200) : 120, maxSteps: race ? (coast ? 360 : 480) : 400, tackLoss: race ? (CLS.foils ? 150 : 60) : 30, s0, front: [s0], step: 0, cl0, isos: [], keepIsos, mode: mode && RMODES[mode] ? mode : null, vref: Math.max(4, bestFast(90, w0.tws)) / 3600, sref: Math.max(4, 0.85 * bestFast(90, w0.tws)) };
 }
 // Un pas d'isochrone, découpé : reprend là où il s'était arrêté si l'échéance `until` (performance.now) est dépassée.
 // Résultat identique au calcul d'un bloc ; seules les tranches changent (le pas transat pouvait prendre 15-20 ms d'un coup).
@@ -2220,38 +2352,43 @@ function routeStep(st, until = Infinity) {
     if (Math.abs(n.lat - dest.lat) * 60 > reachMax) continue;
     const d = gcDist(n.lat, n.lon, dest.lat, dest.lon); if (d > reachMax) continue;
     const brg = gcBrg(n.lat, n.lon, dest.lat, dest.lon), twa = norm180(w.twd - brg), s = bestFast(Math.abs(twa), w.tws), dd = Math.max(0, d - rr * 0.8);
-    if (s > 0.5 && dd <= s * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 && !segLandLL(n.lat, n.lon, dest.lat, dest.lon, Math.max(0, d - Math.max(rr, st.race ? 1 : 0.05)))) { const ta = n.t + dd / s * 3600; if (!C.best || ta < C.best.t) C.best = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: brg, tws: w.tws }; }
+    if (s > 0.5 && dd <= s * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 && !segLandLL(n.lat, n.lon, dest.lat, dest.lon, Math.max(0, d - Math.max(rr, st.race ? 1 : 0.05)))) { const ta = n.t + dd / s * 3600, c = st.mode ? ta + (n.pen || 0) + rPen(st.mode, Math.abs(twa), w.tws, 0, w.sq, s, st.sref) * (ta - n.t) : ta; if (!C.best || c < C.best.c) C.best = { lat: dest.lat, lon: dest.lon, t: ta, c, parent: n, twa, hdg: brg, tws: w.tws }; }
   }
   if (C.best) { st.best = C.best; st.cur = null; return 'done'; }
   if (st.step >= st.maxSteps || !st.front.length) { // côtier : nouvel essai plus fin, puis plus large (passes étroites, îles à contourner)
     if (st.race && COURSE.coastal && (st.retry || 0) < 2) { st.retry = (st.retry || 0) + 1; st.dt = st.retry === 1 ? 300 : 900; st.maxSteps = Math.round(216000 / st.dt); st.front = [st.s0]; st.step = 0; st.isos = []; st.wide = st.retry === 2; st.cur = null; return null; }
     st.cur = null; return 'fail'; }
-  const bins = C.bins, tol = Math.max(rr, st.race ? (COURSE.coastal ? 0.6 : 2.5) : 0.08);
+  const bins = C.bins, tol = Math.max(rr, st.race ? (COURSE.coastal ? 0.6 : 2.5) : 0.08), RM = st.mode ? RMODES[st.mode] : null, cAng = RM ? RM.ang : 80, cK = RM ? RM.dk : 1.15, cC = RM ? RM.dc : 50, vref = st.vref;
   for (; C.j < st.front.length; C.j++) {
     if ((C.j & 7) === 7 && performance.now() > until) return null;
     const n = st.front[C.j], w = ws[C.j], brgD = gcBrg(n.lat, n.lon, dest.lat, dest.lon), cn = Math.cos(n.lat * D2R), ex = (dest.lon - n.lon) * 60 * cn, ey = (dest.lat - n.lat) * 60, eL = Math.hypot(ex, ey);
     for (let off = -102; off <= 102; off += 6) {
       const h = norm360(brgD + off), twa = norm180(w.twd - h), s = bestFast(Math.abs(twa), w.tws); if (s < 0.3) continue;
-      const nm = s * ((n.parent && Math.sign(twa) !== Math.sign(n.twa)) ? dt - tackLoss : dt) / 3600, hr = h * D2R;
+      const turn = n.parent && Math.sign(twa) !== Math.sign(n.twa), nm = s * (turn ? dt - tackLoss : dt) / 3600, hr = h * D2R;
+      if (st.mode) { C.sS = (C.sS || 0) + s; C.nS = (C.nS || 0) + 1; }
+      const pr = st.mode ? rPen(st.mode, Math.abs(twa), w.tws, off, w.sq, s, st.sref) : 0, pen = st.mode ? (n.pen || 0) + pr * dt + (turn ? RM.tack * tackLoss : 0) : 0;
       const lat = n.lat + nm * Math.cos(hr) / 60, lon = n.lon + nm * Math.sin(hr) / (60 * cn);
       if (eL < nm + tol) { const sx = Math.sin(hr) * nm, sy = Math.cos(hr) * nm, u = clamp((ex * sx + ey * sy) / (nm * nm), 0, 1), cd = Math.hypot(ex - u * sx, ey - u * sy);
-        if (cd <= tol) { const ta = n.t + u * dt; if ((!C.arr || ta < C.arr.t) && !segLandLL(n.lat, n.lon, n.lat + u * sy / 60, n.lon + u * sx / (60 * cn), u * nm)) C.arr = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: h, tws: w.tws }; } }
+        if (cd <= tol) { const ta = n.t + u * dt, c = st.mode ? ta + (n.pen || 0) + pr * u * dt + (turn ? RM.tack * tackLoss : 0) : ta; if ((!C.arr || c < C.arr.c) && !segLandLL(n.lat, n.lon, n.lat + u * sy / 60, n.lon + u * sx / (60 * cn), u * nm)) C.arr = { lat: dest.lat, lon: dest.lon, t: ta, c, parent: n, twa, hdg: h, tws: w.tws }; } }
       const X = (lon - s0.lon) * 60 * cl0, Y = (lat - s0.lat) * 60, db = X * X + Y * Y;
-      if (st.step > 2 && !st.wide && (Math.abs(norm180(Math.atan2(X, Y) * R2D - st.brg0)) > 80 || (X - st.Xd) ** 2 + (Y - st.Yd) ** 2 > (st.D0 * 1.15 + 50) ** 2)) continue;
+      if (st.step > 2 && !st.wide && (Math.abs(norm180(Math.atan2(X, Y) * R2D - st.brg0)) > cAng || (X - st.Xd) ** 2 + (Y - st.Yd) ** 2 > (st.D0 * cK + cC) ** 2)) continue;
       const k = Math.floor(norm360(Math.atan2(X, Y) * R2D) / sector), prev = bins.get(k);
       // au large, près de l'arrivée : on garde aussi le nœud le plus proche de l'arrivée par secteur de 6° vu depuis l'arrivée
       // (sinon le critère « le plus loin du départ » élimine les nœuds qui contournent une île posée devant l'arrivée)
       const nearK = st.race && !COURSE.coastal && eL < 300 ? Math.floor(norm360(Math.atan2(lon - dest.lon, lat - dest.lat) * R2D) / 6) : -1, de2 = nearK >= 0 ? ((lon - dest.lon) * 60 * cn) ** 2 + ((lat - dest.lat) * 60) ** 2 : 0, pn = nearK >= 0 ? C.near.get(nearK) : null;
-      const keepFar = !(prev && db <= prev.db), keepNear = nearK >= 0 && (!pn || de2 < pn.de2);
+      // profil : progression comparée à pénalité égale (pénalité convertie en milles à la vitesse moyenne du front)
+      const sc = st.mode ? Math.sqrt(db) - pen * vref : db, dn = st.mode && nearK >= 0 ? Math.sqrt(de2) + pen * vref : de2;
+      const keepFar = !(prev && sc <= prev.sc), keepNear = nearK >= 0 && (!pn || dn < pn.dn);
       if (!keepFar && !keepNear) continue;
       if (segLandLL(n.lat, n.lon, lat, lon, nm)) continue;
-      const node = { lat, lon, t: n.t + dt, parent: n, twa, hdg: h, tws: w.tws, db, k, de2 };
+      const node = { lat, lon, t: n.t + dt, parent: n, twa, hdg: h, tws: w.tws, db, k, de2, sc, dn, pen };
       if (keepFar) bins.set(k, node); if (keepNear) C.near.set(nearK, node);
     }
   }
   st.cur = null;
   if (C.arr) { st.best = C.arr; return 'done'; }
   const fr = new Set(bins.values()); C.near.forEach(n => fr.add(n)); st.front = [...fr].sort((a, b) => a.k - b.k); st.step++;
+  if (st.mode) { let m = 0; st.front.forEach(n => { if (n.db > m) m = n.db; }); if (m > 0) st.vref = Math.max(2 / 3600, Math.sqrt(m) / (st.step * dt)); if (C.nS) st.sref = Math.max(3, 0.7 * st.sref + 0.3 * C.sS / C.nS); }
   if (st.keepIsos && st.step % (st.race ? Math.round(21600 / dt) : 5) === 0) { const dec = Math.max(1, Math.ceil(st.front.length / 320)); st.isos.push(st.front.filter((n, i) => i % dec === 0).map(n => [n.lat, n.lon, n.k * sector])); }
   return null;
 }
@@ -2259,12 +2396,12 @@ const flatNodes = best => { const out = []; for (let n = best; n; n = n.parent) 
 function startRouting(dest, shareWithBots) {
   if (!dest) return;
   if (ROUTE.job) ROUTE.job.cancelled = true;
-  const st = makeRouteState(dest, player, true);
+  const st = makeRouteState(dest, player, true, ROUTE.mode);
   Object.assign(ROUTE, { dest, busy: true, err: '', isos: st.isos, steps: 0, t0: gameT, lastAuto: gameT });
   const job = { st, onStep: s => { ROUTE.steps = s.step; }, onDone: (r, s) => {
     if (ROUTE.job !== job) return; ROUTE.job = null;
-    if (r === 'done') { Object.assign(ROUTE, { nodes: flatNodes(s.best), eta: s.best.t, busy: false }); if (ROUTE.follow) toast('Routage mis à jour', 1500);
-      if (shareWithBots) active.forEach(b => { if (!b.isPlayer && b.mi === dest.mi) b.route = { nodes: ROUTE.nodes, mi: dest.mi, t0: gameT - Math.random() * botEvery(b) * 3600 * 0.8, eta: s.best.t }; }); }
+    if (r === 'done') { Object.assign(ROUTE, { nodes: flatNodes(s.best), eta: s.best.t, busy: false, nmode: st.mode || 'normal' }); if (ROUTE.follow) toast('Routage mis à jour', 1500);
+      if (shareWithBots && !st.mode) active.forEach(b => { if (!b.isPlayer && b.mi === dest.mi) b.route = { nodes: ROUTE.nodes, mi: dest.mi, t0: gameT - Math.random() * botEvery(b) * 3600 * 0.8, eta: s.best.t }; }); }
     else Object.assign(ROUTE, { busy: false, err: 'Destination hors de portée (terre ou trop loin)', nodes: null });
   } };
   ROUTE.job = job; enqueueJob(job, true);
@@ -2348,14 +2485,14 @@ function applyAdvice() {
 
 /* ===================== SAUVEGARDE AUTOMATIQUE ===================== */
 const SAVE_KEY = 'gl3d_save_v3';
-const BFIELDS = ['pens', 'reef', 'atStop', 'legT', 'legStart', 'gRec', 'gRecT', 'lat', 'lon', 'hdg', 'dispHdg', 'spd', 'sail', 'trim', 'foilP', 'foilS', 'tgtP', 'tgtS', 'mode', 'lockTwa', 'man', 'queue', 'hoist', 'cant', 'autoSail', 'autoTrim', 'autoFoil', 'penT', 'penF', 'penDur', 'penLabel', 'finished', 'finishT', 'prevTwa', 'track', 'trackT', 'nextDecision', 'heel', 'lift', 'log', 'mi', 'grounded', 'twa', 'tws', 'twd'];
+const BFIELDS = ['pens', 'reef', 'atStop', 'legT', 'legStart', 'gRec', 'gRecT', 'lat', 'lon', 'hdg', 'dispHdg', 'spd', 'sail', 'trim', 'foilP', 'foilS', 'tgtP', 'tgtS', 'mode', 'lockTwa', 'man', 'queue', 'hoist', 'cant', 'autoSail', 'autoTrim', 'autoFoil', 'penT', 'penF', 'penDur', 'penLabel', 'finished', 'finishT', 'prevTwa', 'track', 'trackT', 'nextDecision', 'heel', 'lift', 'log', 'mi', 'grounded', 'twa', 'tws', 'twd', 'mx', 'my', 'ms', 'autoBal', 'fly', 'crashT', 'crashHeat', 'crashes', 'balDP', 'balDH', 'flyK', 'balEff', 'foilEff'];
 let lastSaveReal = 0;
 function saveGame() {
   if (!running || gameT < 1) return;
   try {
     const data = { v: 3, cls: CLS.id, DAILY: DAILY.on ? { ...DAILY } : null, WX_OFF, START_H, FC: { ...FC }, LEG: { ...LEG }, mode: MODE, course: COURSE.id, gameT, realRaceT, accel, TW: { ...TW }, buoys: TRAIN_BUOYS.map(b => b.done), saved: Date.now(),
       boats: active.map(b => { const o = { name: b.name }; BFIELDS.forEach(k => o[k] = b[k]); return o; }),
-      route: ROUTE.nodes ? { dest: ROUTE.dest, eta: ROUTE.eta, nodes: ROUTE.nodes, follow: ROUTE.follow } : null };
+      route: ROUTE.nodes ? { dest: ROUTE.dest, eta: ROUTE.eta, nodes: ROUTE.nodes, follow: ROUTE.follow, nmode: ROUTE.nmode } : null };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data)); lastSaveReal = realT;
   } catch (e) {}
 }
@@ -2366,7 +2503,7 @@ function restoreGame(d) {
   gameT = d.gameT; realRaceT = d.realRaceT || 0; if (d.FC) Object.assign(FC, d.FC); WX_OFF = d.WX_OFF || 0; START_H = d.START_H || 13; windDirty = true; if (d.LEG) Object.assign(LEG, d.LEG); accel = ACCELS.includes(d.accel) ? d.accel : accel; Object.assign(TW, d.TW || {});
   (d.buoys || []).forEach((x, i) => { if (TRAIN_BUOYS[i]) TRAIN_BUOYS[i].done = x; });
   d.boats.forEach(o => { const b = boats.find(x => x.name === o.name); if (b) { BFIELDS.forEach(k => { if (o[k] !== undefined) b[k] = o[k]; }); b.route = null; b.routeJob = null; b.nextDecision = Math.random() * 300; } });
-  if (d.route) Object.assign(ROUTE, { dest: d.route.dest, nodes: d.route.nodes, eta: d.route.eta, follow: !!d.route.follow, lastAuto: gameT, isos: [] });
+  if (d.route) Object.assign(ROUTE, { dest: d.route.dest, nodes: d.route.nodes, eta: d.route.eta, follow: !!d.route.follow, nmode: d.route.nmode || 'normal', lastAuto: gameT, isos: [] });
   else if (MODE === 'race') startRouting(markDest(player.mi));
   $('twAuto').textContent = TW.auto ? 'Vent : variable' : 'Vent : manuel'; $('twAuto').classList.toggle('on', !TW.auto);
   buildAccel(); windDirty = true;
@@ -2425,6 +2562,9 @@ addEventListener('keydown', e => {
     case '1': case '2': case '3': setSail(+k - 1); break;
     case 'a': player.autoSail = !player.autoSail; break; case 'r': player.autoTrim = !player.autoTrim; break; case 'g': if (!noFoil()) player.autoFoil = !player.autoFoil; break; case 'y': toggleGhost(); break; case 'i': reefBy(1); break; case 'o': reefBy(-1); break;
     case 'b': toggleFoil('P'); break; case 'n': toggleFoil('S'); break; case 'f': foilLeeward(); break;
+    case 'z': if (CLS.foils) setBal(player.mx + 0.1, player.ms); break; case 's': if (CLS.foils) setBal(player.mx - 0.1, player.ms); break;
+    case 'e': if (CLS.foils) setBal(player.mx, player.ms + 0.1); break; case 'w': if (CLS.foils) setBal(player.mx, player.ms - 0.1); break;
+    case 'u': if (CLS.foils) { player.autoBal = !player.autoBal; updateBalUI(); } break;
     case 'l': if (ROUTE.nodes) { ROUTE.follow = !ROUTE.follow; toast(`Pilote routeur ${ROUTE.follow ? 'activé' : 'désactivé'}`, 1500); } break;
     case 'k': if (ROUTE.nodes) applyAdvice(); break;
     case 'x': setSound(!AUD.on); break; case 'j': setCycle(!ENV.cycle); break;
@@ -2450,6 +2590,13 @@ $('reefP').onclick = () => reefBy(1); $('reefM').onclick = () => reefBy(-1);
 $('foilP').onclick = () => toggleFoil('P'); $('foilS').onclick = () => toggleFoil('S'); $('foilSwap').onclick = foilLeeward;
 $('trim').oninput = e => { player.autoTrim = false; player.trim = e.target.value / 100; };
 $('aSail').onclick = () => player.autoSail = !player.autoSail; $('aTrim').onclick = () => player.autoTrim = !player.autoTrim; $('aFoil').onclick = () => player.autoFoil = !player.autoFoil;
+{ const pad = $('balPad'); let drag = false;
+  const at = e => { const r = pad.getBoundingClientRect(); setBal(1 - 2 * (e.clientY - r.top) / r.height, 2 * (e.clientX - r.left) / r.width - 1); };
+  pad.addEventListener('pointerdown', e => { drag = true; pad.setPointerCapture(e.pointerId); at(e); e.preventDefault(); e.stopPropagation(); });
+  pad.addEventListener('pointermove', e => { if (drag) { at(e); e.preventDefault(); } });
+  pad.addEventListener('pointerup', () => drag = false); pad.addEventListener('pointercancel', () => drag = false);
+  $('balAuto').onclick = () => { player.autoBal = !player.autoBal; updateBalUI(); };
+}
 $('zIn').onclick = () => { if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov / 1.2, 35, 90); else cam.dist = clamp(cam.dist / 1.4, CLS.cam * 0.25, 4000); };
 $('zOut').onclick = () => { if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov * 1.2, 35, 90); else cam.dist = clamp(cam.dist * 1.4, CLS.cam * 0.25, 4000); };
 $('mobBtn').onclick = () => setMobile(!isMobile());
@@ -2467,13 +2614,14 @@ $('rPick').onclick = () => { ROUTE.pick = !ROUTE.pick; if (ROUTE.pick && !$('tr'
 $('rApply').onclick = () => applyAdvice();
 $('rFollow').onclick = () => { if (!ROUTE.nodes) return; ROUTE.follow = !ROUTE.follow; toast(`Pilote routeur ${ROUTE.follow ? 'activé' : 'désactivé'}`, 1500); };
 $('rClear').onclick = () => clearRoute();
+document.querySelectorAll('#rModes button').forEach(b => b.onclick = () => setRouteMode(b.dataset.m)); updRModes();
 $('rstB').onclick = () => { setupMode('train'); running = true; };
 $('twAuto').onclick = () => { TW.auto = !TW.auto; $('twAuto').textContent = TW.auto ? 'Vent : variable' : 'Vent : manuel'; $('twAuto').classList.toggle('on', !TW.auto); windDirty = true; };
 $('twS').oninput = e => { TW.tws = +e.target.value; $('twSL').textContent = TW.tws + ' nd'; if (TW.auto) $('twAuto').click(); windDirty = true; };
 $('twD').oninput = e => { TW.twd = +e.target.value; $('twDL').textContent = TW.twd + '°'; if (TW.auto) $('twAuto').click(); windDirty = true; };
 const msailBtns = SAILS.map((s, i) => { const b = document.createElement('button'); b.style.borderBottomColor = s.ui; b.innerHTML = `${s.name}<span class="star" style="display:none">★</span>`; b.onclick = () => setSail(i); $('msails').appendChild(b); return b; });
 const sailBtns = SAILS.map((s, i) => { const b = document.createElement('button'); b.style.borderBottomColor = s.ui; b.title = `${s.name} (${i + 1})`; b.innerHTML = `${s.name}<span class="star" style="display:none">★</span>`; b.onclick = () => setSail(i); $('sails').appendChild(b); return b; });
-function accelLabel(a) { return MODE === 'race' ? (a < 60 ? a + ' s/s' : (a / 60) + ' min/s') : '×' + a; }
+function accelLabel(a) { return MODE === 'race' ? (a < 60 ? a + 's/s' : (a / 60) + 'm/s') : '×' + a; }
 function buildAccel() { const el = $('accel'); el.querySelectorAll('button').forEach(b => b.remove()); ACCELS.forEach(a => { const b = document.createElement('button'); b.textContent = accelLabel(a); if (a === accel) b.className = 'on'; b.onclick = () => setAccel(a); el.appendChild(b); }); }
 
 const pointers = new Map(); let pinchD = 0;
@@ -2753,6 +2901,30 @@ function placeBoard() {
     P.style.display = 'none';
   }
 }
+// matossage : point sur le carré, jauges d'assiette et de gîte (zone verte = réglage idéal du moment), état de vol
+// Panneau VOL entre la barre de commandes (centre) et le panneau polaire (droite) quand la place le permet (≥ 165 px)
+function placeBalP() {
+  const P = $('balP'), L = $('balLine'), bc = $('bc').getBoundingClientRect(), br = $('br').getBoundingClientRect(), inP = L.parentNode === P;
+  const gap = br.left - (inP ? bc.right : bc.right) - 24, ok = CLS.foils && !document.body.classList.contains('mobile') && br.width > 0 && gap >= 210; document.body.classList.toggle('balp', ok);
+  if (ok) { if (!inP) P.appendChild(L); const w = Math.min(310, gap); P.style.width = w + 'px'; P.style.left = Math.round(bc.right + 12 + (gap - w) / 2) + 'px'; $('balLine').querySelector('.lbl').textContent = T('VOL · MATOSSAGE', 'FLIGHT · STACKING'); }
+  else if (inP) { $('bc').insertBefore(L, $('trimLine')); $('balLine').querySelector('.lbl').textContent = T('MATOS.', 'STACK'); }
+  return ok;
+}
+function updateBalUI() {
+  const P = player, tol = (BAL[CLS.id] || BAL.imoca).tol, pad = $('balPad');
+  placeBalP();
+  pad.classList.toggle('auto', !!P.autoBal); $('balAuto').classList.toggle('on', !!P.autoBal);
+  $('balDot').style.left = ((clamp(P.ms === undefined ? 0 : P.ms, -1, 1) + 1) / 2 * 100) + '%'; $('balDot').style.top = ((1 - P.mx) / 2 * 100) + '%';
+  const gauge = (id, v, c, hw, lo, hi, txt) => { const g = $(id), f = x => clamp((x - lo) / (hi - lo), 0, 1) * 100, z = g.firstElementChild;
+    z.style.left = f(c - hw) + '%'; z.style.width = (f(c + hw) - f(c - hw)) + '%'; g.lastElementChild.style.left = f(v) + '%'; $(id + 'Txt').textContent = txt; };
+  // assiette : réglage actuel (poids sur l'avant → nez qui pique) et assiette optimale (bouge avec la houle) ; gîte : idem côté latéral
+  const mxO = P.mx - (P.balDP || 0), myO = P.my - (P.balDH || 0), base = 1.2 * (P.fly || 0);
+  const pv = base - 4 * P.mx, po = base - 4 * mxO; gauge('gPitch', pv, po, 0.56 * tol, -5, 5, (pv >= 0 ? '+' : '') + pv.toFixed(1) + '°');
+  const hb = P.heelIdeal || Math.abs(P.heel || 0) || 15, hv = Math.max(0, hb - 7 * (P.my - 0.5)), ho = Math.max(0, hb - 7 * (myO - 0.5));
+  gauge('gHeel', hv, ho, 1.1 * tol, 0, 30, hv.toFixed(0) + '°');
+  $('flyTxt').textContent = P.crashT > 0 ? T('💥 Planté — redécollage dans ', '💥 Crashed — take-off in ') + Math.ceil(P.crashT / 60) + ' min' : P.fly > 0.85 ? T('✈ En vol', '✈ Flying') + ' · ' + T('rendement ', 'efficiency ') + Math.round((P.foilEff || 1) * 100) + ' %' : P.fly > 0.03 ? T('Décollage ', 'Taking off ') + Math.round(P.fly * 100) + ' %' : T('Dans l\'eau', 'In the water');
+}
+function setBal(mx, ms) { player.mx = Math.round(clamp(mx, -1, 1) * 20) / 20; player.ms = Math.round(clamp(ms, -1, 1) * 20) / 20; player.my = player.ms * ((player.twa || 0) >= 0 ? 1 : -1); player.autoBal = false; if (CLS.foils) updateBalUI(); }
 function updateHUD() {
   const w = curWind(), twa = norm180(w.twd - player.hdg), a = Math.abs(twa);
   if (isMobile()) {
@@ -2796,7 +2968,7 @@ function updateHUD() {
     const turnTxt = pl.turnNow ? T(`<b style="color:#ffb36b">${pl.turnNowType} à faire maintenant</b> (la route est sur l'autre bord)`, `<b style="color:#ffb36b">${pl.turnNowType} now</b> (the route is on the other tack)`) : pl.turn ? `${pl.turn.type} dans <b>${fmtIn(pl.turn.dt)}</b>${MODE === 'race' ? ' <span class="muted">(' + fmtRace(gameT + pl.turn.dt) + ')</span>' : ''} → TWA ${twaTxt(pl.turn.toTwa)}` : '<span class="muted">aucune jusqu\'à destination</span>';
     const fb = foilBoost(Math.abs(adv.twa), w.tws), foilTxtNow = pl.foilNow === '0' ? `<b>${T('relevés', 'up')}</b> <span class="muted">(${fb > 0 ? T('gain trop faible', 'gain too small') : T('près ou vent trop faible', 'upwind or wind too light')})</span>` : `<b>${foilName(pl.foilNow)}</b> <span class="muted">(+${Math.round(fb * 100)} %)</span>`;
     const foilNextTxt = pl.foilNext ? ` · ${T('puis', 'then')} <b>${foilName(pl.foilNext.f)}</b> ${pl.foilNext.afterTurn ? T('après la manœuvre', 'after the manoeuvre') : T('dans ', 'in ') + fmtIn(pl.foilNext.dt)}` : '';
-    rt = `<div class="row"><span>Destination</span><b>${ROUTE.dest.mk ? mN(ROUTE.dest.mk) : ROUTE.dest.name}</b></div><div class="row"><span>${T('ETA routage', 'Routing ETA')}</span><b>${MODE === 'race' ? fmtRace(ROUTE.eta) + ' (' + fmtDur(Math.max(0, left)) + ')' : T('dans ', 'in ') + Math.max(0, Math.round(left / 60)) + ' min'}</b></div>`
+    rt = `<div class="row"><span>Destination</span><b>${ROUTE.dest.mk ? mN(ROUTE.dest.mk) : ROUTE.dest.name}</b></div><div class="row"><span>${T('ETA routage', 'Routing ETA')}</span><b>${MODE === 'race' ? fmtRace(ROUTE.eta) + ' (' + fmtDur(Math.max(0, left)) + ')' : T('dans ', 'in ') + Math.max(0, Math.round(left / 60)) + ' min'}</b></div>${routeStatsRow()}`
       + `<div class="advice">${T('Cap conseillé', 'Suggested heading')} <b>${Math.round(adv.hdg)}°</b> · TWA <b style="color:${adv.twa >= 0 ? '#5dff9e' : '#ff6b6b'}">${twaTxt(adv.twa)}</b> · ${T('écart', 'off-track')} <b style="color:${adv.stale ? '#ff8a8a' : '#fff'}">${adv.xtrack.toFixed(MODE === 'race' ? 1 : 2)} nm</b>`
       + `<br>${T('Prochaine manœuvre', 'Next manoeuvre')} : ${turnTxt}`
       + `<br>Foils : ${foilTxtNow}${foilNextTxt}${pl.foilOk ? ' <span style="color:#5dff9e">✓</span>' : ` <span style="color:#ffb36b">⚠ ${T('à régler (F)', 'adjust (F)')}</span>`}`
@@ -2814,7 +2986,7 @@ function updateHUD() {
     const moving = Math.abs(v - tg) > 0.01; el.textContent = `${isMobile() ? (nm === 'Bâbord' ? 'Bd' : 'Tb') : nm} ${moving ? (tg > v ? '⇣ ' : '⇡ ') + Math.round(v * 100) + '%' : (v > 0.5 ? '▼ baissé' : '▲ relevé')}`;
     el.classList.remove('good', 'bad'); const cls = (v > 0.5 || tg > 0.5) ? (isLee && useful ? 'good' : (!isLee ? 'bad' : '')) : ''; if (cls) el.classList.add(cls);
   });
-  const lee = leeP ? player.foilP : player.foilS, wnd = leeP ? player.foilS : player.foilP, ff = foilFactor(lee, wnd, a, w.tws);
+  const lee = leeP ? player.foilP : player.foilS, wnd = leeP ? player.foilS : player.foilP, ff = foilFactor(lee * (CLS.foils && player.flyK !== undefined ? player.flyK : 1), wnd, a, w.tws);
   if (CLS.reef) { const br = bestReef(a, w.tws), pr = plannedReef(player), rr = reefRel(player.reef || 0, a, w.tws);
     $('reefTxt').textContent = (player.reef || 0) + T(' ris', ' reef') + (pr !== (player.reef || 0) ? ' → ' + pr : '');
     $('reefP').classList.toggle('good', br > pr); $('reefM').classList.toggle('good', br < pr);
@@ -2822,10 +2994,11 @@ function updateHUD() {
   if (!CLS.foils) { const r = player.sail === 2 ? broachRisk(a, w.tws, player.trim) * (1 - 0.35 * (player.reef || 0)) : 0, sf = player.surfF || 1;
     $('foilHint').innerHTML = `${sf > 1.06 ? `🏄 <b style="color:#5dff9e">Surf +${Math.round((sf - 1) * 100)} %</b>` : a > 100 && w.tws > 11 ? T('🌊 Portant : le bateau surfe dans les vagues', '🌊 Downwind: the boat surfs the waves') : a < 70 && w.tws > CLS.seaT ? `⚠ Près dans la mer formée : <b style="color:#ff6b6b">−${Math.round(Math.min(45, (w.tws - CLS.seaT) * CLS.seaK * 100))} %</b>` : (bestReef(a, w.tws) !== (player.reef || 0) ? `Ris conseillé : <b>${bestReef(a, w.tws)}</b>` : 'Mini 6.50 : pas de foils')}${r > 0.05 ? ` · Spi : risque de départ au lof <b style="color:${r > 1 ? '#ff6b6b' : '#ffd166'}">${r > 1 ? 'élevé' : 'modéré'}</b>` : ''}`; }
   else $('foilHint').innerHTML = a < 25 ? 'Bateau à plat : relève les deux foils.' : `Gîte sur <b>${leeP ? 'bâbord' : 'tribord'}</b> → foil <b>${leeP ? 'bâbord' : 'tribord'}</b> ${useful ? 'conseillé' : 'peu utile ici'} · effet actuel <b style="color:${ff >= 1 ? '#5dff9e' : '#ff6b6b'}">${ff >= 1 ? '+' : ''}${Math.round((ff - 1) * 100)} %</b>`;
+  if (CLS.foils) updateBalUI(); 
   const to = topt(a), te = trimEff(player.trim, a), d = player.trim - to;
   if (document.activeElement !== $('trim')) $('trim').value = Math.round(player.trim * 100);
   $('trimOpt').style.left = `calc(${to * 100}% - 1px)`;
-  $('trimTxt').innerHTML = `${Math.abs(d) < 0.06 ? '<b style="color:#5dff9e">optimal</b>' : d < 0 ? '<b style="color:#ffd166">trop bordé</b>' : '<b style="color:#ffd166">trop choqué</b>'} · ${Math.round(te * 100)} %`;
+  $('trimTxt').innerHTML = player.autoTrim ? `<b style="color:#8fd3ff">auto</b> · 80 %` : `${Math.abs(d) < 0.06 ? '<b style="color:#5dff9e">optimal</b>' : d < 0 ? '<b style="color:#ffd166">trop bordé</b>' : '<b style="color:#ffd166">trop choqué</b>'} · ${Math.round(te * 100)} %`;
   [['aSail', player.autoSail], ['aTrim', player.autoTrim], ['aFoil', player.autoFoil]].forEach(([id, on]) => $(id).classList.toggle('on', on));
   const m = player.man;
   if (m) { const p = clamp(m.t / m.dur, 0, 1); $('manbar').style.width = (p * 100) + '%'; $('manbar').style.background = isTurnMan(m) ? 'rgba(255,140,40,.45)' : 'rgba(31,143,214,.5)'; $('mantxt').textContent = `${m.label} · ${Math.ceil((m.dur - m.t) / 60)} min · vitesse ${Math.round(manFactor(m, p) * 100)} %`; }
@@ -2842,8 +3015,8 @@ const CONTROLS_FR = `<ul>
   <li><kbd>1</kbd> Foc · <kbd>2</kbd> Génois · <kbd>3</kbd> Spi (★ = meilleure voile) · <kbd>↑</kbd>/<kbd>↓</kbd> ou <kbd>Z</kbd>/<kbd>S</kbd> border / choquer (repère vert = optimal)</li>
   <li><kbd>B</kbd> foil bâbord · <kbd>N</kbd> foil tribord · <kbd>F</kbd> foil sous le vent · Minis et Class40 : <kbd>I</kbd> prendre un ris · <kbd>O</kbd> larguer un ris</li>
   <li><kbd>Y</kbd> afficher / masquer les fantômes · 🛰 nouvelle prévision météo toutes les 6 à 9 min de jeu</li>
-  <li>Routeur : <kbd>K</kbd> appliquer le cap conseillé · <kbd>L</kbd> pilote routeur · 📍 router vers un point de la carte</li>
-  <li>Assistances (−1,5 % chacune) : <kbd>A</kbd> voile auto · <kbd>R</kbd> écoute auto · <kbd>G</kbd> foils auto · pilote routeur</li>
+  <li>Routeur : <kbd>K</kbd> appliquer le cap conseillé · <kbd>L</kbd> pilote routeur · 📍 router vers un point de la carte · profils <b>⚡ Attaque</b> (cherche le vent fort et la zone de vol, route plus longue), <b>Normal</b> (route la plus rapide), <b>🛡 Prudent</b> (route plus directe, moins de manœuvres, évite brise forte et grains)</li>
+  <li>Assistances : <kbd>A</kbd> voile auto, <kbd>G</kbd> foils auto, pilote routeur (−1,5 % chacune) · <kbd>R</kbd> écoute auto (80 % d'efficacité au plus) · <kbd>U</kbd> matossage auto (foils à 75 % de rendement au plus)</li>
   <li><kbd>+</kbd>/<kbd>−</kbd> vitesse du temps · <kbd>M</kbd> carte plein écran · <kbd>C</kbd> caméra (suiveuse, libre, à bord) · <kbd>X</kbd> son · <kbd>P</kbd> pause · <kbd>Échap</kbd> menu</li></ul>`;
 const CONTROLS_EN = `<ul>
   <li><kbd>←</kbd>/<kbd>→</kbd> or <kbd>Q</kbd>/<kbd>D</kbd> steer (<kbd>Shift</kbd> = fine) · <kbd>Space</kbd> tack/gybe · <kbd>T</kbd> lock heading ⇄ TWA · <kbd>V</kbd> VMG angle</li>
@@ -2851,7 +3024,7 @@ const CONTROLS_EN = `<ul>
   <li><kbd>B</kbd> port foil · <kbd>N</kbd> starboard foil · <kbd>F</kbd> leeward foil · Minis and Class40: <kbd>I</kbd> take a reef · <kbd>O</kbd> shake a reef</li>
   <li><kbd>Y</kbd> show / hide ghosts · 🛰 new weather forecast every 6 to 9 min of play</li>
   <li>Router: <kbd>K</kbd> apply suggested heading · <kbd>L</kbd> router autopilot · 📍 route to a point on the map</li>
-  <li>Assists (−1.5 % each): <kbd>A</kbd> auto sail · <kbd>R</kbd> auto trim · <kbd>G</kbd> auto foils · router autopilot</li>
+  <li>Assists: <kbd>A</kbd> auto sail, <kbd>G</kbd> auto foils, router autopilot (−1.5 % each) · <kbd>R</kbd> auto trim (80 % efficiency at most) · <kbd>U</kbd> auto stacking (foils at 75 % efficiency at most)</li>
   <li><kbd>+</kbd>/<kbd>−</kbd> time speed · <kbd>M</kbd> full-screen map · <kbd>C</kbd> camera (chase, free, onboard) · <kbd>X</kbd> sound · <kbd>P</kbd> pause · <kbd>Esc</kbd> menu</li></ul>`;
 Object.defineProperty(window, 'CONTROLS', { get: () => T(CONTROLS_FR, CONTROLS_EN) });
 const sailNm = i => T(SAILS[i].name, ({ Foc: 'Jib', 'Génois': 'Genoa', Spi: 'Spinnaker' })[SAILS[i].name] || SAILS[i].name);
@@ -3023,6 +3196,7 @@ async function launch(info, prep, msg) {
 function start(msg) { MENU_CINE = false; $('overlay').classList.add('hide'); $('overlay').classList.remove('mm', 'mh'); running = true; paused = false; toast(msg, 5000); if (MODE === 'race' && GHOST.list.length && GHOST.on) setTimeout(() => toast(DAILY.on ? `👻 ${GHOST.list.length} fantôme${GHOST.list.length > 1 ? 's' : ''} en course (tes essais du jour) — touche Y pour masquer` : `👻 Ton fantôme (record ${fmtDur(GHOST.list[0].T)}) est en course — touche Y pour le masquer`, 4000), 5200); }
 const HELP_EN = () => `<h1>Help</h1>
     <h3>Manoeuvres</h3><p>The skipper does <b>one manoeuvre at a time</b>; the next ones wait in a queue (3 max). Durations are in race time and depend on the class: a <b>tack</b> or <b>gybe</b> costs speed for a few minutes, a <b>sail change</b> several minutes, moving the <b>foils</b> a few minutes. The helm is locked during a tack or gybe.</p>
+    <h3>Stacking and flight (IMOCA, foiling Proto)</h3><p>The <b>STACK</b> pad moves weight on board: up = bow, down = stern, left = port, right = starboard (keys <kbd>Z</kbd> <kbd>S</kbd> <kbd>W</kbd> <kbd>E</kbd>, <kbd>U</kbd> = auto). The weight stays on the same side after a tack: remember to move it across. To <b>take off</b> you need the leeward foil down, enough wind (IMOCA ≈ 12 kn reaching, 14 downwind, 17 upwind) and the right weight. Take-off takes 1 to 2 min: the boat accelerates, the foils load up, the hull lifts, then the flight settles. too far forward and the boat won't lift, too far aft and it lifts then the stern stalls. <b>In flight</b>, too much to leeward stalls the foil and the boat crashes; too much to windward reduces heel and foil lift. The <b>Pitch</b> and <b>Heel</b> gauges show the angle your setting gives (needle) and the optimal angle (green zone), which moves with the swell: keep the needle in the green. These zones move with the swell, speed and angle. Above ≈ 31 kn (IMOCA) the foil can stall from overspeed. A crash halves your speed and you need 1 to 2 min before taking off again. <b>Auto</b> mode is safe: fewest crashes, but foil efficiency is capped at 75 %. Peak efficiency lies a little forward and to leeward of the green zone, at the cost of more crashes.</p>
     <h3>Weather systems (offshore)</h3><p><b>A</b> Azores high: light wind in its centre, trade winds on its southern flank. <b>D</b> westerly lows, each with a <b>cold front</b> (blue ▲ line: squalls, sharp wind shift as it passes) and a <b>warm front</b> (red ●). Between two lows, a <b>ridge</b> (blue dashes): soft wind, cross it fast or go around. Sometimes an isolated <b>cut-off low</b> (purple D) near the Azores, and <b>tropical waves</b> (orange dashes) crossing the trades with squalls and shifts. The <b>doldrums</b> stay near 5° N.</p>
     <h3>Forecasts</h3><p>Maps and the router use a <b>forecast</b> published every 6 to 9 min of real play (every 1 h 30 of race time in the daily challenge). It is reliable at short range and drifts further out. Each new run recomputes the route: time to review your strategy.</p>
     <h3>Four classes</h3><p><b>IMOCA</b>: heavy and powerful, slow to accelerate, everything happens on the <b>foils</b> when reaching. <b>Class40</b>: no foils, planing scow, reefs, medium manoeuvres. <b>Mini 6.50</b>: light and quick, reefs, beware of broaches under spinnaker. <b>Mini proto</b>: faster, with foils.</p>
@@ -3036,6 +3210,7 @@ function showHelp(fromMenu) {
   if (LANG === 'en') { $('card').innerHTML = HELP_EN() + `<div class="go"><button id="hClose" data-default>${fromMenu ? '← Menu' : '▶ Resume'}</button></div>`; $('overlay').classList.remove('hide'); $('hClose').onclick = () => { if (fromMenu) return showMenu(typeof fromMenu === 'string' ? fromMenu : 'solo'); $('overlay').classList.add('hide'); paused = false; }; return; }
   $('card').innerHTML = `<h1>Aide</h1>
     <h3>Manœuvres</h3><p>Le skipper fait <b>une manœuvre à la fois</b>, les suivantes attendent dans une file (3 au plus). Durées en temps de course : <b>virement</b> 5 min (jusqu'à −55 %), <b>empannage</b> 6 min, <b>changement de voile</b> 10 min (−38 %), <b>foils</b> 4 min (−8 %). Pendant un virement ou un empannage la barre est bloquée. Passer le vent sans manœuvre demandée = manœuvre « non préparée », qui coûte quand même.</p>
+    <h3>Matossage et vol (IMOCA, Proto à foils)</h3><p>Le carré <b>MATOS.</b> place le poids à bord : haut = avant, bas = arrière, gauche = bâbord, droite = tribord (touches <kbd>Z</kbd> <kbd>S</kbd> <kbd>W</kbd> <kbd>E</kbd>, <kbd>U</kbd> = auto). Le poids reste du même bord après un virement : pense à le basculer. Pour <b>décoller</b> il faut le foil sous le vent baissé, assez de vent (IMOCA ≈ 12 nd au travers, 14 au portant, 17 au près) et le bon poids. Le décollage prend 1 à 2 min : le bateau accélère, les foils portent, la coque se soulève puis le vol se stabilise. trop sur l'avant le bateau ne décolle pas, trop sur l'arrière il décolle puis l'arrière décroche. <b>En vol</b>, trop sous le vent le foil décroche et le bateau plante ; trop au vent il gîte moins et le foil porte moins. Les jauges <b>Assiette</b> et <b>Gîte</b> montrent l'angle que donne ton réglage (aiguille) et l'angle optimal (zone verte), qui bouge avec la houle : garde l'aiguille dans le vert. Ces zones bougent avec la houle, la vitesse et l'allure. Au-delà de ≈ 31 nd (IMOCA) le foil peut décrocher en survitesse. Un plantage divise la vitesse par deux et il faut 1 à 2 min avant de redécoller. Le mode <b>Auto</b> est prudent : le moins de plantages, mais le rendement des foils est limité à 75 %. Le meilleur rendement se trouve un peu sur l'avant et sous le vent de la zone verte, au prix de plus de plantages.</p>
     <h3>Systèmes météo (au large)</h3><p><b>A</b> anticyclone des Açores : vent faible au centre, alizés sur son flanc sud. <b>D</b> dépressions d'ouest, chacune avec un <b>front froid</b> (ligne bleue ▲ : grains, forte bascule du vent au passage) et un <b>front chaud</b> (rouge ●). Entre deux dépressions, une <b>dorsale</b> (tirets bleus) : vent mou, à traverser vite ou à contourner. Parfois une <b>goutte froide</b> (D violet) isolée près des Açores, et des <b>ondes tropicales</b> (tirets orange) qui traversent les alizés avec grains et bascules. Le <b>pot-au-noir</b> reste vers 5° N.</p>
     <h3>Prévisions météo</h3><p>Les cartes et le routeur utilisent une <b>prévision</b>, publiée toutes les 6 à 9 min de jeu réel (compteur dans le panneau). Elle est fiable à courte échéance puis s'écarte de la réalité : dépressions décalées, en avance ou en retard, vent ±12 % à 4-5 jours. À chaque nouveau run, le routage est recalculé : c'est le moment de revoir ta stratégie.</p>
     <h3>Ris (Minis)</h3><p>Au-delà de ~18 nd au près (~23 nd au portant) le Mini est surtoilé et perd de la vitesse : prends 1 ris, puis 2 au-dessus de ~24 / 30 nd. Chaque ris coûte de la puissance dans le petit temps, réduit la gîte et le risque de départ au lof. Manœuvre : 2 min 30.</p>
@@ -3195,11 +3370,12 @@ function bindRecovery() {
 }
 /* ----- Traduction des textes fixes de l'interface (le français est la langue de base) ----- */
 const I18N = {
-  'ROUTEUR': 'ROUTER', '🏁 Vers l\'arrivée': '🏁 To the finish', '📍 Point': '📍 Point', 'Appliquer le cap': 'Apply heading', 'Pilote routeur': 'Router autopilot',
+  'ROUTEUR': 'ROUTER', '⚡ Attaque': '⚡ Attack', '🛡 Prudent': '🛡 Safe', 'Attaque : cherche la vitesse (vent fort, zones de vol), quitte à rallonger la route': 'Attack: chases speed (strong wind, flight zones), even on a longer route', 'Normal : route la plus rapide sur la polaire': 'Normal: fastest route on the polar', 'Prudent : route plus courte et plus directe, moins de manœuvres, évite la brise forte et les grains': 'Safe: shorter, more direct route, fewer manoeuvres, avoids strong breeze and squalls', '🏁 Vers l\'arrivée': '🏁 To the finish', '📍 Point': '📍 Point', 'Appliquer le cap': 'Apply heading', 'Pilote routeur': 'Router autopilot',
   'Passe à moins de 500 m des bouées orange, dans l\'ordre que tu veux. Règle le vent en bas à droite.': 'Pass within 500 m of the orange buoys, in any order. Set the wind bottom right.', '↻ Réinitialiser': '↻ Reset',
   '⛶': '⛶', '✕ Fermer': '✕ Close', '≋ Isochrones': '≋ Isochrones', 'Prévision': 'Forecast', 'Vent': 'Wind', '45 nd': '45 kn',
   'VITESSE': 'SPEED', 'CAP': 'HEADING', 'VENT (TWS)': 'WIND (TWS)', 'DIR. VENT (TWD)': 'WIND DIR. (TWD)', 'nd': 'kn', 'Allure :': 'Point of sail:', 'Perf. :': 'Perf.:', 'Gîte :': 'Heel:', 'Pression :': 'Pressure:',
   '⟲ Virer': '⟲ Tack', 'FOILS': 'FOILS', 'Bâbord ▲': 'Port ▲', 'Tribord ▲': 'Stbd ▲', 'Sous le vent': 'Leeward', 'RIS': 'REEFS', '− ris': '− reef', '+ ris': '+ reef', '0 ris': '0 reef',
+  'MATOS.': 'STACK', 'VOL · MATOSSAGE': 'FLIGHT · STACKING', 'Plantages depuis le départ': 'Crashes since the start', 'Glisse le point : haut = avant, bas = arrière, gauche = sous le vent, droite = au vent (Z/S, W/E)': 'Drag the dot: up = bow, down = stern, left = leeward, right = windward (Z/S, W/E)', 'Assiette': 'Pitch', 'Gîte': 'Heel', 'avant': 'bow', 'arrière': 'stern', 'Auto': 'Auto', 'Matossage : déplace le poids à bord (Z/S avant-arrière, W/E bâbord-tribord, U auto)': 'Stacking: move weight on board (Z/S fore-aft, W/E port-starboard, U auto)', 'Glisse le point : haut = avant, bas = arrière, gauche = bâbord, droite = tribord': 'Drag the dot: up = bow, down = stern, left = port, right = starboard', 'Matossage automatique prudent : le moins de plantages, rendement des foils limité à 75 % (U)': 'Safe auto stacking: fewest crashes, foil efficiency capped at 75 % (U)',
   'ÉCOUTE': 'SHEET', 'bordé': 'in', 'choqué': 'eased', '🎥 Suiveuse': '🎥 Chase', 'Aucune manœuvre en cours': 'No manoeuvre in progress', 'Annuler la dernière en file': 'Cancel last queued',
   'Réduire': 'Fold', 'Course': 'Race', 'Réglages': 'Trim', 'Carte': 'Map', 'Caméra': 'Camera', 'Pause': 'Pause', 'Menu': 'Menu',
   'Voile auto': 'Auto sail', 'Écoute auto': 'Auto trim', 'Foils auto': 'Auto foils', 'Temps': 'Time', 'Vent : variable': 'Wind: variable', 'Force': 'Speed', 'Direction': 'Direction', 'PAUSE': 'PAUSE',
@@ -3209,7 +3385,7 @@ const I18N = {
   '10° à bâbord': '10° to port', '1° à bâbord (← / Q)': '1° to port (← / Q)', 'Verrouiller le cap ou l\'angle au vent (T)': 'Lock heading or wind angle (T)', '1° à tribord (→ / D)': '1° to starboard (→ / D)', '10° à tribord': '10° to starboard',
   'Virer / empanner (Espace)': 'Tack / gybe (Space)', 'Angle VMG optimal (V)': 'Optimal VMG angle (V)', 'Foil bâbord (B)': 'Port foil (B)', 'Foil tribord (N)': 'Starboard foil (N)', 'Foil sous le vent baissé, au vent relevé (F)': 'Leeward foil down, windward up (F)',
   'Larguer un ris (O)': 'Shake a reef (O)', 'Prendre un ris (I)': 'Take a reef (I)', 'Caméra suiveuse / libre / à bord (C)': 'Chase / free / onboard camera (C)', 'Zoom avant': 'Zoom in', 'Zoom arrière': 'Zoom out', 'Réduire / agrandir les commandes': 'Fold / unfold controls',
-  'Choix automatique de la voile (A) — coûte 1,5 % de vitesse': 'Automatic sail choice (A) — costs 1.5 % speed', 'Réglage automatique de l\'écoute (R) — coûte 1,5 %': 'Automatic sheet trim (R) — costs 1.5 %', 'Gestion automatique des foils (G) — coûte 1,5 %': 'Automatic foils (G) — costs 1.5 %',
+  'Choix automatique de la voile (A) — coûte 1,5 % de vitesse': 'Automatic sail choice (A) — costs 1.5 % speed', 'Réglage automatique de l\'écoute (R) — 80 % d\'efficacité au plus': 'Automatic sheet trim (R) — 80 % efficiency at most', 'Gestion automatique des foils (G) — coûte 1,5 %': 'Automatic foils (G) — costs 1.5 %',
 };
 const I18N_SKIP = new Set(['card', 'tlBody', 'rInfo', 'board', 'foilHint', 'trimTxt', 'mantxt', 'rnext', 'manq', 'toast', 'shoreWarn', 'tlTitle', 'iAll', 'iPerf', 'iHeel', 'iBaro', 'fcstL', 'reefTxt', 'msails', 'sails', 'accel']);
 function applyStaticLang() {
@@ -3288,7 +3464,7 @@ function renderResults() {
   const A = player.award; $('card').innerHTML = `<h1>${COURSE.coastal ? cN(COURSE) : COURSE.id === 'fastnet' ? 'Fastnet' : COURSE.id === 'minitransat' ? 'Mini Transat' : COURSE.id === 'indien' ? T('Océan Indien', 'Indian Ocean') : 'Transat'} — <span>${ord(r)}</span> / ${active.length}</h1>
     <p>${T('Temps de course', 'Race time')} : <b>${fmtDur(player.finishT)}</b> · ${player.log.toFixed(0)} ${T('nm parcourus', 'nm sailed')} · ${fmtClock(realRaceT)} ${T('de jeu', 'of play')}${best ? ` · ${T('meilleur temps', 'best time')} : ${fmtDur(best)}` : ''}. ${T('La flotte continue, le classement se met à jour.', 'The fleet sails on, standings keep updating.')}</p>
     ${A ? awardHtml(A) + careerBadge() : ''}
-    <table>${st.map((b, i) => `<tr class="${b.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="background:${b.color}"></span> ${b.isPlayer ? T('Vous', 'You') : b.name}</td><td style="color:#7fa3bd">${b.strat ? T(b.strat, b.strat.replace('Routage toutes les', 'Routes every').replace(' h', ' h')) : ''}</td><td style="color:#7fa3bd">${b.legT && b.legT.length ? 'E1 ' + fmtDur(b.legT[0]) + (b.finished ? ' · E2 ' + fmtDur(b.finishT - b.legT[0]) : '') : ''}</td><td style="text-align:right">${b.finished ? fmtDur(b.finishT) : T('en mer · ', 'at sea · ') + dtf(b).toFixed(0) + ' nm'}</td></tr>`).join('')}</table>
+    <table>${st.map((b, i) => `<tr class="${b.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="background:${b.color}"></span> ${b.isPlayer ? T('Vous', 'You') : b.name}</td><td style="color:#7fa3bd">${b.strat ? T(b.strat, b.strat.replace('Routage toutes les', 'Routes every').replace('régleur d’élite', 'elite trimmer').replace('très bon régleur', 'very good trimmer').replace('bon régleur', 'good trimmer').replace('régleur moyen', 'average trimmer').replace('régleur prudent', 'cautious trimmer').replace(' h', ' h')) : ''}</td><td style="color:#7fa3bd">${b.legT && b.legT.length ? 'E1 ' + fmtDur(b.legT[0]) + (b.finished ? ' · E2 ' + fmtDur(b.finishT - b.legT[0]) : '') : ''}</td><td style="text-align:right">${b.finished ? fmtDur(b.finishT) : T('en mer · ', 'at sea · ') + dtf(b).toFixed(0) + ' nm'}</td></tr>`).join('')}</table>
     <div class="go"><button id="again" data-default>↻ ${T('Rejouer cette course', 'Race again')}</button><button id="anaBtn" class="sec">📈 ${T('Analyse de course', 'Race analysis')}</button><button id="watch" class="sec">${T('Suivre la flotte', 'Watch the fleet')}</button><button id="toMenu" class="sec">Menu</button></div>`;
   $('again').onclick = () => launch(ldInfo(COURSE), () => setupMode('race', COURSE.id), T('Nouveau départ !', 'New start!'));
   $('anaBtn').onclick = () => showAnalysis();
@@ -3391,6 +3567,12 @@ function updateHeads(b, v, cd, SD, tr, side, flutter, seed, rdt) {
    - étrave qui retombe sur l'eau après une crête (vitesse relative de chute > 2,5 m/s) : claquement, gerbe latérale.
    Le calcul se fait sur la mer complète (houle + vagues du vent), pas sur la mer filtrée qui pilote le mouvement de la coque. */
 const _bw = new THREE.Vector3();
+// plantage d'un foiler : la coque retombe d'un coup, deux énormes nappes d'eau, coup dans la caméra
+function crashSplash(b, px, pz, fx, fz, rx, rz) {
+  const k = b.vis.cd.k, sz = 0.55 + 0.45 * k, bv = (b.dspd || b.spd) * KN, P = (lx, ly, lz) => [px + (rx * lx - fx * lz) * k, ly, pz + (rz * lx - fz * lz) * k];
+  sideSheet(P, waveH(px, pz), fx, fz, rx, rz, bv, 1.7, sz, Math.round(260 * sz), 0, 9, 2.8);
+  if (b.isPlayer) { sfxSplash(1.5); camKick = Math.min(1.2, camKick + 1); }
+}
 function bowImpact(b, v, M, fp, px, pz, fx, fz, rx, rz, rdt) {
   if (!fp || b.lift > 0.9) return;
   const R = v.root, sc = R.scale.x, fb = v.stl ? v.stl.meta.bowY : 0.85 * v.cd.k, sp = b.dspd || b.spd, bv = sp * KN, k = v.cd.k, sz = 0.55 + 0.45 * k;
@@ -3429,18 +3611,28 @@ function updateBoatVisual(b, rdt) {
   let hb = 0, hs = 0, hr = 0, hl = 0, hm = 0;
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const q = seaLow(px + fx * l * i + rx * w * j, pz + fz * l * i + rz * w * j); hm += q / 9; if (i > 0) hb += q / 3; if (i < 0) hs += q / 3; if (j > 0) hr += q / 3; if (j < 0) hl += q / 3; }
   const twa = norm180((b.twd || 0) - b.dispHdg), a = Math.abs(twa), side = twa >= 0 ? 1 : -1;
-  const lee = side > 0 ? b.foilP : b.foilS, boost = lee * Math.min(0.45, foilBoost(a, b.tws || 10) * 0.7) * Math.min(1, b.spd / 12); // visuel : gain de vitesse → portance apparente bornée
+  // décollage vu en temps réel quelle que soit l'accélération du temps : ≥ 6 s pour sortir la coque, retombée immédiate au plantage
+  if (CLS.foils && b.fly !== undefined) { const fv = b.flyV || 0; b.flyV = b.fly < fv ? (b.crashT > 0 ? b.fly : Math.max(b.fly, fv - rdt / 2.5)) : Math.min(b.fly, fv + rdt / 6); }
+  const fV = CLS.foils && b.fly !== undefined ? b.flyV : 1, hullUp = smooth(0.3, 0.85, fV);
+  const lee = side > 0 ? b.foilP : b.foilS, boost = lee * Math.min(0.45, foilBoost(a, b.tws || 10) * 0.7) * Math.min(1, b.spd / 12) * (CLS.foils && b.fly !== undefined ? 0.08 + 0.92 * hullUp : 1); // portance apparente : la coque sort de l'eau entre 30 et 85 % du décollage
   const cd = v.cd, hf = a < 45 ? 1 : Math.max(0.2, 1 - (a - 45) / 110);
   let heelT = a < 25 ? 0 : side * Math.min(CLS.heelMax, (b.tws || 12) * cd.heel) * hf * Math.min(1, b.spd / (6 * cd.k + 2) + 0.3);
   // bateau à foils : il gîte sur le foil sous le vent pour décoller ; plus le foil porte, plus la gîte se cale (jusqu'à ≈ 1,1 × gîte max)
   if (boost > 0.01 && a >= 40) heelT = side * Math.max(Math.abs(heelT), CLS.heelMax * (0.6 + 0.5 * Math.min(1, boost / 0.45)) * Math.min(1, b.spd / 12));
+  if (CLS.foils && b.fly !== undefined && a >= 40 && fV > 0.08) heelT = side * Math.max(Math.abs(heelT), CLS.heelMax * (0.7 + 0.35 * smooth(0.08, 0.35, fV))); // les foils portent : le bateau se cale sur sa gîte
   heelT *= 1 - 0.14 * (b.reef || 0);
+  // matossage : le poids au vent redresse le bateau, sous le vent il le couche ; l'assiette suit le poids avant/arrière
+  b.heelIdeal = Math.abs(heelT); let pitchT = 0;
+  if (CLS.foils && BAL[CLS.id] && a >= 25) { heelT += side * -7 * (b.balDH || 0); pitchT = (-4 * (b.balDP || 0) + 1.2 * (b.flyV || 0)) * D2R; }
+  if (b.crashFx > 0) { pitchT -= 0.13 * Math.sin(Math.PI * Math.min(1, (1 - b.crashFx) * 1.6)); b.crashFx = Math.max(0, b.crashFx - rdt * 0.5); }
+  b.pitchV = (b.pitchV || 0) + (pitchT - (b.pitchV || 0)) * Math.min(1, rdt * 1.6);
   // départ au lof : le bateau se couche puis se redresse
   if (b.broachT > 0) { b.broachT = Math.max(0, b.broachT - rdt * 0.35); heelT += side * 38 * Math.sin(Math.PI * Math.min(1, (1 - b.broachT) * 2.2)) * (b.broachT > 0 ? 1 : 0); }
   // surf (Mini) : au portant dans la brise, le bateau accélère en descendant la face des vagues
   let surfT = 1; if (cd.surf && a > 95 && a < 172 && b.sail > 0) { const amp = smooth(11, 20, b.tws || 0) * 0.45 * cd.surf * Math.exp(-(((a - 140) / 32) ** 2)); surfT = 1 + amp * clamp((hs - hb) / (0.8 + seaAmp * 0.6) + 0.15, -0.5, 1.2); }
-  b.surfF = (b.surfF || 1) + (surfT - (b.surfF || 1)) * Math.min(1, rdt * 1.5); b.dspd = b.spd * b.surfF;
-  b.heel += (heelT - b.heel) * Math.min(1, rdt * 1.5); b.lift += (boost * 2.3 * (cd ? cd.k : 1) - b.lift) * Math.min(1, rdt * 0.8);
+  b.surfF = (b.surfF || 1) + (surfT - (b.surfF || 1)) * Math.min(1, rdt * 1.5);
+  b.spdV = b.spdV === undefined ? b.spd : b.spdV + (b.spd - b.spdV) * Math.min(1, rdt / 1.6); b.dspd = b.spdV * b.surfF; // accélération visible en temps réel
+  b.heel += (heelT - b.heel) * Math.min(1, rdt * 1.5); b.lift += (boost * 2.3 * (cd ? cd.k : 1) - b.lift) * Math.min(1, rdt * 0.5);
   b.cant += ((a < 25 || !cd.cant ? 0 : side * 0.6) - b.cant) * Math.min(1, rdt * 1.2);
   const damp = 1 - Math.min(0.6, b.lift / 1.5);
   // inertie : pilonnement, tangage et roulis suivent la mer via un ressort amorti (période propre ≈ 1,4 s en Mini, 2,2 s en IMOCA)
@@ -3451,7 +3643,8 @@ function updateBoatVisual(b, rdt) {
     M.vp += (om * om * (tP - M.p) - 2 * ze * om * M.vp) * dt; M.p += M.vp * dt;
     M.vr += (om * om * 0.8 * (tR - M.r) - 2 * ze * om * M.vr) * dt; M.r += M.vr * dt; }
   v.root.position.set(px, M.y * damp + b.lift - 0.1, pz);
-  v.root.rotation.set(M.p * damp + b.lift * 0.025 - (b.surfF - 1) * 0.12, -h, M.r * damp + b.heel * D2R);
+  v.root.rotation.set(M.p * damp + b.lift * 0.025 - (b.surfF - 1) * 0.12 + (b.pitchV || 0), -h, M.r * damp + b.heel * D2R);
+  if (b.crashFx > 0.98 && !b.crashShown) { b.crashShown = true; crashSplash(b, px, pz, fx, fz, rx, rz); } else if (b.crashFx < 0.5) b.crashShown = false;
   if (!b.isGhost && V_MASK_ON && v.maskKey !== (v.stl || 'param')) waterMask(v, MASK_Y[CLS.id] || 0.5);
   if (!b.isGhost && Math.hypot(px - camera.position.x, pz - camera.position.z) < 900) bowImpact(b, v, M, fp, px, pz, fx, fz, rx, rz, rdt);
   v.keel.rotation.z = b.cant;
