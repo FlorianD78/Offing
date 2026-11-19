@@ -499,7 +499,7 @@ function gaussAx(lat, lon, cLat, cLon, sa, sc, brg) {
 const llAt = (lat, lon, brg, dist) => { const b = brg * D2R, la = lat + Math.cos(b) * dist / 60; return [la, lon + Math.sin(b) * dist / (60 * Math.cos(((lat + la) / 2) * D2R))]; };
 let WX_OFF = 0, START_H = 13;
 /* ----- Défi du jour : même météo, mêmes prévisions et même hasard pour tous les joueurs du jour ; simulation à pas fixe, ordres enregistrés ----- */
-const DSTEP = 1, ENGINE_VER = 10; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
+const DSTEP = 1, ENGINE_VER = 11; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
 const DAILY = { on: false, day: '', seed: 0, K: 0, acc: 0, log: null, lastCtl: null };
 let IN_STEP = false;
 function parisDay() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
@@ -1881,13 +1881,16 @@ const raceTime = b => (b.legT || []).reduce((x, y) => x + y, 0) + (b.atStop ? 0 
 const curMarks = () => COURSE.marks;
 
 /* ===================== FLOTTE ===================== */
+/* Niveaux des concurrents (vitesse relative à des réglages parfaits, assistances comprises côté joueur, mesurée vent et mer imposés) :
+   joueur tout-auto ≈ 0,77 · joueur manuel centré ≈ 1,00 (IMOCA) · réglage fin au pic ≈ 1,03.
+   Les bots s'étagent de 0,79 à 0,975 : le tout-auto lutte avec la queue de flotte, le manuel soigné vise le podium, le réglage fin la victoire. */
 const BOAT_DEFS = [
   { name: 'Vous', hull: 0xd62839, acc: 0xff5d73, player: true },
-  { name: 'Albatros', hull: 0x1d3557, acc: 0x4ea8de, skill: 0.955, every: 6, hyst: 0.06, strat: 'Routage toutes les 6 h' },
-  { name: 'Sterne', hull: 0xf4a261, acc: 0xe76f51, skill: 0.95, every: 12, hyst: 0.1, strat: 'Routage toutes les 12 h' },
-  { name: 'Fou de Bassan', hull: 0x2a9d8f, acc: 0x8ad9c9, skill: 0.965, every: 9, hyst: 0.05, strat: 'Routage toutes les 9 h' },
-  { name: 'Puffin', hull: 0xffd60a, acc: 0x222222, skill: 0.94, every: 24, hyst: 0.12, strat: 'Routage toutes les 24 h' },
-  { name: 'Goéland', hull: 0x6a4c93, acc: 0xc77dff, skill: 0.958, every: 18, hyst: 0.08, strat: 'Routage toutes les 18 h' },
+  { name: 'Albatros', hull: 0x1d3557, acc: 0x4ea8de, skill: 0.975, every: 6, hyst: 0.06, strat: 'Routage toutes les 6 h · régleur d’élite' },
+  { name: 'Sterne', hull: 0xf4a261, acc: 0xe76f51, skill: 0.885, every: 12, hyst: 0.1, strat: 'Routage toutes les 12 h · bon régleur' },
+  { name: 'Fou de Bassan', hull: 0x2a9d8f, acc: 0x8ad9c9, skill: 0.93, every: 9, hyst: 0.05, strat: 'Routage toutes les 9 h · très bon régleur' },
+  { name: 'Puffin', hull: 0xffd60a, acc: 0x222222, skill: 0.79, every: 24, hyst: 0.12, strat: 'Routage toutes les 24 h · régleur prudent' },
+  { name: 'Goéland', hull: 0x6a4c93, acc: 0xc77dff, skill: 0.835, every: 18, hyst: 0.08, strat: 'Routage toutes les 18 h · régleur moyen' },
 ];
 const boats = BOAT_DEFS.map(d => ({
   name: d.name, isPlayer: !!d.player, skill: d.skill || 1, hyst: d.hyst || 0, every: d.every || 12, strat: d.strat, color: hexCss(d.player ? d.acc : d.hull),
@@ -2138,7 +2141,7 @@ function balUpdate(b, w, a, twa, dt, pl) {
   const lee = twa >= 0 ? b.foilP : b.foilS, fb = foilBoost(a, w.tws), F = CLS.foil;
   b.crashHeat = (b.crashHeat || 0) * Math.exp(-dt / 3600); if (b.crashT > 0) b.crashT -= dt;
   const wMin = flyTws(a) * P.wk + 1.2 * b.crashHeat;
-  const can = lee > 0.9 && fb > 0.06 && a >= 40 && !isTurnMan(b.man) && !(b.man && b.man.type === 'foil') && b.crashT <= 0 && b.spd >= F.v0 && w.tws >= wMin - 0.5;
+  const can = lee > 0.9 && fb > 0.06 && a >= 40 && !isTurnMan(b.man) && !(b.man && b.man.type === 'foil') && b.crashT <= 0 && b.spd >= F.v0 * (pl ? Math.min(1, b.costK || 1) : 1) && w.tws >= wMin - 0.5; // vitesse de décollage rapportée au potentiel : les assistances freinent mais n'empêchent pas de voler
   const q = (1 - smooth(0.12 * tol, 0.38 * tol, dP)) * smooth(wMin - 0.5, wMin + 2, w.tws);   // trop sur l'avant ou vent trop juste : décollage lent ou impossible
   b.fly = can ? clamp(b.fly + (q > 0.02 ? q / P.rate : -1 / 40) * dt, 0, 1) : clamp(b.fly - dt / 30, 0, 1);
   // portance obtenue : partielle dans l'eau, totale en vol ; au vent → moins de gîte, foil moins efficace ; sous le vent → un peu plus de puissance
@@ -2152,11 +2155,11 @@ function balUpdate(b, w, a, twa, dt, pl) {
   if (b.crashT > 0) b.balEff *= 0.75; // le bateau se vautre après un plantage
   if (b.fly > 0.4) {
     const tF = dP > 0 ? (dP / (0.14 * tol)) ** 2 : 0, tA = dP < 0 ? (dP / (0.2 * tol)) ** 2 : 0, tL = dH < 0 ? (dH / (0.16 * tol)) ** 2 : 0, tV = b.spd > P.vs ? (b.spd - P.vs) / 1.3 : 0;
-    const lam = Math.min(60, 0.12 * (0.4 + 1.2 * sea) * Math.exp(tF + tA + tL + tV - 2.5 * clamp(dH, 0, 0.3)) * b.fly);
+    const lam = Math.min(20, 0.04 * (0.4 + 1.2 * sea) * Math.exp(tF + tA + tL + tV - 2.5 * clamp(dH, 0, 0.3)) * b.fly);
     const r = DAILY.on && pl ? hrand(DAILY.seed ^ 0x7c2a, DAILY.K) : Math.random();
     if (r < 1 - Math.exp(-lam * dt / 3600)) {
       const m = Math.max(tF, tA, tL, tV), cause = m === tV && tV > 0 ? 'speed' : m === tF && tF > 0 ? 'nose' : m === tA && tA > 0 ? 'tail' : m === tL && tL > 0 ? 'lee' : 'sea';
-      b.fly = 0; b.spd *= 0.5; b.crashT = 60 + 60 * Math.min(1, sea); b.crashHeat += 1; b.crashes = (b.crashes || 0) + 1; b.crashFx = 1; b.crashCause = cause;
+      b.fly = 0; b.spd *= 0.4; b.crashT = 150 + 150 * Math.min(1, sea); b.crashHeat += 1; b.crashes = (b.crashes || 0) + 1; b.crashFx = 1; b.crashCause = cause; // plantages ≈ 3× plus rares qu’avant (v10), mais plus longs à digérer : même coût moyen, des événements qui comptent
       if (b.isPlayer && running) { const L = { speed: T('survitesse, le foil a décroché', 'overspeed, the foil stalled'), nose: T('trop de poids sur l\'avant, le nez a enfourné', 'too much weight forward, the bow dug in'), tail: T('trop de poids sur l\'arrière, l\'arrière a décroché', 'too much weight aft, the stern stalled'), lee: T('trop de poids sous le vent, le foil a décroché', 'too much weight to leeward, the foil stalled'), sea: T('la mer a eu raison du vol', 'the sea knocked you off the foil') };
         toast(`💥 ${T('Le bateau a planté', 'Crash')} : ${L[cause]}`, 3000); }
     }
@@ -2195,7 +2198,7 @@ function stepBoat(b, dt) {
       if (idle) { const fb = foilBoost(a, w.tws), lee = twa >= 0 ? b.tgtP : b.tgtS, on = fb > 0.03 ? 1 : fb < 0.01 ? 0 : lee; const P = twa >= 0 ? on : 0, S = twa < 0 ? on : 0; if (P !== b.tgtP || S !== b.tgtS) { b.tgtP = P; b.tgtS = S; requestMan(b, { type: 'foil', P, S }); } }
       if (pl) cost *= ASSIST;
     }
-    if (CLS.foils) balUpdate(b, w, a, twa, dt, pl);
+    b.costK = cost; if (CLS.foils) balUpdate(b, w, a, twa, dt, pl);
     let target = speedOf(b, twa, w.tws) * b.skill * cost * mf;
     if (w.tws > CLS.seaT && a < 70) target *= Math.max(0.55, 1 - (w.tws - CLS.seaT) * CLS.seaK);
     // Mini : sous spi dans la brise, risque de départ au lof (le bateau se couche, le spi faseye, grosse perte de vitesse)
@@ -3461,7 +3464,7 @@ function renderResults() {
   const A = player.award; $('card').innerHTML = `<h1>${COURSE.coastal ? cN(COURSE) : COURSE.id === 'fastnet' ? 'Fastnet' : COURSE.id === 'minitransat' ? 'Mini Transat' : COURSE.id === 'indien' ? T('Océan Indien', 'Indian Ocean') : 'Transat'} — <span>${ord(r)}</span> / ${active.length}</h1>
     <p>${T('Temps de course', 'Race time')} : <b>${fmtDur(player.finishT)}</b> · ${player.log.toFixed(0)} ${T('nm parcourus', 'nm sailed')} · ${fmtClock(realRaceT)} ${T('de jeu', 'of play')}${best ? ` · ${T('meilleur temps', 'best time')} : ${fmtDur(best)}` : ''}. ${T('La flotte continue, le classement se met à jour.', 'The fleet sails on, standings keep updating.')}</p>
     ${A ? awardHtml(A) + careerBadge() : ''}
-    <table>${st.map((b, i) => `<tr class="${b.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="background:${b.color}"></span> ${b.isPlayer ? T('Vous', 'You') : b.name}</td><td style="color:#7fa3bd">${b.strat ? T(b.strat, b.strat.replace('Routage toutes les', 'Routes every').replace(' h', ' h')) : ''}</td><td style="color:#7fa3bd">${b.legT && b.legT.length ? 'E1 ' + fmtDur(b.legT[0]) + (b.finished ? ' · E2 ' + fmtDur(b.finishT - b.legT[0]) : '') : ''}</td><td style="text-align:right">${b.finished ? fmtDur(b.finishT) : T('en mer · ', 'at sea · ') + dtf(b).toFixed(0) + ' nm'}</td></tr>`).join('')}</table>
+    <table>${st.map((b, i) => `<tr class="${b.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="background:${b.color}"></span> ${b.isPlayer ? T('Vous', 'You') : b.name}</td><td style="color:#7fa3bd">${b.strat ? T(b.strat, b.strat.replace('Routage toutes les', 'Routes every').replace('régleur d’élite', 'elite trimmer').replace('très bon régleur', 'very good trimmer').replace('bon régleur', 'good trimmer').replace('régleur moyen', 'average trimmer').replace('régleur prudent', 'cautious trimmer').replace(' h', ' h')) : ''}</td><td style="color:#7fa3bd">${b.legT && b.legT.length ? 'E1 ' + fmtDur(b.legT[0]) + (b.finished ? ' · E2 ' + fmtDur(b.finishT - b.legT[0]) : '') : ''}</td><td style="text-align:right">${b.finished ? fmtDur(b.finishT) : T('en mer · ', 'at sea · ') + dtf(b).toFixed(0) + ' nm'}</td></tr>`).join('')}</table>
     <div class="go"><button id="again" data-default>↻ ${T('Rejouer cette course', 'Race again')}</button><button id="anaBtn" class="sec">📈 ${T('Analyse de course', 'Race analysis')}</button><button id="watch" class="sec">${T('Suivre la flotte', 'Watch the fleet')}</button><button id="toMenu" class="sec">Menu</button></div>`;
   $('again').onclick = () => launch(ldInfo(COURSE), () => setupMode('race', COURSE.id), T('Nouveau départ !', 'New start!'));
   $('anaBtn').onclick = () => showAnalysis();
