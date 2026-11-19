@@ -367,7 +367,7 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
   <div class="sails" id="sails"></div>
   <div class="assist">
     <button id="aSail" title="Choix automatique de la voile (A) — coûte 1,5 % de vitesse">Voile auto</button>
-    <button id="aTrim" title="Réglage automatique de l'écoute (R) — 80 % d'efficacité au plus">Écoute auto</button>
+    <button id="aTrim" title="Réglage automatique de l'écoute (R) — 95 % d'efficacité au plus">Écoute auto</button>
     <button id="aFoil" title="Gestion automatique des foils (G) — coûte 1,5 %">Foils auto</button>
   </div>
   <div class="accel" id="accel"><span>Temps</span></div>
@@ -499,7 +499,7 @@ function gaussAx(lat, lon, cLat, cLon, sa, sc, brg) {
 const llAt = (lat, lon, brg, dist) => { const b = brg * D2R, la = lat + Math.cos(b) * dist / 60; return [la, lon + Math.sin(b) * dist / (60 * Math.cos(((lat + la) / 2) * D2R))]; };
 let WX_OFF = 0, START_H = 13;
 /* ----- Défi du jour : même météo, mêmes prévisions et même hasard pour tous les joueurs du jour ; simulation à pas fixe, ordres enregistrés ----- */
-const DSTEP = 1, ENGINE_VER = 11; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
+const DSTEP = 1, ENGINE_VER = 12; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
 const DAILY = { on: false, day: '', seed: 0, K: 0, acc: 0, log: null, lastCtl: null };
 let IN_STEP = false;
 function parisDay() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
@@ -1882,7 +1882,7 @@ const curMarks = () => COURSE.marks;
 
 /* ===================== FLOTTE ===================== */
 /* Niveaux des concurrents (vitesse relative à des réglages parfaits, assistances comprises côté joueur, mesurée vent et mer imposés) :
-   joueur tout-auto ≈ 0,77 · joueur manuel centré ≈ 1,00 (IMOCA) · réglage fin au pic ≈ 1,03.
+   joueur tout-auto ≈ 0,91 · joueur manuel centré ≈ 1,00 (IMOCA) · réglage fin au pic ≈ 1,03.
    Les bots s'étagent de 0,79 à 0,975 : le tout-auto lutte avec la queue de flotte, le manuel soigné vise le podium, le réglage fin la victoire. */
 const BOAT_DEFS = [
   { name: 'Vous', hull: 0xd62839, acc: 0xff5d73, player: true },
@@ -2193,7 +2193,7 @@ function stepBoat(b, dt) {
     const idle = !b.man && !b.queue.length;
     if (b.autoSail && CLS.reef && idle && !b.queue.length) { const br = bestReef(a, w.tws); if (br !== (b.reef || 0) && reefRel(b.reef || 0, a, w.tws) < (pl ? 0.985 : 0.975)) requestMan(b, { type: 'reef', toReef: br }); }
     if (b.autoSail) { if (idle && !b.queue.length) { const bs = bestSail(a, w.tws); if (bs !== b.sail && sailEff(bs, a, w.tws) > sailEff(b.sail, a, w.tws) * (pl ? 1.03 : 1.04)) requestMan(b, { type: 'sail', toSail: bs }); } if (pl) cost *= ASSIST; }
-    if (b.autoTrim) { b.trim = topt(a); if (pl) cost *= 0.8; } // écoute auto : 80 % d'efficacité au plus — régler à la main paie
+    if (b.autoTrim) { b.trim = topt(a); if (pl) cost *= 0.95; } // écoute auto : 95 % d'efficacité au plus — régler à la main paie
     if (b.autoFoil) {
       if (idle) { const fb = foilBoost(a, w.tws), lee = twa >= 0 ? b.tgtP : b.tgtS, on = fb > 0.03 ? 1 : fb < 0.01 ? 0 : lee; const P = twa >= 0 ? on : 0, S = twa < 0 ? on : 0; if (P !== b.tgtP || S !== b.tgtS) { b.tgtP = P; b.tgtS = S; requestMan(b, { type: 'foil', P, S }); } }
       if (pl) cost *= ASSIST;
@@ -2998,7 +2998,7 @@ function updateHUD() {
   const to = topt(a), te = trimEff(player.trim, a), d = player.trim - to;
   if (document.activeElement !== $('trim')) $('trim').value = Math.round(player.trim * 100);
   $('trimOpt').style.left = `calc(${to * 100}% - 1px)`;
-  $('trimTxt').innerHTML = player.autoTrim ? `<b style="color:#8fd3ff">auto</b> · 80 %` : `${Math.abs(d) < 0.06 ? '<b style="color:#5dff9e">optimal</b>' : d < 0 ? '<b style="color:#ffd166">trop bordé</b>' : '<b style="color:#ffd166">trop choqué</b>'} · ${Math.round(te * 100)} %`;
+  $('trimTxt').innerHTML = player.autoTrim ? `<b style="color:#8fd3ff">auto</b> · 95 %` : `${Math.abs(d) < 0.06 ? '<b style="color:#5dff9e">optimal</b>' : d < 0 ? '<b style="color:#ffd166">trop bordé</b>' : '<b style="color:#ffd166">trop choqué</b>'} · ${Math.round(te * 100)} %`;
   [['aSail', player.autoSail], ['aTrim', player.autoTrim], ['aFoil', player.autoFoil]].forEach(([id, on]) => $(id).classList.toggle('on', on));
   const m = player.man;
   if (m) { const p = clamp(m.t / m.dur, 0, 1); $('manbar').style.width = (p * 100) + '%'; $('manbar').style.background = isTurnMan(m) ? 'rgba(255,140,40,.45)' : 'rgba(31,143,214,.5)'; $('mantxt').textContent = `${m.label} · ${Math.ceil((m.dur - m.t) / 60)} min · vitesse ${Math.round(manFactor(m, p) * 100)} %`; }
@@ -3016,7 +3016,7 @@ const CONTROLS_FR = `<ul>
   <li><kbd>B</kbd> foil bâbord · <kbd>N</kbd> foil tribord · <kbd>F</kbd> foil sous le vent · Minis et Class40 : <kbd>I</kbd> prendre un ris · <kbd>O</kbd> larguer un ris</li>
   <li><kbd>Y</kbd> afficher / masquer les fantômes · 🛰 nouvelle prévision météo toutes les 6 à 9 min de jeu</li>
   <li>Routeur : <kbd>K</kbd> appliquer le cap conseillé · <kbd>L</kbd> pilote routeur · 📍 router vers un point de la carte · profils <b>⚡ Attaque</b> (cherche le vent fort et la zone de vol, route plus longue), <b>Normal</b> (route la plus rapide), <b>🛡 Prudent</b> (route plus directe, moins de manœuvres, évite brise forte et grains)</li>
-  <li>Assistances : <kbd>A</kbd> voile auto, <kbd>G</kbd> foils auto, pilote routeur (−1,5 % chacune) · <kbd>R</kbd> écoute auto (80 % d'efficacité au plus) · <kbd>U</kbd> matossage auto (foils à 75 % de rendement au plus)</li>
+  <li>Assistances : <kbd>A</kbd> voile auto, <kbd>G</kbd> foils auto, pilote routeur (−1,5 % chacune) · <kbd>R</kbd> écoute auto (95 % d'efficacité au plus) · <kbd>U</kbd> matossage auto (foils à 75 % de rendement au plus)</li>
   <li><kbd>+</kbd>/<kbd>−</kbd> vitesse du temps · <kbd>M</kbd> carte plein écran · <kbd>C</kbd> caméra (suiveuse, libre, à bord) · <kbd>X</kbd> son · <kbd>P</kbd> pause · <kbd>Échap</kbd> menu</li></ul>`;
 const CONTROLS_EN = `<ul>
   <li><kbd>←</kbd>/<kbd>→</kbd> or <kbd>Q</kbd>/<kbd>D</kbd> steer (<kbd>Shift</kbd> = fine) · <kbd>Space</kbd> tack/gybe · <kbd>T</kbd> lock heading ⇄ TWA · <kbd>V</kbd> VMG angle</li>
@@ -3024,7 +3024,7 @@ const CONTROLS_EN = `<ul>
   <li><kbd>B</kbd> port foil · <kbd>N</kbd> starboard foil · <kbd>F</kbd> leeward foil · Minis and Class40: <kbd>I</kbd> take a reef · <kbd>O</kbd> shake a reef</li>
   <li><kbd>Y</kbd> show / hide ghosts · 🛰 new weather forecast every 6 to 9 min of play</li>
   <li>Router: <kbd>K</kbd> apply suggested heading · <kbd>L</kbd> router autopilot · 📍 route to a point on the map</li>
-  <li>Assists: <kbd>A</kbd> auto sail, <kbd>G</kbd> auto foils, router autopilot (−1.5 % each) · <kbd>R</kbd> auto trim (80 % efficiency at most) · <kbd>U</kbd> auto stacking (foils at 75 % efficiency at most)</li>
+  <li>Assists: <kbd>A</kbd> auto sail, <kbd>G</kbd> auto foils, router autopilot (−1.5 % each) · <kbd>R</kbd> auto trim (95 % efficiency at most) · <kbd>U</kbd> auto stacking (foils at 75 % efficiency at most)</li>
   <li><kbd>+</kbd>/<kbd>−</kbd> time speed · <kbd>M</kbd> full-screen map · <kbd>C</kbd> camera (chase, free, onboard) · <kbd>X</kbd> sound · <kbd>P</kbd> pause · <kbd>Esc</kbd> menu</li></ul>`;
 Object.defineProperty(window, 'CONTROLS', { get: () => T(CONTROLS_FR, CONTROLS_EN) });
 const sailNm = i => T(SAILS[i].name, ({ Foc: 'Jib', 'Génois': 'Genoa', Spi: 'Spinnaker' })[SAILS[i].name] || SAILS[i].name);
@@ -3385,7 +3385,7 @@ const I18N = {
   '10° à bâbord': '10° to port', '1° à bâbord (← / Q)': '1° to port (← / Q)', 'Verrouiller le cap ou l\'angle au vent (T)': 'Lock heading or wind angle (T)', '1° à tribord (→ / D)': '1° to starboard (→ / D)', '10° à tribord': '10° to starboard',
   'Virer / empanner (Espace)': 'Tack / gybe (Space)', 'Angle VMG optimal (V)': 'Optimal VMG angle (V)', 'Foil bâbord (B)': 'Port foil (B)', 'Foil tribord (N)': 'Starboard foil (N)', 'Foil sous le vent baissé, au vent relevé (F)': 'Leeward foil down, windward up (F)',
   'Larguer un ris (O)': 'Shake a reef (O)', 'Prendre un ris (I)': 'Take a reef (I)', 'Caméra suiveuse / libre / à bord (C)': 'Chase / free / onboard camera (C)', 'Zoom avant': 'Zoom in', 'Zoom arrière': 'Zoom out', 'Réduire / agrandir les commandes': 'Fold / unfold controls',
-  'Choix automatique de la voile (A) — coûte 1,5 % de vitesse': 'Automatic sail choice (A) — costs 1.5 % speed', 'Réglage automatique de l\'écoute (R) — 80 % d\'efficacité au plus': 'Automatic sheet trim (R) — 80 % efficiency at most', 'Gestion automatique des foils (G) — coûte 1,5 %': 'Automatic foils (G) — costs 1.5 %',
+  'Choix automatique de la voile (A) — coûte 1,5 % de vitesse': 'Automatic sail choice (A) — costs 1.5 % speed', 'Réglage automatique de l\'écoute (R) — 95 % d\'efficacité au plus': 'Automatic sheet trim (R) — 95 % efficiency at most', 'Gestion automatique des foils (G) — coûte 1,5 %': 'Automatic foils (G) — costs 1.5 %',
 };
 const I18N_SKIP = new Set(['card', 'tlBody', 'rInfo', 'board', 'foilHint', 'trimTxt', 'mantxt', 'rnext', 'manq', 'toast', 'shoreWarn', 'tlTitle', 'iAll', 'iPerf', 'iHeel', 'iBaro', 'fcstL', 'reefTxt', 'msails', 'sails', 'accel']);
 function applyStaticLang() {
