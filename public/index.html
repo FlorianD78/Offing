@@ -852,6 +852,19 @@ const WAVES = [ // houle : spectre étroit (110 → 330 m, ±15°) → séries d
 ];
 WAVES.forEach(w => { w.dx = Math.cos(w.ang); w.dz = Math.sin(w.ang); w.k = 2 * Math.PI / w.len; w.om = Math.sqrt(9.81 * w.k); w.Q = w.S / w.k; });
 let realT = 0, GX = 0, GZ = 0, seaAmp = 0.8, swellAmp = 0.8;
+/* Bulletin de mer : la mer visible ne suit pas l'accélération du temps. En course, l'état de mer (vent sur l'eau, direction, houle)
+   est relevé toutes les 90 s réelles, comme un bulletin, puis la mer passe en douceur au nouvel état en 25 s ; entre deux bulletins elle reste stable.
+   Les vagues, leur défilement et leur période restent en temps réel. Purement visuel : la physique (vitesse, matossage, plantages) suit le vent réel. */
+const SEA_PER = 90, SEA_TR = 25, SS = { tws: 10, twd: 0, pres: 1013, n: 0, nextR: 0, tr0: -99, from: null, to: null };
+function seaSnap() { return { tws: player.tws || 10, twd: player.twd || 0, pres: player.pres || 1013 }; }
+function seaReset() { const q = seaSnap(); Object.assign(SS, q, { from: q, to: q, tr0: -99, nextR: realT + SEA_PER, n: SS.n + 1 }); }
+function seaTick() {
+  if (MODE !== 'race' || !running) { Object.assign(SS, seaSnap()); SS.to = null; return; } // entraînement, chargement, compte à rebours : la mer suit directement le vent
+  if (!SS.to) { seaReset(); return; } // départ ou reprise de course : premier bulletin
+  if (realT >= SS.nextR) { SS.from = { tws: SS.tws, twd: SS.twd, pres: SS.pres }; SS.to = seaSnap(); SS.tr0 = realT; SS.nextR = realT + SEA_PER; SS.n++; }
+  const u = smooth(0, 1, (realT - SS.tr0) / SEA_TR), F = SS.from, G = SS.to;
+  SS.tws = F.tws + (G.tws - F.tws) * u; SS.pres = F.pres + (G.pres - F.pres) * u; SS.twd = norm360(F.twd + norm180(G.twd - F.twd) * u);
+}
 const wavePh = WAVES.map(() => 0);
 function waveH(x, z) {
   const d = Math.hypot(x, z), att = 1 - smooth(1200, 6000, d), attS = 1 - smooth(150, 500, d);
@@ -918,8 +931,9 @@ function oceanSpectrum(U, dir, hs) {
   OCN.U = U; OCN.dir = dir; OCN.hs = hs;
 }
 function oceanFFTUpdate(rdt, force) {
-  const N = FFT_N, tws = player.tws || 10, U = Math.max(2, tws * 0.5144), dir = ((player.twd || 0) + 180) * D2R, hs = 1.5 * seaAmp;
-  if (force || Math.abs(U - OCN.U) > 0.6 || Math.abs(norm180((dir - OCN.dir) * R2D)) > 5 || Math.abs(hs - OCN.hs) > 0.08) oceanSpectrum(U, dir, hs);
+  const N = FFT_N, tws = SS.tws, U = Math.max(2, tws * 0.5144), dir = (SS.twd + 180) * D2R, hs = 1.5 * seaAmp;
+  OCN.rb = (OCN.rb || 0) + (rdt || 0); // petits pas (≤ 1,5°, 0,25 m/s, 3 cm) au plus 4 fois par seconde : la mer se transforme sans à-coup
+  if (force || (OCN.rb > 0.25 && (Math.abs(U - OCN.U) > 0.25 || Math.abs(norm180((dir - OCN.dir) * R2D)) > 1.5 || Math.abs(hs - OCN.hs) > 0.03))) { oceanSpectrum(U, dir, hs); OCN.rb = 0; }
   OCN.acc = (OCN.acc || 0) + (rdt || 0); if (!force && OCN.acc < 1 / 30) return; const dtF = OCN.acc; OCN.acc = 0;
   OCN.t += dtF; const t = OCN.t, lam = OCN.lambda, decay = Math.exp(-dtF / 2.2);
   for (let c = 0; c < (GFX.level === 'low' ? 1 : 2); c++) {
@@ -1984,6 +1998,7 @@ const coastalEst = c => c.nm * 1.3 / (CLS.id === 'imoca' ? 16 : CLS.id === 'c40'
 const COAST_ACCELS = [10, 20, 30, 60, 120, 240];
 const coastalAccel = c => { const tgt = coastalEst(c) * 3600 / (11 * 60); return COAST_ACCELS.reduce((a, b) => Math.abs(Math.log(b / tgt)) < Math.abs(Math.log(a / tgt)) ? b : a); };
 function setupMode(mode, courseId, restoring) {
+  SS.to = null;
   cancelAllJobs();
   MODE = mode; if (courseId) COURSE = COURSES[courseId]; LEG.n = 1;
   gameT = 0; realRaceT = 0; running = false; paused = false; finishedShown = false; GX = GZ = 0;
@@ -2503,6 +2518,7 @@ function saveGame() {
 }
 function loadSave() { try { const d = JSON.parse(localStorage.getItem(SAVE_KEY)); return d && d.v === 3 ? d : null; } catch (e) { return null; } }
 function restoreGame(d) {
+  SS.to = null;
   setClass(d.cls || 'imoca'); if (d.DAILY) Object.assign(DAILY, d.DAILY); else solo(); setupMode(d.mode, d.course, true);
   if (DAILY.on && GHOST.list.length) active = [player];
   gameT = d.gameT; realRaceT = d.realRaceT || 0; if (d.FC) Object.assign(FC, d.FC); WX_OFF = d.WX_OFF || 0; START_H = d.START_H || 13; windDirty = true; if (d.LEG) Object.assign(LEG, d.LEG); accel = ACCELS.includes(d.accel) ? d.accel : accel; Object.assign(TW, d.TW || {});
@@ -2966,7 +2982,10 @@ function updateHUD() {
     $('tlBody').innerHTML = row(T('Chrono', 'Time'), fmtClock(gameT)) + row(T('Loch', 'Log'), player.log.toFixed(2) + ' nm') + row(T('Bouées validées', 'Buoys rounded'), `${TRAIN_BUOYS.length - left.length} / ${TRAIN_BUOYS.length}`) + (near ? row(T('Bouée proche', 'Nearest buoy'), `${near.name} · ${nd.toFixed(2)} nm · ${Math.round(gcBrg(player.lat, player.lon, near.lat, near.lon))}°`) : row(T('Tour', 'Lap'), T('complet ✓', 'complete ✓')));
   }
   $('tlBody').insertAdjacentHTML('beforeend', row(T('Météo', 'Weather'), weatherTxt()));
-  if (MODE === 'race') { const sLeft = Math.max(0, FC.nextReal - realRaceT); $('tlBody').insertAdjacentHTML('beforeend', row(T('Prévision', 'Forecast'), DAILY.on ? T(`run n°${FC.n} · suivant à ${fmtRace(FC.nextGame)}`, `run #${FC.n} · next at ${fmtRace(FC.nextGame)}`) : T(`run n°${FC.n} · suivant dans `, `run #${FC.n} · next in `) + `${Math.floor(sLeft / 60)}:${String(Math.floor(sLeft % 60)).padStart(2, '0')}`)); }
+  if (MODE === 'race') { const sLeft = Math.max(0, FC.nextReal - realRaceT); $('tlBody').insertAdjacentHTML('beforeend', row(T('Prévision', 'Forecast'), DAILY.on ? T(`run n°${FC.n} · suivant à ${fmtRace(FC.nextGame)}`, `run #${FC.n} · next at ${fmtRace(FC.nextGame)}`) : T(`run n°${FC.n} · suivant dans `, `run #${FC.n} · next in `) + `${Math.floor(sLeft / 60)}:${String(Math.floor(sLeft % 60)).padStart(2, '0')}`));
+    const hW = 1.5 * seaAmp, hS = 3.85 * swellAmp, H = Math.hypot(hW, hS), D = [[0.1, 'calme', 'calm'], [0.5, 'belle', 'smooth'], [1.25, 'peu agitée', 'slight'], [2.5, 'agitée', 'moderate'], [4, 'forte', 'rough'], [6, 'très forte', 'very rough'], [9, 'grosse', 'high'], [14, 'très grosse', 'very high'], [99, 'énorme', 'phenomenal']].find(d => H < d[0]);
+    const mL = Math.max(0, SS.nextR - realT), mTr = SS.to && realT - SS.tr0 < SEA_TR;
+    $('tlBody').insertAdjacentHTML('beforeend', row(T('Mer', 'Sea'), `${T(D[1], D[2])} · ${H.toFixed(1)} m · ` + (mTr ? T('évolue…', 'changing…') : T('bulletin dans ', 'update in ') + `${Math.floor(mL / 60)}:${String(Math.floor(mL % 60)).padStart(2, '0')}`))); }
   const adv = routeAdvice(); let rt = '';
   if (ROUTE.busy && !ROUTE.nodes) rt = `<span class="muted">${T('Calcul en cours…', 'Computing…')} ${ROUTE.steps} isochrones</span>`;
   else if (ROUTE.err) rt = `<span style="color:#ff8a8a">${ROUTE.err}</span>`;
@@ -3978,16 +3997,16 @@ function frame(now) {
   } else if (player.mode === 'twa' && !isTurnMan(player.man)) { const w = curWind(); player.hdg = norm360(w.twd - player.lockTwa); player.twd = w.twd; player.tws = w.tws; }
   refCos = Math.cos(player.lat * D2R);
   const hv = player.dispHdg * D2R, v = player.spd * KN * VF, bvx = Math.sin(hv) * v, bvz = -Math.cos(hv) * v; GX += bvx * rdt; GZ += bvz * rdt;
-  const tws = player.tws || 10;
+  seaTick(); const tws = SS.tws;
   const SEA = MODE === 'race' ? COURSE.sea || 1 : 1;
   seaAmp += (clamp(tws / 18 * SEA, 0.3, 2.1 * SEA) - seaAmp) * Math.min(1, rdt * 0.25);
-  const lowB = MODE === 'race' ? (SOUTH() ? smooth(1000, 965, player.pres || 1013) : smooth(1010, 984, player.pres || 1013)) : 0;
+  const lowB = MODE === 'race' ? (SOUTH() ? smooth(1000, 965, SS.pres) : smooth(1010, 984, SS.pres)) : 0;
   swellAmp += (clamp(Math.max(MODE === 'race' ? COURSE.swellMin || 0 : 0, (0.45 + tws / 26) * (1 + 0.55 * lowB) * SEA), 0.5, 2.6 * SEA) - swellAmp) * Math.min(1, rdt * 0.08);
   for (let i = 0; i < NW; i++) { const w = WAVES[i]; wavePh[i] = ((w.dx * GX + w.dz * GZ) * w.k) % (Math.PI * 2); oceanU.uPh.value[i] = wavePh[i]; }
   updateEnv(rdt);
   oceanU.uTime.value = realT; oceanU.uAmp.value = seaAmp; oceanU.uSwell.value = swellAmp; oceanU.uG.value.set(GX % 2048, GZ % 2048);
   oceanFFTUpdate(rdt); const md = (a, L) => ((a % L) + L) % L; oceanU.uFG.value.set(md(GX, OCN.L[0]), md(GZ, OCN.L[0]), md(GX, OCN.L[1]), md(GZ, OCN.L[1])); oceanU.uHs.value = OCN.hs; updateHullContact();
-  const wa = ((player.twd || 0) + 180) * D2R; oceanU.uWind.value.set(Math.sin(wa), -Math.cos(wa), tws);
+  const wa = (SS.twd + 180) * D2R; oceanU.uWind.value.set(Math.sin(wa), -Math.cos(wa), tws);
   camera.updateMatrixWorld(); _wkF.setFromProjectionMatrix(_wkM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   boats.forEach(b => { if (active.includes(b)) updateBoatVisual(b, rdt); }); updateGhost(rdt);
   updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(rdt); updateAudio(rdt);
