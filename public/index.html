@@ -66,7 +66,8 @@ body.balp:not(.cls-mini) #balP{display:block}
 .bpHead button.on,#balAuto.on{background:#1e6fa8;color:#fff;border-color:#4aa3e0}
 #bpPad{display:block;width:100%;height:112px;border-radius:9px;touch-action:none;cursor:crosshair}
 .bpAtt{margin-top:6px;background:rgba(255,255,255,.04);border-radius:10px;padding:4px}
-#bpAtt{display:block;width:100%;height:118px;border-radius:8px}
+#bpAtt,#bpHeel{display:block;height:104px;border-radius:8px;min-width:0}
+.bpRow{display:grid;grid-template-columns:56% 1fr;gap:5px}#bpAtt,#bpHeel{width:100%}
 .bpV{display:flex;justify-content:space-between;padding:3px 4px 0;font-size:10.5px;color:#a9c3d6}.bpV b{color:#fff;font-variant-numeric:tabular-nums}
 .bpG{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
 .bpG>div{background:rgba(255,255,255,.04);border-radius:8px;padding:3px 3px 4px;text-align:center}
@@ -377,7 +378,7 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
 <div id="balP" class="panel">
   <div class="bpHead"><span class="bpT">VOL · MATOSSAGE</span><button id="balAuto2" title="Matossage automatique prudent : le moins de plantages possible, pas la vitesse maximale (U)">Auto</button></div>
   <canvas id="bpPad" title="Glisse le point : haut = avant, bas = arrière, gauche = sous le vent, droite = au vent (Z/S, W/E)"></canvas>
-  <div class="bpAtt"><canvas id="bpAtt" title="Horizon artificiel : assiette (haut/bas) et gîte (inclinaison). Garde le symbole jaune dans la bande verte et l'index de gîte dans l'arc vert."></canvas><div class="bpV"><span>Assiette <b id="bpPitchT">–</b></span><span>Gîte <b id="bpHeelT">–</b></span></div></div>
+  <div class="bpAtt"><div class="bpRow"><canvas id="bpAtt" title="Assiette réelle du bateau par rapport à l'horizon : garde le symbole jaune dans la bande verte"></canvas><canvas id="bpHeel" title="Gîte réelle, bateau vu de l'arrière : garde le mât dans le secteur vert"></canvas></div><div class="bpV"><span>Assiette <b id="bpPitchT">–</b></span><span>Gîte <b id="bpHeelT">–</b></span></div></div>
   <div class="bpFly"><span id="bpSt">–</span><div class="bpBar"><i id="bpBar"></i></div><span id="bpCr" title="Plantages depuis le départ">💥 0</span></div>
 </div>
 
@@ -2899,32 +2900,37 @@ function drawBalPanel() {
     tr.forEach((q, j) => { g.fillStyle = `rgba(${P.autoBal ? '143,211,255' : '255,211,77'},${0.05 + 0.25 * j / tr.length})`; g.beginPath(); g.arc(X(q[0]), Y(q[1]), 3, 0, 7); g.fill(); });
     g.fillStyle = P.autoBal ? '#8fd3ff' : '#ffd34d'; g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 2; g.beginPath(); g.arc(X(P.my), Y(P.mx), 6.5, 0, 7); g.fill(); g.stroke();
   }
-  { // horizon artificiel (comme en avion) : le ciel et la mer bougent, le symbole du bateau reste fixe au centre
-    const [g, W, H] = cvFit($('bpAtt')), cx = W / 2, cy = H / 2 + 4, ppd = H / 11, side = (P.twa || 0) >= 0 ? 1 : -1;
-    const pc = 1.2 * (P.fly || 0), pitch = -4 * (P.balDP || 0) + pc, roll = (P.heel || 0) * D2R, hv = Math.abs(P.heel || 0), hc = P.heelIdeal || hv, hwP = 0.56 * tol, hwH = 1.1 * tol;
-    g.save(); g.beginPath(); g.roundRect ? g.roundRect(0, 0, W, H, 8) : g.rect(0, 0, W, H); g.clip();
-    g.save(); g.translate(cx, cy); g.rotate(-roll); g.translate(0, pitch * ppd);
-    let gr = g.createLinearGradient(0, -H * 1.5, 0, 0); gr.addColorStop(0, '#1a4f8a'); gr.addColorStop(1, '#6db3e6'); g.fillStyle = gr; g.fillRect(-W * 2, -H * 3, W * 4, H * 3);
-    gr = g.createLinearGradient(0, 0, 0, H * 1.5); gr.addColorStop(0, '#0f5a7a'); gr.addColorStop(1, '#04192b'); g.fillStyle = gr; g.fillRect(-W * 2, 0, W * 4, H * 3);
-    g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(-W * 2, 0); g.lineTo(W * 2, 0); g.stroke();
-    // bande verte : assiette idéale (le symbole doit y rester)
-    const ok = Math.abs(pitch - pc) <= hwP; g.fillStyle = ok ? 'rgba(93,255,158,.28)' : 'rgba(93,255,158,.2)'; g.fillRect(-W * 0.3, (-pc - hwP) * ppd, W * 0.6, 2 * hwP * ppd);
-    g.strokeStyle = 'rgba(93,255,158,.75)'; g.lineWidth = 1; g.strokeRect(-W * 0.3, (-pc - hwP) * ppd, W * 0.6, 2 * hwP * ppd);
-    g.fillStyle = 'rgba(255,255,255,.85)'; g.strokeStyle = 'rgba(255,255,255,.75)'; g.font = '8px system-ui'; g.textAlign = 'left';
-    for (const d of [-4, -2, 2, 4]) { const y = -d * ppd, L = Math.abs(d) === 4 ? W * 0.16 : W * 0.1; g.beginPath(); g.moveTo(-L, y); g.lineTo(L, y); g.stroke(); g.fillText((d > 0 ? '+' : '') + d, L + 3, y + 3); }
-    g.restore();
-    // échelle de gîte (fixe) en haut, index qui tourne, arc vert = gîte idéale
-    const R = H * 0.44, A = d => -Math.PI / 2 + d * D2R, sg = side > 0 ? 1 : -1;
-    g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 1; g.beginPath(); g.arc(cx, cy, R, A(-35), A(35)); g.stroke();
-    for (const d of [-30, -20, -10, 0, 10, 20, 30]) { const a = A(d), r2 = d === 0 ? R - 8 : R - 5; g.beginPath(); g.moveTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); g.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); g.stroke(); }
-    const okH = Math.abs(hv - hc) <= hwH; g.strokeStyle = 'rgba(93,255,158,.9)'; g.lineWidth = 4; g.beginPath(); const hwA = Math.max(hwH, 2.5); g.arc(cx, cy, R + 3, Math.min(A(-sg * (hc + hwA)), A(-sg * (hc - hwA))), Math.max(A(-sg * (hc + hwA)), A(-sg * (hc - hwA)))); g.stroke();
-    const ra = A(-(P.heel || 0)); g.fillStyle = okH ? '#fff' : '#ffb35c'; g.beginPath(); g.moveTo(cx + Math.cos(ra) * (R - 1), cy + Math.sin(ra) * (R - 1)); g.lineTo(cx + Math.cos(ra - 0.07) * (R - 11), cy + Math.sin(ra - 0.07) * (R - 11)); g.lineTo(cx + Math.cos(ra + 0.07) * (R - 11), cy + Math.sin(ra + 0.07) * (R - 11)); g.closePath(); g.fill();
-    // symbole fixe du bateau (jaune) : coque vue de l'arrière + mât
-    g.fillStyle = ok ? '#ffd34d' : '#ff9d3d'; g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 1.2;
-    g.beginPath(); g.moveTo(cx - W * 0.2, cy); g.lineTo(cx - W * 0.07, cy); g.lineTo(cx - W * 0.045, cy + 5); g.lineTo(cx + W * 0.045, cy + 5); g.lineTo(cx + W * 0.07, cy); g.lineTo(cx + W * 0.2, cy); g.lineTo(cx + W * 0.2, cy + 3); g.lineTo(cx + W * 0.09, cy + 3); g.lineTo(cx + W * 0.06, cy + 8); g.lineTo(cx - W * 0.06, cy + 8); g.lineTo(cx - W * 0.09, cy + 3); g.lineTo(cx - W * 0.2, cy + 3); g.closePath(); g.fill(); g.stroke();
-    g.fillRect(cx - 1, cy - 14, 2, 14); g.beginPath(); g.arc(cx, cy, 2.5, 0, 7); g.fill();
-    g.restore();
-    $('bpPitchT').textContent = (pitch >= 0 ? '+' : '') + pitch.toFixed(1) + '°'; $('bpPitchT').style.color = ok ? '#fff' : '#ffb35c';
+  { // angles RÉELS du bateau (houle comprise), lus sur la coque affichée
+    const R3 = P.vis && P.vis.root ? P.vis.root.rotation : { x: 0, z: 0 }, side = (P.twa || 0) >= 0 ? 1 : -1;
+    const pitch = R3.x / D2R, pc = pitch + 4 * (P.balDP || 0), hwP = 0.56 * tol; // zone idéale = assiette réelle sans l'effet du matossage
+    const heel = R3.z / D2R, hv = Math.abs(heel), hc = Math.abs(heel + side * 7 * (P.balDH || 0)), hwH = 1.1 * tol; // côté sous le vent : signe de la gîte
+    const okP = Math.abs(pitch - pc) <= hwP, okH = Math.abs(hv - hc) <= hwH;
+    { // horizon artificiel d'assiette : ciel/mer qui montent ou descendent, symbole fixe
+      const [g, W, H] = cvFit($('bpAtt')), cx = W / 2, cy = H / 2, ppd = H / 10;
+      g.save(); g.beginPath(); g.roundRect ? g.roundRect(0, 0, W, H, 8) : g.rect(0, 0, W, H); g.clip(); g.translate(0, pitch * ppd);
+      let gr = g.createLinearGradient(0, cy - H, 0, cy); gr.addColorStop(0, '#1a4f8a'); gr.addColorStop(1, '#6db3e6'); g.fillStyle = gr; g.fillRect(0, cy - H * 3, W, H * 3);
+      gr = g.createLinearGradient(0, cy, 0, cy + H); gr.addColorStop(0, '#0f5a7a'); gr.addColorStop(1, '#04192b'); g.fillStyle = gr; g.fillRect(0, cy, W, H * 3);
+      g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(0, cy); g.lineTo(W, cy); g.stroke();
+      const by = cy - pc * ppd; g.fillStyle = 'rgba(93,255,158,.25)'; g.fillRect(W * 0.14, by - hwP * ppd, W * 0.72, 2 * hwP * ppd); g.strokeStyle = 'rgba(93,255,158,.8)'; g.lineWidth = 1; g.strokeRect(W * 0.14, by - hwP * ppd, W * 0.72, 2 * hwP * ppd);
+      g.strokeStyle = 'rgba(255,255,255,.7)'; g.fillStyle = 'rgba(255,255,255,.85)'; g.font = '8px system-ui'; g.textAlign = 'left';
+      for (const d of [-4, -2, 2, 4]) { const y = cy - d * ppd, L = W * (Math.abs(d) === 4 ? 0.17 : 0.1); g.beginPath(); g.moveTo(cx - L, y); g.lineTo(cx + L, y); g.stroke(); g.fillText((d > 0 ? '+' : '') + d + '°', cx + L + 3, y + 3); }
+      g.restore();
+      // symbole fixe : bateau vu de profil (étrave à droite)
+      g.fillStyle = okP ? '#ffd34d' : '#ff9d3d'; g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 1.2; const L = W * 0.3;
+      g.beginPath(); g.moveTo(cx - L, cy - 2); g.lineTo(cx + L, cy - 3); g.lineTo(cx + L * 0.86, cy + 3); g.lineTo(cx - L * 0.95, cy + 3); g.closePath(); g.fill(); g.stroke(); g.fillRect(cx - L * 0.1 - 1, cy - 16, 2, 14);
+    }
+    { // gîte : bateau vu de l'arrière, incliné de la gîte réelle, secteur vert côté sous le vent
+      const [g, W, H] = cvFit($('bpHeel')), cx = W / 2, cy = H * 0.8, R = Math.min(W * 0.46, H * 0.72), A = d => -Math.PI / 2 + d * D2R;
+      g.fillStyle = 'rgba(6,18,30,.55)'; g.fillRect(0, 0, W, H);
+      g.lineWidth = 5; g.strokeStyle = 'rgba(255,255,255,.08)'; g.beginPath(); g.arc(cx, cy, R, A(-40), A(40)); g.stroke();
+      const sg = heel >= 0 ? -1 : 1, hwA = Math.max(hwH, 1.5); g.strokeStyle = 'rgba(93,255,158,.6)'; g.beginPath(); g.arc(cx, cy, R, Math.min(A(sg * (hc - hwA)), A(sg * (hc + hwA))), Math.max(A(sg * (hc - hwA)), A(sg * (hc + hwA)))); g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 1; for (const d of [-30, -15, 0, 15, 30]) { const a = A(d); g.beginPath(); g.moveTo(cx + Math.cos(a) * (R - 6), cy + Math.sin(a) * (R - 6)); g.lineTo(cx + Math.cos(a) * (R + 3), cy + Math.sin(a) * (R + 3)); g.stroke(); }
+      g.strokeStyle = 'rgba(127,208,255,.45)'; g.beginPath(); g.moveTo(4, cy + 1); g.lineTo(W - 4, cy + 1); g.stroke();
+      g.save(); g.translate(cx, cy); g.rotate(-heel * D2R); g.fillStyle = okH ? '#fff' : '#ffb35c'; g.strokeStyle = 'rgba(0,0,0,.35)';
+      g.beginPath(); g.moveTo(-R * 0.36, -7); g.lineTo(R * 0.36, -7); g.lineTo(R * 0.13, 4); g.lineTo(-R * 0.13, 4); g.closePath(); g.fill(); g.stroke(); g.fillRect(-1, -R * 0.82, 2, R * 0.76);
+      g.restore();
+    }
+    $('bpPitchT').textContent = (pitch >= 0 ? '+' : '') + pitch.toFixed(1) + '°'; $('bpPitchT').style.color = okP ? '#fff' : '#ffb35c';
     $('bpHeelT').textContent = hv.toFixed(0) + '°'; $('bpHeelT').style.color = okH ? '#fff' : '#ffb35c';
   }
   $('bpSt').textContent = P.crashT > 0 ? T('💥 Planté', '💥 Crashed') : P.fly > 0.85 ? T('✈ En vol', '✈ Flying') : P.fly > 0.03 ? T('Décollage', 'Take-off') : T('Dans l\'eau', 'In water');
@@ -3216,7 +3222,7 @@ async function launch(info, prep, msg) {
 function start(msg) { MENU_CINE = false; $('overlay').classList.add('hide'); $('overlay').classList.remove('mm', 'mh'); running = true; paused = false; toast(msg, 5000); if (MODE === 'race' && GHOST.list.length && GHOST.on) setTimeout(() => toast(DAILY.on ? `👻 ${GHOST.list.length} fantôme${GHOST.list.length > 1 ? 's' : ''} en course (tes essais du jour) — touche Y pour masquer` : `👻 Ton fantôme (record ${fmtDur(GHOST.list[0].T)}) est en course — touche Y pour le masquer`, 4000), 5200); }
 const HELP_EN = () => `<h1>Help</h1>
     <h3>Manoeuvres</h3><p>The skipper does <b>one manoeuvre at a time</b>; the next ones wait in a queue (3 max). Durations are in race time and depend on the class: a <b>tack</b> or <b>gybe</b> costs speed for a few minutes, a <b>sail change</b> several minutes, moving the <b>foils</b> a few minutes. The helm is locked during a tack or gybe.</p>
-    <h3>Stacking and flight (IMOCA, foiling Proto)</h3><p>The <b>STACK</b> pad moves weight on board: up = bow, down = stern, left = leeward, right = windward (keys <kbd>Z</kbd> <kbd>S</kbd> <kbd>W</kbd> <kbd>E</kbd>, <kbd>U</kbd> = auto). To <b>take off</b> you need the leeward foil down, enough wind (IMOCA ≈ 12 kn reaching, 14 downwind, 17 upwind) and the right weight. Take-off takes 1 to 2 min: the boat accelerates, the foils load up, the hull lifts, then the flight settles. too far forward and the boat won't lift, too far aft and it lifts then the stern stalls. <b>In flight</b>, too much to leeward stalls the foil and the boat crashes; too much to windward reduces heel and foil lift. The <b>attitude indicator</b> shows pitch and heel: keep the yellow symbol in the green band and the heel index in the green arc. These zones move with the swell, speed and angle. Above ≈ 31 kn (IMOCA) the foil can stall from overspeed. A crash halves your speed and you need 1 to 2 min before taking off again. <b>Auto</b> mode is safe: fewest crashes, not top speed.</p>
+    <h3>Stacking and flight (IMOCA, foiling Proto)</h3><p>The <b>STACK</b> pad moves weight on board: up = bow, down = stern, left = leeward, right = windward (keys <kbd>Z</kbd> <kbd>S</kbd> <kbd>W</kbd> <kbd>E</kbd>, <kbd>U</kbd> = auto). To <b>take off</b> you need the leeward foil down, enough wind (IMOCA ≈ 12 kn reaching, 14 downwind, 17 upwind) and the right weight. Take-off takes 1 to 2 min: the boat accelerates, the foils load up, the hull lifts, then the flight settles. too far forward and the boat won't lift, too far aft and it lifts then the stern stalls. <b>In flight</b>, too much to leeward stalls the foil and the boat crashes; too much to windward reduces heel and foil lift. The <b>attitude indicator</b> shows the boat's real pitch against the horizon (swell included): keep the yellow symbol in the green band. The dial next to it shows the real heel, seen from astern: keep the mast in the green sector. These zones move with the swell, speed and angle. Above ≈ 31 kn (IMOCA) the foil can stall from overspeed. A crash halves your speed and you need 1 to 2 min before taking off again. <b>Auto</b> mode is safe: fewest crashes, not top speed.</p>
     <h3>Weather systems (offshore)</h3><p><b>A</b> Azores high: light wind in its centre, trade winds on its southern flank. <b>D</b> westerly lows, each with a <b>cold front</b> (blue ▲ line: squalls, sharp wind shift as it passes) and a <b>warm front</b> (red ●). Between two lows, a <b>ridge</b> (blue dashes): soft wind, cross it fast or go around. Sometimes an isolated <b>cut-off low</b> (purple D) near the Azores, and <b>tropical waves</b> (orange dashes) crossing the trades with squalls and shifts. The <b>doldrums</b> stay near 5° N.</p>
     <h3>Forecasts</h3><p>Maps and the router use a <b>forecast</b> published every 6 to 9 min of real play (every 1 h 30 of race time in the daily challenge). It is reliable at short range and drifts further out. Each new run recomputes the route: time to review your strategy.</p>
     <h3>Four classes</h3><p><b>IMOCA</b>: heavy and powerful, slow to accelerate, everything happens on the <b>foils</b> when reaching. <b>Class40</b>: no foils, planing scow, reefs, medium manoeuvres. <b>Mini 6.50</b>: light and quick, reefs, beware of broaches under spinnaker. <b>Mini proto</b>: faster, with foils.</p>
@@ -3230,7 +3236,7 @@ function showHelp(fromMenu) {
   if (LANG === 'en') { $('card').innerHTML = HELP_EN() + `<div class="go"><button id="hClose" data-default>${fromMenu ? '← Menu' : '▶ Resume'}</button></div>`; $('overlay').classList.remove('hide'); $('hClose').onclick = () => { if (fromMenu) return showMenu(typeof fromMenu === 'string' ? fromMenu : 'solo'); $('overlay').classList.add('hide'); paused = false; }; return; }
   $('card').innerHTML = `<h1>Aide</h1>
     <h3>Manœuvres</h3><p>Le skipper fait <b>une manœuvre à la fois</b>, les suivantes attendent dans une file (3 au plus). Durées en temps de course : <b>virement</b> 5 min (jusqu'à −55 %), <b>empannage</b> 6 min, <b>changement de voile</b> 10 min (−38 %), <b>foils</b> 4 min (−8 %). Pendant un virement ou un empannage la barre est bloquée. Passer le vent sans manœuvre demandée = manœuvre « non préparée », qui coûte quand même.</p>
-    <h3>Matossage et vol (IMOCA, Proto à foils)</h3><p>Le carré <b>MATOS.</b> place le poids à bord : haut = avant, bas = arrière, gauche = sous le vent, droite = au vent (touches <kbd>Z</kbd> <kbd>S</kbd> <kbd>W</kbd> <kbd>E</kbd>, <kbd>U</kbd> = auto). Pour <b>décoller</b> il faut le foil sous le vent baissé, assez de vent (IMOCA ≈ 12 nd au travers, 14 au portant, 17 au près) et le bon poids. Le décollage prend 1 à 2 min : le bateau accélère, les foils portent, la coque se soulève puis le vol se stabilise. trop sur l'avant le bateau ne décolle pas, trop sur l'arrière il décolle puis l'arrière décroche. <b>En vol</b>, trop sous le vent le foil décroche et le bateau plante ; trop au vent il gîte moins et le foil porte moins. L'<b>horizon artificiel</b> montre l'assiette et la gîte : garde le symbole jaune dans la bande verte et l'index de gîte dans l'arc vert. Ces zones bougent avec la houle, la vitesse et l'allure. Au-delà de ≈ 31 nd (IMOCA) le foil peut décrocher en survitesse. Un plantage divise la vitesse par deux et il faut 1 à 2 min avant de redécoller. Le mode <b>Auto</b> est prudent : le moins de plantages, pas la vitesse maximale.</p>
+    <h3>Matossage et vol (IMOCA, Proto à foils)</h3><p>Le carré <b>MATOS.</b> place le poids à bord : haut = avant, bas = arrière, gauche = sous le vent, droite = au vent (touches <kbd>Z</kbd> <kbd>S</kbd> <kbd>W</kbd> <kbd>E</kbd>, <kbd>U</kbd> = auto). Pour <b>décoller</b> il faut le foil sous le vent baissé, assez de vent (IMOCA ≈ 12 nd au travers, 14 au portant, 17 au près) et le bon poids. Le décollage prend 1 à 2 min : le bateau accélère, les foils portent, la coque se soulève puis le vol se stabilise. trop sur l'avant le bateau ne décolle pas, trop sur l'arrière il décolle puis l'arrière décroche. <b>En vol</b>, trop sous le vent le foil décroche et le bateau plante ; trop au vent il gîte moins et le foil porte moins. L'<b>horizon artificiel</b> montre l'assiette réelle du bateau par rapport à l'horizon (houle comprise) : garde le symbole jaune dans la bande verte. Le cadran à côté montre la gîte réelle, bateau vu de l'arrière : garde le mât dans le secteur vert. Ces zones bougent avec la houle, la vitesse et l'allure. Au-delà de ≈ 31 nd (IMOCA) le foil peut décrocher en survitesse. Un plantage divise la vitesse par deux et il faut 1 à 2 min avant de redécoller. Le mode <b>Auto</b> est prudent : le moins de plantages, pas la vitesse maximale.</p>
     <h3>Systèmes météo (au large)</h3><p><b>A</b> anticyclone des Açores : vent faible au centre, alizés sur son flanc sud. <b>D</b> dépressions d'ouest, chacune avec un <b>front froid</b> (ligne bleue ▲ : grains, forte bascule du vent au passage) et un <b>front chaud</b> (rouge ●). Entre deux dépressions, une <b>dorsale</b> (tirets bleus) : vent mou, à traverser vite ou à contourner. Parfois une <b>goutte froide</b> (D violet) isolée près des Açores, et des <b>ondes tropicales</b> (tirets orange) qui traversent les alizés avec grains et bascules. Le <b>pot-au-noir</b> reste vers 5° N.</p>
     <h3>Prévisions météo</h3><p>Les cartes et le routeur utilisent une <b>prévision</b>, publiée toutes les 6 à 9 min de jeu réel (compteur dans le panneau). Elle est fiable à courte échéance puis s'écarte de la réalité : dépressions décalées, en avance ou en retard, vent ±12 % à 4-5 jours. À chaque nouveau run, le routage est recalculé : c'est le moment de revoir ta stratégie.</p>
     <h3>Ris (Minis)</h3><p>Au-delà de ~18 nd au près (~23 nd au portant) le Mini est surtoilé et perd de la vitesse : prends 1 ris, puis 2 au-dessus de ~24 / 30 nd. Chaque ris coûte de la puissance dans le petit temps, réduit la gîte et le risque de départ au lof. Manœuvre : 2 min 30.</p>
