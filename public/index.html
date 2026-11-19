@@ -197,6 +197,10 @@ tr.me td{color:#fff;font-weight:700;background:rgba(255,93,115,.12)}
 .advice{background:rgba(255,79,216,.1);border:1px solid rgba(255,79,216,.3);border-radius:8px;padding:5px 7px;margin-top:4px}
 .rbtns{display:flex;gap:4px;margin-top:5px}
 .rbtns button{flex:1;font-size:11px;padding:4px 4px}
+.rmodes{display:flex;margin-top:5px;border:1px solid rgba(255,79,216,.35);border-radius:7px;overflow:hidden}
+.rmodes button{flex:1;font-size:11px;padding:4px 2px;border:0;border-radius:0;background:transparent}
+.rmodes button+button{border-left:1px solid rgba(255,79,216,.25)}
+.rmodes button.on{background:rgba(255,79,216,.28);color:#fff;font-weight:700}
 button:disabled{opacity:.4;cursor:default}
 #man{height:20px;margin-top:5px;position:relative;border-radius:6px;background:rgba(255,255,255,.05);overflow:hidden;font-size:11px;line-height:20px;color:#ffe2bd}
 #manbar{position:absolute;left:0;top:0;bottom:0;width:0}
@@ -257,10 +261,6 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
   body.mobile .mtabs small{display:none}
 }
 </style>
-<script type="module">
-  import { inject } from 'https://cdn.jsdelivr.net/npm/@vercel/analytics@1/dist/index.mjs';
-  inject();
-</script>
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -270,6 +270,7 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
   <div id="tlBody"></div>
   <div id="router">
     <div class="rtitle">🧭 ROUTEUR</div>
+    <div class="rmodes" id="rModes"><button data-m="attack" title="Attaque : cherche la vitesse (vent fort, zones de vol), quitte à rallonger la route">⚡ Attaque</button><button data-m="normal" title="Normal : route la plus rapide sur la polaire">Normal</button><button data-m="safe" title="Prudent : route plus courte et plus directe, moins de manœuvres, évite la brise forte et les grains">🛡 Prudent</button></div>
     <div id="rInfo"></div>
     <div class="rbtns"><button id="rFinish">🏁 Vers l'arrivée</button><button id="rPick" title="Choisir un point sur la carte">📍 Point</button><button id="rClear" title="Effacer la route">✕</button></div>
     <div class="rbtns"><button id="rApply" title="Régler l'angle au vent conseillé (K)">Appliquer le cap</button><button id="rFollow" title="Suivre la route automatiquement (L) — coûte 1,5 %">Pilote routeur</button></div>
@@ -2266,7 +2267,7 @@ function showStopover() {
 function rankOf(b) { return standings().indexOf(b) + 1; }
 
 /* ===================== ROUTAGE (isochrones) + ordonnanceur de calculs ===================== */
-const ROUTE = { dest: null, busy: false, nodes: null, isos: [], eta: 0, t0: 0, follow: false, showIso: true, err: '', steps: 0, lastAuto: 0, pick: false, job: null };
+const ROUTE = { mode: (() => { try { const m = localStorage.getItem('offing.rmode'); return m === 'attack' || m === 'safe' ? m : 'normal'; } catch (e) { return 'normal'; } })(), dest: null, busy: false, nodes: null, isos: [], eta: 0, t0: 0, follow: false, showIso: true, err: '', steps: 0, lastAuto: 0, pick: false, job: null };
 // File de calculs de routage (joueur + concurrents). Exécutée par tranches dans frame(), dans le temps restant de l'image :
 // le routage ne bloque plus le rendu (avant : tranches de 14 ms enchaînées par setTimeout → saccades sur les grandes traversées).
 const JOBS = []; let jobsT = 0;
@@ -2282,6 +2283,29 @@ function runJobs(budget = 14) {
 // onglet en arrière-plan : rAF est suspendu, le calcul continue doucement
 setInterval(() => { if (document.hidden && JOBS.length) runJobs(30); }, 250);
 function cancelAllJobs() { JOBS.forEach(j => j.cancelled = true); boats.forEach(b => b.routeJob = null); }
+// distance restante sur la route, rallongement par rapport à l'orthodromie, vitesse moyenne prévue
+function routeStats() {
+  const R = ROUTE.nodes; if (!R || R.length < 2) return null;
+  if (_rs.nodes === R && Math.abs(gameT - _rs.g) < 600) return _rs.v;
+  let i = 1; while (i < R.length - 1 && R[i].t <= gameT) i++;
+  let d = gcDist(player.lat, player.lon, R[i].lat, R[i].lon); for (let j = i + 1; j < R.length; j++) d += gcDist(R[j - 1].lat, R[j - 1].lon, R[j].lat, R[j].lon);
+  const last = R[R.length - 1], direct = gcDist(player.lat, player.lon, last.lat, last.lon), left = Math.max(60, ROUTE.eta - gameT);
+  _rs.v = { d, over: direct > 1 ? d / direct - 1 : 0, v: d / (left / 3600) }; _rs.nodes = R; _rs.g = gameT; return _rs.v;
+}
+const _rs = { nodes: null, g: 0, v: null };
+const RMODE_NM = { attack: ['⚡ Attaque', '⚡ Attack'], normal: ['Normal', 'Normal'], safe: ['🛡 Prudent', '🛡 Safe'] };
+function routeStatsRow() {
+  const r = routeStats(); if (!r) return '';
+  const nm = RMODE_NM[ROUTE.nmode || 'normal'], pend = ROUTE.busy && ROUTE.mode !== (ROUTE.nmode || 'normal');
+  return `<div class="row"><span>${T('Route', 'Route')} <span class="muted">${T(nm[0], nm[1])}</span></span><b>${Math.round(r.d * (MODE === 'race' ? 1 : 10)) / (MODE === 'race' ? 1 : 10)} nm · ${r.v.toFixed(1)} ${T('nds', 'kn')}</b></div>`
+    + `<div class="row"><span class="muted">${T('Rallonge', 'Extra distance')}</span><b class="muted">+${Math.round(r.over * 100)} %${pend ? ' · ' + T('recalcul…', 'recomputing…') : ''}</b></div>`;
+}
+function setRouteMode(m) {
+  if (!RMODE_NM[m] || ROUTE.mode === m) return; ROUTE.mode = m; try { localStorage.setItem('offing.rmode', m); } catch (e) {}
+  updRModes(); toast(T('Routeur : ', 'Router: ') + T(RMODE_NM[m][0], RMODE_NM[m][1]), 1400);
+  if (ROUTE.dest) startRouting(ROUTE.dest);
+}
+function updRModes() { document.querySelectorAll('#rModes button').forEach(b => b.classList.toggle('on', b.dataset.m === ROUTE.mode)); }
 function clearRoute() { if (ROUTE.job) ROUTE.job.cancelled = true; Object.assign(ROUTE, { dest: null, busy: false, nodes: null, isos: [], err: '', follow: false, pick: false, job: null }); }
 // Pilote routeur « anti-échouement » : si la terre est à moins de ~0,3 nm sur le cap voulu, il s'écarte vers le large (même bord si possible)
 function pilotSafe(b, h, twd) {
@@ -2294,12 +2318,22 @@ function pilotSafe(b, h, twd) {
   return h;
 }
 function segLandLL(la1, lo1, la2, lo2, nm) { const n = Math.max(1, Math.ceil(nm / (MODE === 'race' ? (COURSE.coastal ? 0.2 : 1.5) : 0.1))); for (let i = 1; i <= n; i++) { const f = i / n; if (landFast(la1 + (la2 - la1) * f, lo1 + (lo2 - lo1) * f)) return true; } return false; }
-function makeRouteState(dest, b, keepIsos) {
+/* Profils du routeur : coût généralisé = temps réel + pénalité (s). L'ETA affichée reste le temps réel.
+   Attaque : bonus dans le vent fort et la zone de vol des foils (vitesse avant tout, route plus longue acceptée), couloir plus large.
+   Prudent : pénalise l'écart à la route directe (route plus courte), la brise forte et les grains, double le coût des manœuvres, couloir resserré.
+   Normal : coût = temps (routage historique, utilisé aussi par les bots). */
+const RMODES = { attack: { ang: 95, dk: 1.3, dc: 70, tack: 0 }, safe: { ang: 65, dk: 1.08, dc: 30, tack: 1 } };
+function rPen(m, a, tws, off, sq, s, sref) {
+  // attaque : récompense les bords plus rapides que la moyenne du front (angles de débridé, brise), et la zone de vol des foilers
+  if (m === 'attack') { const fz = CLS.foils ? smooth(-1.5, 1.5, tws - flyTws(a) * ((BAL[CLS.id] || {}).wk || 1)) : smooth(14, 22, tws); return -(0.35 * clamp((s - sref) / sref, -0.5, 0.5) + (CLS.foils ? 0.1 : 0.04) * fz); }
+  return 0.3 * smooth(25, 38, tws) + 0.14 * (1 - Math.cos(off * D2R)) + 0.12 * (sq || 0);
+}
+function makeRouteState(dest, b, keepIsos, mode) {
   const race = MODE === 'race', t0 = b.t !== undefined ? b.t : gameT, w0 = windFc(b.lat, b.lon, t0), short = race && COURSE.id === 'fastnet', coast = race && COURSE.coastal;
   const s0 = { lat: b.lat, lon: b.lon, t: t0, parent: null, twa: norm180(w0.twd - b.hdg), hdg: b.hdg, tws: w0.tws };
   const cl0 = Math.cos(s0.lat * D2R), Xd = (dest.lon - s0.lon) * 60 * cl0, Yd = (dest.lat - s0.lat) * 60;
   // concurrents au large : secteurs d'isochrone ×1,3 → 20 à 40 % de calcul en moins, ETA quasi identique (≤ 1 %)
-  return { coarse: race && !coast && !keepIsos, Xd, Yd, D0: Math.hypot(Xd, Yd), brg0: Math.atan2(Xd, Yd) * R2D, dest, race, short, dt: race ? (coast ? 600 : short ? 2700 : 7200) : 120, maxSteps: race ? (coast ? 360 : 480) : 400, tackLoss: race ? (CLS.foils ? 150 : 60) : 30, s0, front: [s0], step: 0, cl0, isos: [], keepIsos };
+  return { coarse: race && !coast && !keepIsos, Xd, Yd, D0: Math.hypot(Xd, Yd), brg0: Math.atan2(Xd, Yd) * R2D, dest, race, short, dt: race ? (coast ? 600 : short ? 2700 : 7200) : 120, maxSteps: race ? (coast ? 360 : 480) : 400, tackLoss: race ? (CLS.foils ? 150 : 60) : 30, s0, front: [s0], step: 0, cl0, isos: [], keepIsos, mode: mode && RMODES[mode] ? mode : null, vref: Math.max(4, bestFast(90, w0.tws)) / 3600, sref: Math.max(4, 0.85 * bestFast(90, w0.tws)) };
 }
 // Un pas d'isochrone, découpé : reprend là où il s'était arrêté si l'échéance `until` (performance.now) est dépassée.
 // Résultat identique au calcul d'un bloc ; seules les tranches changent (le pas transat pouvait prendre 15-20 ms d'un coup).
@@ -2315,38 +2349,43 @@ function routeStep(st, until = Infinity) {
     if (Math.abs(n.lat - dest.lat) * 60 > reachMax) continue;
     const d = gcDist(n.lat, n.lon, dest.lat, dest.lon); if (d > reachMax) continue;
     const brg = gcBrg(n.lat, n.lon, dest.lat, dest.lon), twa = norm180(w.twd - brg), s = bestFast(Math.abs(twa), w.tws), dd = Math.max(0, d - rr * 0.8);
-    if (s > 0.5 && dd <= s * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 && !segLandLL(n.lat, n.lon, dest.lat, dest.lon, Math.max(0, d - Math.max(rr, st.race ? 1 : 0.05)))) { const ta = n.t + dd / s * 3600; if (!C.best || ta < C.best.t) C.best = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: brg, tws: w.tws }; }
+    if (s > 0.5 && dd <= s * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 && !segLandLL(n.lat, n.lon, dest.lat, dest.lon, Math.max(0, d - Math.max(rr, st.race ? 1 : 0.05)))) { const ta = n.t + dd / s * 3600, c = st.mode ? ta + (n.pen || 0) + rPen(st.mode, Math.abs(twa), w.tws, 0, w.sq, s, st.sref) * (ta - n.t) : ta; if (!C.best || c < C.best.c) C.best = { lat: dest.lat, lon: dest.lon, t: ta, c, parent: n, twa, hdg: brg, tws: w.tws }; }
   }
   if (C.best) { st.best = C.best; st.cur = null; return 'done'; }
   if (st.step >= st.maxSteps || !st.front.length) { // côtier : nouvel essai plus fin, puis plus large (passes étroites, îles à contourner)
     if (st.race && COURSE.coastal && (st.retry || 0) < 2) { st.retry = (st.retry || 0) + 1; st.dt = st.retry === 1 ? 300 : 900; st.maxSteps = Math.round(216000 / st.dt); st.front = [st.s0]; st.step = 0; st.isos = []; st.wide = st.retry === 2; st.cur = null; return null; }
     st.cur = null; return 'fail'; }
-  const bins = C.bins, tol = Math.max(rr, st.race ? (COURSE.coastal ? 0.6 : 2.5) : 0.08);
+  const bins = C.bins, tol = Math.max(rr, st.race ? (COURSE.coastal ? 0.6 : 2.5) : 0.08), RM = st.mode ? RMODES[st.mode] : null, cAng = RM ? RM.ang : 80, cK = RM ? RM.dk : 1.15, cC = RM ? RM.dc : 50, vref = st.vref;
   for (; C.j < st.front.length; C.j++) {
     if ((C.j & 7) === 7 && performance.now() > until) return null;
     const n = st.front[C.j], w = ws[C.j], brgD = gcBrg(n.lat, n.lon, dest.lat, dest.lon), cn = Math.cos(n.lat * D2R), ex = (dest.lon - n.lon) * 60 * cn, ey = (dest.lat - n.lat) * 60, eL = Math.hypot(ex, ey);
     for (let off = -102; off <= 102; off += 6) {
       const h = norm360(brgD + off), twa = norm180(w.twd - h), s = bestFast(Math.abs(twa), w.tws); if (s < 0.3) continue;
-      const nm = s * ((n.parent && Math.sign(twa) !== Math.sign(n.twa)) ? dt - tackLoss : dt) / 3600, hr = h * D2R;
+      const turn = n.parent && Math.sign(twa) !== Math.sign(n.twa), nm = s * (turn ? dt - tackLoss : dt) / 3600, hr = h * D2R;
+      if (st.mode) { C.sS = (C.sS || 0) + s; C.nS = (C.nS || 0) + 1; }
+      const pr = st.mode ? rPen(st.mode, Math.abs(twa), w.tws, off, w.sq, s, st.sref) : 0, pen = st.mode ? (n.pen || 0) + pr * dt + (turn ? RM.tack * tackLoss : 0) : 0;
       const lat = n.lat + nm * Math.cos(hr) / 60, lon = n.lon + nm * Math.sin(hr) / (60 * cn);
       if (eL < nm + tol) { const sx = Math.sin(hr) * nm, sy = Math.cos(hr) * nm, u = clamp((ex * sx + ey * sy) / (nm * nm), 0, 1), cd = Math.hypot(ex - u * sx, ey - u * sy);
-        if (cd <= tol) { const ta = n.t + u * dt; if ((!C.arr || ta < C.arr.t) && !segLandLL(n.lat, n.lon, n.lat + u * sy / 60, n.lon + u * sx / (60 * cn), u * nm)) C.arr = { lat: dest.lat, lon: dest.lon, t: ta, parent: n, twa, hdg: h, tws: w.tws }; } }
+        if (cd <= tol) { const ta = n.t + u * dt, c = st.mode ? ta + (n.pen || 0) + pr * u * dt + (turn ? RM.tack * tackLoss : 0) : ta; if ((!C.arr || c < C.arr.c) && !segLandLL(n.lat, n.lon, n.lat + u * sy / 60, n.lon + u * sx / (60 * cn), u * nm)) C.arr = { lat: dest.lat, lon: dest.lon, t: ta, c, parent: n, twa, hdg: h, tws: w.tws }; } }
       const X = (lon - s0.lon) * 60 * cl0, Y = (lat - s0.lat) * 60, db = X * X + Y * Y;
-      if (st.step > 2 && !st.wide && (Math.abs(norm180(Math.atan2(X, Y) * R2D - st.brg0)) > 80 || (X - st.Xd) ** 2 + (Y - st.Yd) ** 2 > (st.D0 * 1.15 + 50) ** 2)) continue;
+      if (st.step > 2 && !st.wide && (Math.abs(norm180(Math.atan2(X, Y) * R2D - st.brg0)) > cAng || (X - st.Xd) ** 2 + (Y - st.Yd) ** 2 > (st.D0 * cK + cC) ** 2)) continue;
       const k = Math.floor(norm360(Math.atan2(X, Y) * R2D) / sector), prev = bins.get(k);
       // au large, près de l'arrivée : on garde aussi le nœud le plus proche de l'arrivée par secteur de 6° vu depuis l'arrivée
       // (sinon le critère « le plus loin du départ » élimine les nœuds qui contournent une île posée devant l'arrivée)
       const nearK = st.race && !COURSE.coastal && eL < 300 ? Math.floor(norm360(Math.atan2(lon - dest.lon, lat - dest.lat) * R2D) / 6) : -1, de2 = nearK >= 0 ? ((lon - dest.lon) * 60 * cn) ** 2 + ((lat - dest.lat) * 60) ** 2 : 0, pn = nearK >= 0 ? C.near.get(nearK) : null;
-      const keepFar = !(prev && db <= prev.db), keepNear = nearK >= 0 && (!pn || de2 < pn.de2);
+      // profil : progression comparée à pénalité égale (pénalité convertie en milles à la vitesse moyenne du front)
+      const sc = st.mode ? Math.sqrt(db) - pen * vref : db, dn = st.mode && nearK >= 0 ? Math.sqrt(de2) + pen * vref : de2;
+      const keepFar = !(prev && sc <= prev.sc), keepNear = nearK >= 0 && (!pn || dn < pn.dn);
       if (!keepFar && !keepNear) continue;
       if (segLandLL(n.lat, n.lon, lat, lon, nm)) continue;
-      const node = { lat, lon, t: n.t + dt, parent: n, twa, hdg: h, tws: w.tws, db, k, de2 };
+      const node = { lat, lon, t: n.t + dt, parent: n, twa, hdg: h, tws: w.tws, db, k, de2, sc, dn, pen };
       if (keepFar) bins.set(k, node); if (keepNear) C.near.set(nearK, node);
     }
   }
   st.cur = null;
   if (C.arr) { st.best = C.arr; return 'done'; }
   const fr = new Set(bins.values()); C.near.forEach(n => fr.add(n)); st.front = [...fr].sort((a, b) => a.k - b.k); st.step++;
+  if (st.mode) { let m = 0; st.front.forEach(n => { if (n.db > m) m = n.db; }); if (m > 0) st.vref = Math.max(2 / 3600, Math.sqrt(m) / (st.step * dt)); if (C.nS) st.sref = Math.max(3, 0.7 * st.sref + 0.3 * C.sS / C.nS); }
   if (st.keepIsos && st.step % (st.race ? Math.round(21600 / dt) : 5) === 0) { const dec = Math.max(1, Math.ceil(st.front.length / 320)); st.isos.push(st.front.filter((n, i) => i % dec === 0).map(n => [n.lat, n.lon, n.k * sector])); }
   return null;
 }
@@ -2354,12 +2393,12 @@ const flatNodes = best => { const out = []; for (let n = best; n; n = n.parent) 
 function startRouting(dest, shareWithBots) {
   if (!dest) return;
   if (ROUTE.job) ROUTE.job.cancelled = true;
-  const st = makeRouteState(dest, player, true);
+  const st = makeRouteState(dest, player, true, ROUTE.mode);
   Object.assign(ROUTE, { dest, busy: true, err: '', isos: st.isos, steps: 0, t0: gameT, lastAuto: gameT });
   const job = { st, onStep: s => { ROUTE.steps = s.step; }, onDone: (r, s) => {
     if (ROUTE.job !== job) return; ROUTE.job = null;
-    if (r === 'done') { Object.assign(ROUTE, { nodes: flatNodes(s.best), eta: s.best.t, busy: false }); if (ROUTE.follow) toast('Routage mis à jour', 1500);
-      if (shareWithBots) active.forEach(b => { if (!b.isPlayer && b.mi === dest.mi) b.route = { nodes: ROUTE.nodes, mi: dest.mi, t0: gameT - Math.random() * botEvery(b) * 3600 * 0.8, eta: s.best.t }; }); }
+    if (r === 'done') { Object.assign(ROUTE, { nodes: flatNodes(s.best), eta: s.best.t, busy: false, nmode: st.mode || 'normal' }); if (ROUTE.follow) toast('Routage mis à jour', 1500);
+      if (shareWithBots && !st.mode) active.forEach(b => { if (!b.isPlayer && b.mi === dest.mi) b.route = { nodes: ROUTE.nodes, mi: dest.mi, t0: gameT - Math.random() * botEvery(b) * 3600 * 0.8, eta: s.best.t }; }); }
     else Object.assign(ROUTE, { busy: false, err: 'Destination hors de portée (terre ou trop loin)', nodes: null });
   } };
   ROUTE.job = job; enqueueJob(job, true);
@@ -2450,7 +2489,7 @@ function saveGame() {
   try {
     const data = { v: 3, cls: CLS.id, DAILY: DAILY.on ? { ...DAILY } : null, WX_OFF, START_H, FC: { ...FC }, LEG: { ...LEG }, mode: MODE, course: COURSE.id, gameT, realRaceT, accel, TW: { ...TW }, buoys: TRAIN_BUOYS.map(b => b.done), saved: Date.now(),
       boats: active.map(b => { const o = { name: b.name }; BFIELDS.forEach(k => o[k] = b[k]); return o; }),
-      route: ROUTE.nodes ? { dest: ROUTE.dest, eta: ROUTE.eta, nodes: ROUTE.nodes, follow: ROUTE.follow } : null };
+      route: ROUTE.nodes ? { dest: ROUTE.dest, eta: ROUTE.eta, nodes: ROUTE.nodes, follow: ROUTE.follow, nmode: ROUTE.nmode } : null };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data)); lastSaveReal = realT;
   } catch (e) {}
 }
@@ -2461,7 +2500,7 @@ function restoreGame(d) {
   gameT = d.gameT; realRaceT = d.realRaceT || 0; if (d.FC) Object.assign(FC, d.FC); WX_OFF = d.WX_OFF || 0; START_H = d.START_H || 13; windDirty = true; if (d.LEG) Object.assign(LEG, d.LEG); accel = ACCELS.includes(d.accel) ? d.accel : accel; Object.assign(TW, d.TW || {});
   (d.buoys || []).forEach((x, i) => { if (TRAIN_BUOYS[i]) TRAIN_BUOYS[i].done = x; });
   d.boats.forEach(o => { const b = boats.find(x => x.name === o.name); if (b) { BFIELDS.forEach(k => { if (o[k] !== undefined) b[k] = o[k]; }); b.route = null; b.routeJob = null; b.nextDecision = Math.random() * 300; } });
-  if (d.route) Object.assign(ROUTE, { dest: d.route.dest, nodes: d.route.nodes, eta: d.route.eta, follow: !!d.route.follow, lastAuto: gameT, isos: [] });
+  if (d.route) Object.assign(ROUTE, { dest: d.route.dest, nodes: d.route.nodes, eta: d.route.eta, follow: !!d.route.follow, nmode: d.route.nmode || 'normal', lastAuto: gameT, isos: [] });
   else if (MODE === 'race') startRouting(markDest(player.mi));
   $('twAuto').textContent = TW.auto ? 'Vent : variable' : 'Vent : manuel'; $('twAuto').classList.toggle('on', !TW.auto);
   buildAccel(); windDirty = true;
@@ -2572,6 +2611,7 @@ $('rPick').onclick = () => { ROUTE.pick = !ROUTE.pick; if (ROUTE.pick && !$('tr'
 $('rApply').onclick = () => applyAdvice();
 $('rFollow').onclick = () => { if (!ROUTE.nodes) return; ROUTE.follow = !ROUTE.follow; toast(`Pilote routeur ${ROUTE.follow ? 'activé' : 'désactivé'}`, 1500); };
 $('rClear').onclick = () => clearRoute();
+document.querySelectorAll('#rModes button').forEach(b => b.onclick = () => setRouteMode(b.dataset.m)); updRModes();
 $('rstB').onclick = () => { setupMode('train'); running = true; };
 $('twAuto').onclick = () => { TW.auto = !TW.auto; $('twAuto').textContent = TW.auto ? 'Vent : variable' : 'Vent : manuel'; $('twAuto').classList.toggle('on', !TW.auto); windDirty = true; };
 $('twS').oninput = e => { TW.tws = +e.target.value; $('twSL').textContent = TW.tws + ' nd'; if (TW.auto) $('twAuto').click(); windDirty = true; };
@@ -2925,7 +2965,7 @@ function updateHUD() {
     const turnTxt = pl.turnNow ? T(`<b style="color:#ffb36b">${pl.turnNowType} à faire maintenant</b> (la route est sur l'autre bord)`, `<b style="color:#ffb36b">${pl.turnNowType} now</b> (the route is on the other tack)`) : pl.turn ? `${pl.turn.type} dans <b>${fmtIn(pl.turn.dt)}</b>${MODE === 'race' ? ' <span class="muted">(' + fmtRace(gameT + pl.turn.dt) + ')</span>' : ''} → TWA ${twaTxt(pl.turn.toTwa)}` : '<span class="muted">aucune jusqu\'à destination</span>';
     const fb = foilBoost(Math.abs(adv.twa), w.tws), foilTxtNow = pl.foilNow === '0' ? `<b>${T('relevés', 'up')}</b> <span class="muted">(${fb > 0 ? T('gain trop faible', 'gain too small') : T('près ou vent trop faible', 'upwind or wind too light')})</span>` : `<b>${foilName(pl.foilNow)}</b> <span class="muted">(+${Math.round(fb * 100)} %)</span>`;
     const foilNextTxt = pl.foilNext ? ` · ${T('puis', 'then')} <b>${foilName(pl.foilNext.f)}</b> ${pl.foilNext.afterTurn ? T('après la manœuvre', 'after the manoeuvre') : T('dans ', 'in ') + fmtIn(pl.foilNext.dt)}` : '';
-    rt = `<div class="row"><span>Destination</span><b>${ROUTE.dest.mk ? mN(ROUTE.dest.mk) : ROUTE.dest.name}</b></div><div class="row"><span>${T('ETA routage', 'Routing ETA')}</span><b>${MODE === 'race' ? fmtRace(ROUTE.eta) + ' (' + fmtDur(Math.max(0, left)) + ')' : T('dans ', 'in ') + Math.max(0, Math.round(left / 60)) + ' min'}</b></div>`
+    rt = `<div class="row"><span>Destination</span><b>${ROUTE.dest.mk ? mN(ROUTE.dest.mk) : ROUTE.dest.name}</b></div><div class="row"><span>${T('ETA routage', 'Routing ETA')}</span><b>${MODE === 'race' ? fmtRace(ROUTE.eta) + ' (' + fmtDur(Math.max(0, left)) + ')' : T('dans ', 'in ') + Math.max(0, Math.round(left / 60)) + ' min'}</b></div>${routeStatsRow()}`
       + `<div class="advice">${T('Cap conseillé', 'Suggested heading')} <b>${Math.round(adv.hdg)}°</b> · TWA <b style="color:${adv.twa >= 0 ? '#5dff9e' : '#ff6b6b'}">${twaTxt(adv.twa)}</b> · ${T('écart', 'off-track')} <b style="color:${adv.stale ? '#ff8a8a' : '#fff'}">${adv.xtrack.toFixed(MODE === 'race' ? 1 : 2)} nm</b>`
       + `<br>${T('Prochaine manœuvre', 'Next manoeuvre')} : ${turnTxt}`
       + `<br>Foils : ${foilTxtNow}${foilNextTxt}${pl.foilOk ? ' <span style="color:#5dff9e">✓</span>' : ` <span style="color:#ffb36b">⚠ ${T('à régler (F)', 'adjust (F)')}</span>`}`
@@ -2972,7 +3012,7 @@ const CONTROLS_FR = `<ul>
   <li><kbd>1</kbd> Foc · <kbd>2</kbd> Génois · <kbd>3</kbd> Spi (★ = meilleure voile) · <kbd>↑</kbd>/<kbd>↓</kbd> ou <kbd>Z</kbd>/<kbd>S</kbd> border / choquer (repère vert = optimal)</li>
   <li><kbd>B</kbd> foil bâbord · <kbd>N</kbd> foil tribord · <kbd>F</kbd> foil sous le vent · Minis et Class40 : <kbd>I</kbd> prendre un ris · <kbd>O</kbd> larguer un ris</li>
   <li><kbd>Y</kbd> afficher / masquer les fantômes · 🛰 nouvelle prévision météo toutes les 6 à 9 min de jeu</li>
-  <li>Routeur : <kbd>K</kbd> appliquer le cap conseillé · <kbd>L</kbd> pilote routeur · 📍 router vers un point de la carte</li>
+  <li>Routeur : <kbd>K</kbd> appliquer le cap conseillé · <kbd>L</kbd> pilote routeur · 📍 router vers un point de la carte · profils <b>⚡ Attaque</b> (cherche le vent fort et la zone de vol, route plus longue), <b>Normal</b> (route la plus rapide), <b>🛡 Prudent</b> (route plus directe, moins de manœuvres, évite brise forte et grains)</li>
   <li>Assistances : <kbd>A</kbd> voile auto, <kbd>G</kbd> foils auto, pilote routeur (−1,5 % chacune) · <kbd>R</kbd> écoute auto (80 % d'efficacité au plus) · <kbd>U</kbd> matossage auto (foils à 75 % de rendement au plus)</li>
   <li><kbd>+</kbd>/<kbd>−</kbd> vitesse du temps · <kbd>M</kbd> carte plein écran · <kbd>C</kbd> caméra (suiveuse, libre, à bord) · <kbd>X</kbd> son · <kbd>P</kbd> pause · <kbd>Échap</kbd> menu</li></ul>`;
 const CONTROLS_EN = `<ul>
@@ -3327,7 +3367,7 @@ function bindRecovery() {
 }
 /* ----- Traduction des textes fixes de l'interface (le français est la langue de base) ----- */
 const I18N = {
-  'ROUTEUR': 'ROUTER', '🏁 Vers l\'arrivée': '🏁 To the finish', '📍 Point': '📍 Point', 'Appliquer le cap': 'Apply heading', 'Pilote routeur': 'Router autopilot',
+  'ROUTEUR': 'ROUTER', '⚡ Attaque': '⚡ Attack', '🛡 Prudent': '🛡 Safe', 'Attaque : cherche la vitesse (vent fort, zones de vol), quitte à rallonger la route': 'Attack: chases speed (strong wind, flight zones), even on a longer route', 'Normal : route la plus rapide sur la polaire': 'Normal: fastest route on the polar', 'Prudent : route plus courte et plus directe, moins de manœuvres, évite la brise forte et les grains': 'Safe: shorter, more direct route, fewer manoeuvres, avoids strong breeze and squalls', '🏁 Vers l\'arrivée': '🏁 To the finish', '📍 Point': '📍 Point', 'Appliquer le cap': 'Apply heading', 'Pilote routeur': 'Router autopilot',
   'Passe à moins de 500 m des bouées orange, dans l\'ordre que tu veux. Règle le vent en bas à droite.': 'Pass within 500 m of the orange buoys, in any order. Set the wind bottom right.', '↻ Réinitialiser': '↻ Reset',
   '⛶': '⛶', '✕ Fermer': '✕ Close', '≋ Isochrones': '≋ Isochrones', 'Prévision': 'Forecast', 'Vent': 'Wind', '45 nd': '45 kn',
   'VITESSE': 'SPEED', 'CAP': 'HEADING', 'VENT (TWS)': 'WIND (TWS)', 'DIR. VENT (TWD)': 'WIND DIR. (TWD)', 'nd': 'kn', 'Allure :': 'Point of sail:', 'Perf. :': 'Perf.:', 'Gîte :': 'Heel:', 'Pression :': 'Pressure:',
