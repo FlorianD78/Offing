@@ -2910,6 +2910,7 @@ function placeBalP() {
   else if (inP) { $('bc').insertBefore(L, $('trimLine')); $('balLine').querySelector('.lbl').textContent = T('MATOS.', 'STACK'); }
   return ok;
 }
+const balW = f => 0.15 + 0.85 * smooth(0.1, 0.7, f || 0); // poids du matossage sur la gîte et l'assiette : faible dans l'eau, entier en vol
 function updateBalUI() {
   const P = player, tol = (BAL[CLS.id] || BAL.imoca).tol, pad = $('balPad');
   placeBalP();
@@ -2918,10 +2919,11 @@ function updateBalUI() {
   const gauge = (id, v, c, hw, lo, hi, txt) => { const g = $(id), f = x => clamp((x - lo) / (hi - lo), 0, 1) * 100, z = g.firstElementChild;
     z.style.left = f(c - hw) + '%'; z.style.width = (f(c + hw) - f(c - hw)) + '%'; g.lastElementChild.style.left = f(v) + '%'; $(id + 'Txt').textContent = txt; };
   // assiette : réglage actuel (poids sur l'avant → nez qui pique) et assiette optimale (bouge avec la houle) ; gîte : idem côté latéral
-  const mxO = P.mx - (P.balDP || 0), myO = P.my - (P.balDH || 0), base = 1.2 * (P.fly || 0);
-  const pv = base - 4 * P.mx, po = base - 4 * mxO; gauge('gPitch', pv, po, 0.56 * tol, -5, 5, (pv >= 0 ? '+' : '') + pv.toFixed(1) + '°');
-  const hb = P.heelIdeal || Math.abs(P.heel || 0) || 15, hv = Math.max(0, hb - 7 * (P.my - 0.5)), ho = Math.max(0, hb - 7 * (myO - 0.5));
-  gauge('gHeel', hv, ho, 1.1 * tol, 0, 30, hv.toFixed(0) + '°');
+  // dans l'eau, l'effet du poids sur l'angle est faible (wB) : la plage verte garde sa taille lisible, l'aiguille et la cible se resserrent
+  const wB = balW(P.flyV), mxO = P.mx - (P.balDP || 0), myO = P.my - (P.balDH || 0), base = 1.2 * (P.flyV || 0);
+  const pv = base - 4 * P.mx * wB, po = base - 4 * mxO * wB; gauge('gPitch', pv, po, 0.56 * tol * Math.max(0.35, wB), -5, 5, (pv >= 0 ? '+' : '') + pv.toFixed(1) + '°');
+  const hb = P.heelIdeal || Math.abs(P.heel || 0) || 15, hv = Math.max(0, hb - 7 * (P.my - 0.5) * wB), ho = Math.max(0, hb - 7 * (myO - 0.5) * wB);
+  gauge('gHeel', hv, ho, 1.1 * tol * Math.max(0.35, wB), 0, 30, hv.toFixed(0) + '°');
   $('flyTxt').textContent = P.crashT > 0 ? T('💥 Planté — redécollage dans ', '💥 Crashed — take-off in ') + Math.ceil(P.crashT / 60) + ' min' : P.fly > 0.85 ? T('✈ En vol', '✈ Flying') + ' · ' + T('rendement ', 'efficiency ') + Math.round((P.foilEff || 1) * 100) + ' %' : P.fly > 0.03 ? T('Décollage ', 'Taking off ') + Math.round(P.fly * 100) + ' %' : T('Dans l\'eau', 'In the water');
 }
 function setBal(mx, ms) { player.mx = Math.round(clamp(mx, -1, 1) * 20) / 20; player.ms = Math.round(clamp(ms, -1, 1) * 20) / 20; player.my = player.ms * ((player.twa || 0) >= 0 ? 1 : -1); player.autoBal = false; if (CLS.foils) updateBalUI(); }
@@ -3621,9 +3623,11 @@ function updateBoatVisual(b, rdt) {
   if (boost > 0.01 && a >= 40) heelT = side * Math.max(Math.abs(heelT), CLS.heelMax * (0.6 + 0.5 * Math.min(1, boost / 0.45)) * Math.min(1, b.spd / 12));
   if (CLS.foils && b.fly !== undefined && a >= 40 && fV > 0.08) heelT = side * Math.max(Math.abs(heelT), CLS.heelMax * (0.7 + 0.35 * smooth(0.08, 0.35, fV))); // les foils portent : le bateau se cale sur sa gîte
   heelT *= 1 - 0.14 * (b.reef || 0);
-  // matossage : le poids au vent redresse le bateau, sous le vent il le couche ; l'assiette suit le poids avant/arrière
+  // matossage : le poids au vent redresse le bateau, sous le vent il le couche ; l'assiette suit le poids avant/arrière.
+  // Dans l'eau la coque est portée par sa carène : gîte et assiette restent celles du vent et des vagues, le poids ne joue presque pas (15 %) ;
+  // l'effet monte avec le décollage et devient entier en vol, quand le bateau n'est plus tenu que par le foil et le safran.
   b.heelIdeal = Math.abs(heelT); let pitchT = 0;
-  if (CLS.foils && BAL[CLS.id] && a >= 25) { heelT += side * -7 * (b.balDH || 0); pitchT = (-4 * (b.balDP || 0) + 1.2 * (b.flyV || 0)) * D2R; }
+  if (CLS.foils && BAL[CLS.id] && a >= 25) { const wB = balW(fV); heelT += side * -7 * (b.balDH || 0) * wB; pitchT = (-4 * (b.balDP || 0) * wB + 1.2 * (b.flyV || 0)) * D2R; }
   if (b.crashFx > 0) { pitchT -= 0.13 * Math.sin(Math.PI * Math.min(1, (1 - b.crashFx) * 1.6)); b.crashFx = Math.max(0, b.crashFx - rdt * 0.5); }
   b.pitchV = (b.pitchV || 0) + (pitchT - (b.pitchV || 0)) * Math.min(1, rdt * 1.6);
   // départ au lof : le bateau se couche puis se redresse
