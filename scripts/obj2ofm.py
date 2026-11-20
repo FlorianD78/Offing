@@ -22,6 +22,11 @@ import sys, json, struct, base64, math, collections, numpy as np
 import fast_simplification as fs
 OBJ, MTL, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
 G, parts, mat = load(OBJ)
+# franc-bord réduit : la coque (jusqu'au pont, y ≤ 2,3 m) est écrasée verticalement de FB au-dessus de la flottaison ;
+# tout ce qui est plus haut (mât, gréement, bôme) descend d'autant, sans être déformé
+FB, YD = 0.8, 2.3
+def fy(y): return np.where(y <= 0, y, np.where(y <= YD, y * FB, y - YD * (1 - FB)))
+G[:, 1] = fy(G[:, 1])
 Kd = {}; Ns = {}; cur = None
 for line in open(MTL):
     t = line.split()
@@ -32,9 +37,9 @@ for line in open(MTL):
 SKIP = {'mainsail', 'mainsail_battens', 'mainsail_bands', 'mainsail_patches', 'jib_J2', 'jib_J2_battens', 'jib_J2_bands', 'foil_port'}
 GROUP = {'mast': 'mast', 'masthead': 'mast', 'spreaders': 'mast', 'outriggers': 'rig', 'rigging': 'rig', 'boom': 'boom', 'boom_fittings': 'boom',
          'keel_fin': 'keel', 'keel_bulb': 'keel', 'foil_starboard': 'foil'}
-MAST_BASE = np.array([0, 1.23, 0.94]); MAST_TOP = np.array([0, 28.79, 1.87]); RAKE = math.atan2(MAST_TOP[2] - MAST_BASE[2], MAST_TOP[1] - MAST_BASE[1])
-PIV = {'mast': MAST_BASE, 'boom': np.array([0, 3.3, 1.135]), 'keel': np.array([0, -0.5, 1.24])}
-META = {'v': 2, 'keelPivot': PIV['keel'].tolist(), 'boomPivot': PIV['boom'].tolist(), 'mastBase': MAST_BASE.tolist(), 'mastRake': RAKE, 'foilRoot': [0, 0, 0], 'bowY': 2.1, 'deckY': 1.6}
+MAST_BASE = np.array([0, float(fy(1.23)), 0.94]); MAST_TOP = np.array([0, float(fy(28.79)), 1.87]); RAKE = math.atan2(MAST_TOP[2] - MAST_BASE[2], MAST_TOP[1] - MAST_BASE[1])
+PIV = {'mast': MAST_BASE, 'boom': np.array([0, float(fy(3.3)), 1.135]), 'keel': np.array([0, -0.5, 1.24])}
+META = {'v': 2, 'keelPivot': PIV['keel'].tolist(), 'boomPivot': PIV['boom'].tolist(), 'mastBase': MAST_BASE.tolist(), 'mastRake': RAKE, 'foilRoot': [0, 0, 0], 'bowY': float(fy(2.1)), 'deckY': float(fy(1.6))}
 LO_DROP = {'coachroof_hatch', 'companionway_glass', 'companionway_frame', 'jammers', 'stern_round_hatch', 'stern_round_hatch_glass', 'winches', 'traveller',
            'deck_hatches', 'deck_hatch_glass', 'rudder_stock_pads', 'stern_gear', 'bow_fittings', 'nav_lights', 'masthead', 'boom_fittings', 'cockpit_seats', 'solar_panel', 'coachroof_windows'}
 LO_TARGET = {'deck': 0.22, 'bottom': 0.4, 'foil_starboard': 0.28, 'coachroof': 0.35, 'keel_bulb': 0.3, 'outriggers': 0.35, 'mast': 0.45, 'livery_swoosh': 0.5,
