@@ -399,7 +399,7 @@ const pad = v => String(v).padStart(2, '0');
 function fmtRace(s) { s = Math.max(0, Math.floor(s)); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return `J+${d} · ${pad(h)}:${pad(m)}`; }
 function fmtDur(s) { s = Math.max(0, Math.floor(s)); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + 'j ' : '') + `${pad(h)}h${pad(m)}`; }
 /* ===================== RÉGLAGES (langue, graphismes) ===================== */
-const SETTINGS = (() => { let o = {}; try { o = JSON.parse(localStorage.getItem('gl3d_settings')) || {}; } catch (e) {} return Object.assign({ lang: (navigator.language || 'fr').toLowerCase().startsWith('fr') ? 'fr' : 'fr', gfx: 'auto', halo: true, shore: true }, o); })();
+const SETTINGS = (() => { let o = {}; try { o = JSON.parse(localStorage.getItem('gl3d_settings')) || {}; } catch (e) {} return Object.assign({ lang: (navigator.language || 'fr').toLowerCase().startsWith('fr') ? 'fr' : 'fr', gfx: 'auto', halo: true, shore: true, fps: '60' }, o); })();
 const saveSettings = () => { try { localStorage.setItem('gl3d_settings', JSON.stringify(SETTINGS)); } catch (e) {} };
 let LANG = SETTINGS.lang === 'en' ? 'en' : 'fr';
 const T = (fr, en) => LANG === 'en' ? en : fr, TL = T; // TL : alias pour les fonctions qui ont une variable locale T
@@ -518,9 +518,11 @@ function lowCenters(t) { const d = (t + WX_OFF) / 86400, out = []; if (SOUTH()) 
    - une dorsale entre deux dépressions successives, qui remonte de l'anticyclone vers le NNE ;
    - une goutte froide (petite dépression isolée, lente) entre Açores et Ibérie, une partie du temps ;
    - deux ondes tropicales qui traversent les alizés d'est en ouest ; le pot-au-noir reste près de 5° N. */
-const WXC = { t: NaN, s: null, o: '' };
+const WXC = { t: NaN, s: null, o: '', w: NaN }, WXL = []; // dernier instant + 8 instants récents (mêmes résultats, sans recalcul)
 function wxSystems(t) {
-  const oc = COURSE.ocean || 'atl'; if (t === WXC.t && oc === WXC.o) return WXC.s; WXC.o = oc;
+  const oc = COURSE.ocean || 'atl'; if (t === WXC.t && oc === WXC.o && WX_OFF === WXC.w) return WXC.s;
+  for (let i = 0; i < WXL.length; i++) { const e = WXL[i]; if (e.t === t && e.o === oc && e.w === WX_OFF) { WXC.t = t; WXC.o = oc; WXC.w = WX_OFF; return WXC.s = e.s; } }
+  WXC.o = oc; WXC.w = WX_OFF;
   const d = (t + WX_OFF) / 86400, lows = lowCenters(t), fronts = [], ridges = [], waves = [];
   const S0 = SOUTH(), dk = S0 ? 33 : 24;
   for (const L of lows) {
@@ -540,7 +542,8 @@ function wxSystems(t) {
   const ca = S0 ? 0 : 10 * Math.max(0, Math.sin(d * 0.23 + 2.1)), cut = ca > 1.5 ? { lat: 36.5 + 3 * Math.sin(d * 0.21), lon: -21 + 8 * Math.sin(d * 0.13 + 1), amp: ca } : null;
   if (!S0) for (let k = 0; k < 2; k++) { const x = (((d * 6.5 + k * 26) % 52) + 52) % 52, a = 2.8 * Math.sin(Math.PI * x / 52); waves.push({ lat: 13.5, lon: -16 - x, brg: 8, sa: 420, sc: 100, amp: a }); }
   for (const o of fronts.concat(ridges, waves)) { const b = o.brg * D2R; o.sb = Math.sin(b); o.cb = Math.cos(b); o.ia = 1 / (2 * o.sa * o.sa); o.ic = 1 / (2 * o.sc * o.sc); o.r2 = 14 * 2 * Math.max(o.sa, o.sc) ** 2; }
-  return WXC.t = t, WXC.s = { d, hc: highCenter(t), lows, fronts, ridges, cut, waves };
+  const S = { d, hc: highCenter(t), lows, fronts, ridges, cut, waves }; WXL.unshift({ t, o: oc, w: WX_OFF, s: S }); if (WXL.length > 8) WXL.pop();
+  return WXC.t = t, WXC.s = S;
 }
 // gaussiennes rapides (cos de la latitude du point, rejet précoce loin du système) : pressure() est appelée 4 fois par calcul de vent
 function gq(lat, lon, cl, cLat, cLon, sLat, sLon) { const dy = (lat - cLat) * 60; if (dy * dy > 28 * sLat * sLat) return 0; const dx = (lon - cLon) * 60 * cl, q = dy * dy / (2 * sLat * sLat) + dx * dx / (2 * sLon * sLon); return q > 14 ? 0 : Math.exp(-q); }
@@ -810,6 +813,19 @@ float hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yz
 float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.0-2.0*f);
   return mix(mix(hash12(i), hash12(i+vec2(1.0,0.0)), u.x), mix(hash12(i+vec2(0.0,1.0)), hash12(i+vec2(1.0,1.0)), u.x), u.y); }
 float fbm(vec2 p){ return vnoise(p)*0.55 + vnoise(p*2.03+7.1)*0.28 + vnoise(p*4.1+3.3)*0.17; }`;
+const NOISE_TEX = (() => {
+  const S = 512, P = 64, du = P / S, R = new Float32Array(S * S);
+  const hsh = (i, j, s) => { let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(s, 2147483647); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const vn = (x, y, per, s) => { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), m = v => ((v % per) + per) % per;
+    const a = hsh(m(i), m(j), s), b = hsh(m(i + 1), m(j), s), c = hsh(m(i), m(j + 1), s), d = hsh(m(i + 1), m(j + 1), s); return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy; };
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const x = (i + 0.5) * du, y = (j + 0.5) * du;
+    R[j * S + i] = vn(x, y, P, 1) * 0.55 + vn(x * 2 + 7, y * 2 + 7, 2 * P, 2) * 0.28 + vn(x * 4 + 3, y * 4 + 3, 4 * P, 3) * 0.17; }
+  const G = new Float32Array(S * S), B = new Float32Array(S * S); let d = 1e-6; const w = (i, j) => R[((j + S) % S) * S + ((i + S) % S)];
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const o = j * S + i; G[o] = (w(i + 1, j) - w(i - 1, j)) / (2 * du); B[o] = (w(i, j + 1) - w(i, j - 1)) / (2 * du); d = Math.max(d, Math.abs(G[o]), Math.abs(B[o])); }
+  const img = new Uint8Array(S * S * 4); for (let o = 0; o < S * S; o++) { img[o * 4] = Math.round(R[o] * 255); img[o * 4 + 1] = Math.round((G[o] / d * 0.5 + 0.5) * 255); img[o * 4 + 2] = Math.round((B[o] / d * 0.5 + 0.5) * 255); img[o * 4 + 3] = 255; }
+  const tex = new THREE.DataTexture(img, S, S, THREE.RGBAFormat); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.needsUpdate = true; // sans mipmaps : même grain net que le bruit calculé
+  return { tex, d }; 
+})();
 const MOON = new THREE.Vector3(0.3, 0.5, 0.8).normalize(), SUNCOL = new THREE.Color(1, 0.93, 0.8);
 const SKYU = { uSun: { value: SUN }, uMoon: { value: MOON }, uSunCol: { value: SUNCOL }, uHorizon: { value: HORIZON }, uZenith: { value: ZENITH }, uDay: { value: 1 }, uCloud: { value: 0.3 }, uFlash: { value: 0 }, uCloudOff: { value: new THREE.Vector2() } };
 const UL = { value: 1 };
@@ -906,7 +922,11 @@ function fft1(re, im, off, st) {
 }
 function fft2(re, im) { for (let r = 0; r < FFT_N; r++) fft1(re, im, r * FFT_N, 1); for (let c = 0; c < FFT_N; c++) fft1(re, im, c, FFT_N); }
 const _f32 = new Float32Array(1), _u32 = new Uint32Array(_f32.buffer);
-function toHalf(v) { _f32[0] = v; const x = _u32[0], s = (x >>> 16) & 0x8000, e = ((x >>> 23) & 0xff) - 112; if (e <= 0) return s; if (e >= 31) return s | 0x7bff; return s | (e << 10) | ((x & 0x7fffff) >>> 13); }
+const HF_B = new Uint16Array(512), HF_S = new Uint8Array(512);
+(() => { for (let i = 0; i < 256; i++) { const e = i - 127; let b, sh;
+  if (e < -24) { b = 0; sh = 24; } else if (e < -14) { b = 0x0400 >> (-e - 14); sh = -e - 1; } else if (e <= 15) { b = (e + 15) << 10; sh = 13; } else { b = 0x7bff; sh = 24; }
+  HF_B[i] = b; HF_B[i | 0x100] = b | 0x8000; HF_S[i] = HF_S[i | 0x100] = sh; } })();
+function toHalf(v) { _f32[0] = v; const x = _u32[0], k = x >>> 23; return HF_B[k] + ((x & 0x7fffff) >>> HF_S[k]); } // tables base/décalage (dépassement → plus grand fini)
 // gaussiennes déterministes (même mer pour tous à chaque changement de vent)
 const oGauss = i => { const u1 = Math.max(1e-6, hrand(0x5ea, i * 2)), u2 = hrand(0x5ea, i * 2 + 1), r = Math.sqrt(-2 * Math.log(u1)); return [r * Math.cos(2 * Math.PI * u2), r * Math.sin(2 * Math.PI * u2)]; };
 const OCN_RE = new Float32Array(FFT_N * FFT_N), OCN_IM = new Float32Array(FFT_N * FFT_N), OCN_RE2 = new Float32Array(FFT_N * FFT_N), OCN_IM2 = new Float32Array(FFT_N * FFT_N);
@@ -915,8 +935,9 @@ const OCN_RE = new Float32Array(FFT_N * FFT_N), OCN_IM = new Float32Array(FFT_N 
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const o = j * N + i, mx = i < N / 2 ? i : i - N, mz = j < N / 2 ? j : j - N; kx[o] = 2 * Math.PI * mx / L; kz[o] = 2 * Math.PI * mz / L; kk[o] = Math.hypot(kx[o], kz[o]); w[o] = Math.sqrt(FFT_G * kk[o]); }
     OCN.kx[c] = kx; OCN.kz[c] = kz; OCN.kk[c] = kk; OCN.w[c] = w; OCN.h0r[c] = new Float32Array(N * N); OCN.h0i[c] = new Float32Array(N * N);
     OCN.H[c] = new Float32Array(N * N); OCN.DX[c] = new Float32Array(N * N); OCN.DZ[c] = new Float32Array(N * N);
-    const t = new THREE.DataTexture(new Uint16Array(N * N * 4), N, N, THREE.RGBAFormat, THREE.HalfFloatType);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; OCN.tex[c] = t; } })();
+    const mk = () => { const t = new THREE.DataTexture(new Uint16Array(N * N * 4), N, N, THREE.RGBAFormat, THREE.HalfFloatType);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; };
+    OCN.tex[c] = mk(); (OCN.stex || (OCN.stex = []))[c] = mk(); } })();
 // spectre de Phillips (vent U m/s vers la direction dir, radians, repère du monde x/z), normalisé sur la hauteur significative visée
 function oceanSpectrum(U, dir, hs) {
   const N = FFT_N, Lw = Math.max(0.5, U * U / FFT_G), wx = Math.sin(dir), wz = -Math.cos(dir), l = Lw / 900, kcut = Math.PI * N / OCN.L[0];
@@ -948,14 +969,16 @@ function oceanFFTUpdate(rdt, force) {
       OCN_RE2[o] = ai * uz; OCN_IM2[o] = -ar * uz;                  // Dz
     }
     fft2(OCN_RE, OCN_IM); fft2(OCN_RE2, OCN_IM2);
-    const H = OCN.H[c], DX = OCN.DX[c], DZ = OCN.DZ[c], img = OCN.tex[c].image.data, dx2 = 2 * OCN.L[c] / N, F = OCN.foam;
+    const H = OCN.H[c], DX = OCN.DX[c], DZ = OCN.DZ[c], img = OCN.tex[c].image.data, simg = OCN.stex[c].image.data, dx2 = 2 * OCN.L[c] / N, F = OCN.foam;
     for (let o = 0; o < N * N; o++) { H[o] = OCN_RE[o]; DX[o] = OCN_IM[o] * lam; DZ[o] = OCN_RE2[o] * lam; }
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const o = j * N + i, ip = j * N + ((i + 1) % N), im = j * N + ((i + N - 1) % N), jp = ((j + 1) % N) * N + i, jm = ((j + N - 1) % N) * N + i;
       let f = 0;
       if (c === 0) { const J = (1 + (DX[ip] - DX[im]) / dx2) * (1 + (DZ[jp] - DZ[jm]) / dx2) - ((DX[jp] - DX[jm]) / dx2) * ((DZ[ip] - DZ[im]) / dx2);
         f = F[o] = Math.max(F[o] * decay, clamp((0.92 - J) * 2.4, 0, 1)); }
-      const q = o * 4; img[q] = toHalf(DX[o]); img[q + 1] = toHalf(H[o]); img[q + 2] = toHalf(DZ[o]); img[q + 3] = toHalf(f); }
-    OCN.tex[c].needsUpdate = true;
+      const q = o * 4; img[q] = toHalf(DX[o]); img[q + 1] = toHalf(H[o]); img[q + 2] = toHalf(DZ[o]); img[q + 3] = toHalf(f);
+      // pentes (différences centrées sur la grille : identiques aux 4 lectures décalées d'un texel du fragment, filtrage linéaire compris)
+      simg[q] = toHalf((H[ip] - H[im]) / dx2); simg[q + 1] = toHalf((H[jp] - H[jm]) / dx2); simg[q + 2] = img[q + 3]; }
+    OCN.tex[c].needsUpdate = true; OCN.stex[c].needsUpdate = true;
   }
 }
 // hauteur FFT au point (x, z) du monde affiché (bilinéaire), pour l'assiette des bateaux, la caméra, les bouées
@@ -1018,7 +1041,7 @@ const oceanU = {
   uWind: { value: new THREE.Vector3(0, 1, 10) },
   uFog: { value: 0.000095 }, uRain: { value: 0 }, uGustT: { value: 0 },
   uSdf: { value: null }, uSdfC: { value: new THREE.Vector2() }, uSdfS: { value: 9000 }, uSdfOn: { value: 0 },
-  uGerS: { value: 0 }, uFA: { value: OCN.tex[0] }, uFB: { value: OCN.tex[1] }, uFG: { value: new THREE.Vector4() }, uFL: { value: new THREE.Vector2(1 / OCN.L[0], 1 / OCN.L[1]) }, uFOn: { value: 1 }, uHs: { value: 1 },
+  uGerS: { value: 0 }, uFA: { value: OCN.tex[0] }, uFB: { value: OCN.tex[1] }, uSA: { value: OCN.stex[0] }, uSB: { value: OCN.stex[1] }, uNz: { value: NOISE_TEX.tex }, uNzD: { value: NOISE_TEX.d }, uFG: { value: new THREE.Vector4() }, uFL: { value: new THREE.Vector2(1 / OCN.L[0], 1 / OCN.L[1]) }, uFOn: { value: 1 }, uHs: { value: 1 },
   uBA: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uBB: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uHB: { value: new Array(16).fill(1) }, uBC: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uNB: { value: 0 },
 };
 Object.assign(oceanU, SKYU);
@@ -1065,6 +1088,10 @@ const oceanMat = new THREE.ShaderMaterial({
       gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.0);
     }`,
   fragmentShader: SKY_FN + WAVE_DECL + `
+    uniform sampler2D uSA; uniform sampler2D uSB; uniform sampler2D uNz; uniform float uNzD;
+    // bruit lu dans une texture répétable (R = fbm 3 octaves, G/B = ses pentes) : 1 lecture au lieu de 3 bruits de valeur (12 hachages)
+    float fbmT(vec2 p){ return texture2D(uNz, p * 0.015625).r; }
+    vec2 fbmTd(vec2 p){ return (texture2D(uNz, p * 0.015625).gb * 2.0 - 1.0) * uNzD; }
     uniform float uFog; uniform vec2 uG; uniform vec3 uWind; uniform float uRain; uniform float uGustT;
     uniform sampler2D uSdf; uniform vec2 uSdfC; uniform float uSdfS; uniform float uSdfOn;
     varying vec3 vWorld; varying float vAtt; varying float vAttS; varying float vCrest; varying vec2 vP0;
@@ -1080,9 +1107,9 @@ const oceanMat = new THREE.ShaderMaterial({
       if (uFOn > 0.5) { // pentes de la mer FFT (différences finies) et écume des crêtes déferlantes
         float e = 1.0 / 64.0; vec2 ua = (vP0 + uFG.xy) * uFL.x + 0.5 / 64.0, ub = (vP0 + uFG.zw) * uFL.y + 0.5 / 64.0;
         float kA = (1.0 - smoothstep(900.0, 5000.0, camD)) * vAtt / (2.0 * e / uFL.x), kB = (1.0 - smoothstep(80.0, 450.0, camD)) / (2.0 * e / uFL.y);
-        dx += (texture2D(uFA, ua + vec2(e, 0.0)).y - texture2D(uFA, ua - vec2(e, 0.0)).y) * kA + (texture2D(uFB, ub + vec2(e, 0.0)).y - texture2D(uFB, ub - vec2(e, 0.0)).y) * kB;
-        dz += (texture2D(uFA, ua + vec2(0.0, e)).y - texture2D(uFA, ua - vec2(0.0, e)).y) * kA + (texture2D(uFB, ub + vec2(0.0, e)).y - texture2D(uFB, ub - vec2(0.0, e)).y) * kB;
-        foamF = texture2D(uFA, ua).w;
+        vec3 sa = texture2D(uSA, ua).xyz; vec2 sb = texture2D(uSB, ub).xy; float k2e = 2.0 * e; // pentes précalculées : 2 lectures au lieu de 9
+        dx += sa.x * k2e / uFL.x * kA + sb.x * k2e / uFL.y * kB; dz += sa.y * k2e / uFL.x * kA + sb.y * k2e / uFL.y * kB;
+        foamF = sa.z;
       }
       float df = 1.0 - smoothstep(40.0, 700.0, camD);
       vec2 r1 = vec2(0.8,0.6); float c1 = 0.045*cos(dot(r1,p)*1.3 + uTime*3.6 + uPh[2]*7.0)*df;
@@ -1090,13 +1117,13 @@ const oceanMat = new THREE.ShaderMaterial({
       vec2 r3 = vec2(0.17,-0.98); float c3 = 0.04*cos(dot(r3,p)*3.4 + uTime*5.8 + uPh[4]*3.0)*df;
       vec2 wp = p + uG; vec2 wd = uWind.xy;
       // risées (cat's paws) : plaques de vent plus fort qui défilent sous le vent, eau plus sombre et plus ridée
-      float gust = smoothstep(0.5, 0.78, fbm(wp * 0.0045 - wd * uGustT * 0.0045)) * smoothstep(5.0, 14.0, uWind.z);
+      float gust = smoothstep(0.5, 0.78, fbmT(wp * 0.0045 - wd * uGustT * 0.0045)) * smoothstep(5.0, 14.0, uWind.z);
       float rip = (0.6 + 0.4 * uAmp) * (1.0 + gust * 0.9);
       dx += (c1*r1.x + c2*r2.x + c3*r3.x) * rip; dz += (c1*r1.y + c2*r2.y + c3*r3.y) * rip;
       // micro-relief : clapot fin, en bruit, ancré dans l'eau
       float df2 = 1.0 - smoothstep(15.0, 220.0, camD);
-      if (df2 > 0.0) { vec2 q = wp * 0.55 + wd * uTime * 0.9; float e = 0.35, n0 = fbm(q), nx = fbm(q + vec2(e, 0.0)), nz2 = fbm(q + vec2(0.0, e));
-        float k = (0.2 + 0.25 * uAmp + gust * 0.25 + uRain * 0.35) * df2; dx += (nx - n0) / e * k; dz += (nz2 - n0) / e * k; }
+      if (df2 > 0.0) { vec2 g = fbmTd(wp * 0.55 + wd * uTime * 0.9); // pente du bruit lue directement (avant : 3 fbm par différences finies)
+        float k = (0.2 + 0.25 * uAmp + gust * 0.25 + uRain * 0.35) * df2; dx += g.x * k; dz += g.y * k; }
       // gouttes de pluie : petits anneaux qui s'élargissent
       float ring = 0.0;
       if (uRain > 0.02 && df2 > 0.0) { vec2 g = wp * 1.4, ci = floor(g), f = fract(g) - 0.5; float h = hash12(ci), tt = fract(uTime * (0.9 + h) + h * 7.0);
@@ -1124,15 +1151,15 @@ const oceanMat = new THREE.ShaderMaterial({
       col = mix(col, col + vec3(0.18) * light, ring);
       // moutons : crêtes de la mer du vent, fragmentés par du bruit ancré dans l'eau
       float wk = smoothstep(0.55, 1.35, uAmp);
-      float nz = fbm(wp * 0.11 + vec2(uTime * 0.05, 0.0));
+      float nz = fbmT(wp * 0.11 + vec2(uTime * 0.05, 0.0));
       float caps = uFOn > 0.5 ? smoothstep(0.12, 0.75, foamF * (0.6 + 0.8 * nz)) * smoothstep(0.3, 0.9, uAmp) : smoothstep(0.62, 0.95, vCrest * 0.75 + nz * 0.55) * wk;
       // stries d'écume dans le sens du vent par mer forte
       vec2 q = vec2(dot(wp, wd), dot(wp, vec2(-wd.y, wd.x)));
-      float streak = smoothstep(0.62, 0.9, fbm(vec2(q.x * 0.012, q.y * 0.18))) * smoothstep(22.0, 34.0, uWind.z) * 0.6;
+      float streak = smoothstep(0.62, 0.9, fbmT(vec2(q.x * 0.012, q.y * 0.18))) * smoothstep(22.0, 34.0, uWind.z) * 0.6;
       float foam = clamp(caps * (1.0 + gust * 0.6) + streak * (0.4 + 0.6 * clamp(vCrest, 0.0, 1.0)), 0.0, 1.0) * vAtt * (0.4 + 0.6 * df);
       col = mix(col, vec3(0.9, 0.95, 0.98) * (light * 0.95 + 0.05) + vec3(0.5) * uFlash, foam * 0.85);
       // contact eau/coque : liseré d'écume le long de la flottaison, bras de Kelvin depuis l'étrave, sillage turbulent derrière le tableau
-      if (uNB > 0.5) { float hf = 0.0, nn = fbm(wp * 0.8 + vec2(uTime * 0.35, -uTime * 0.2));
+      if (uNB > 0.5) { float hf = 0.0, nn = fbmT(wp * 0.8 + vec2(uTime * 0.35, -uTime * 0.2));
         for (int i = 0; i < 4; i++) { if (float(i) >= uNB) break;
           vec2 d = vWorld.xz - uBA[i].xy, f = uBA[i].zw; float L = uBB[i].y, v = uBB[i].x, s = uBB[i].z - dot(d, f), at = abs(dot(d, vec2(-f.y, f.x))), u = s / L;
           float sv = smoothstep(0.4, 3.5, v); if (sv <= 0.0 || u < -0.3 || u > 9.0) continue;
@@ -1152,7 +1179,7 @@ const oceanMat = new THREE.ShaderMaterial({
           float sh = (1.0 - smoothstep(80.0, 1100.0, d)) * ef;
           vec3 lagoon = mix(vec3(0.06, 0.5, 0.52), vec3(0.5, 0.62, 0.48), 1.0 - smoothstep(0.0, 260.0, d));
           col = mix(col, lagoon * (0.25 + 0.75 * light) * (0.75 + 0.25 * max(dot(n, uSun), 0.0)) + uSunCol * pow(sd, 350.0) * sunUp * clr, sh * 0.72);
-          float surf = (1.0 - smoothstep(0.0, 55.0, d)) * (0.6 + 0.4 * sin(d * 0.14 - uTime * 2.2 + fbm(wp * 0.02) * 4.0)) * ef;
+          float surf = (1.0 - smoothstep(0.0, 55.0, d)) * (0.6 + 0.4 * sin(d * 0.14 - uTime * 2.2 + fbmT(wp * 0.02) * 4.0)) * ef;
           col = mix(col, vec3(0.93, 0.97, 1.0) * (light * 0.9 + 0.1), clamp(surf, 0.0, 1.0) * 0.9);
         }
       }
@@ -2125,7 +2152,7 @@ let legRoutes = [];
 function computeLegRoutes() {
   legRoutes = [];
   for (let i = 1; i < curMarks().length; i++) { const from = markDest(i - 1), to = markDest(i), st = makeRouteState(to, { lat: from.lat, lon: from.lon, hdg: gcBrg(from.lat, from.lon, to.lat, to.lon), t: gameT + i * (COURSE.coastal ? 1.5 : 30) * 3600 }, false);
-    enqueueJob({ st, onDone: (r, s2) => { if (r === 'done') legRoutes[i] = { nodes: flatNodes(s2.best), mi: i }; } }, false); }
+    enqueueJob({ bot: true, st, onDone: (r, s2) => { if (r === 'done') legRoutes[i] = { nodes: flatNodes(s2.best), mi: i }; } }, false); }
 }
 function markDest(i) { const m = curMarks()[i]; return m ? { lat: m.lat, lon: m.lon, r: m.r, name: m.name, mi: i, mk: m } : null; }
 
@@ -2396,11 +2423,11 @@ const ROUTE = { mode: (() => { try { const m = localStorage.getItem('offing.rmod
 // le routage ne bloque plus le rendu (avant : tranches de 14 ms enchaînées par setTimeout → saccades sur les grandes traversées).
 const JOBS = []; let jobsT = 0;
 function enqueueJob(job, urgent) { urgent ? JOBS.unshift(job) : JOBS.push(job); }
-function runJobs(budget = 14) {
+function runJobs(budget = 14, botCap = budget) {
   const t1 = performance.now();
-  while (JOBS.length && performance.now() - t1 < budget) {
+  while (JOBS.length && performance.now() - t1 < (JOBS[0].bot ? Math.min(budget, botCap) : budget)) {
     const j = JOBS[0]; if (j.cancelled) { JOBS.shift(); continue; }
-    const r = routeStep(j.st, t1 + budget); if (j.onStep) j.onStep(j.st);
+    const r = routeStep(j.st, t1 + (j.bot ? Math.min(budget, botCap) : budget)); if (j.onStep) j.onStep(j.st);
     if (r) { JOBS.shift(); j.onDone(r, j.st); }
   }
 }
@@ -2468,7 +2495,7 @@ function routeStep(st, until = Infinity) {
   const sector = st.race ? clamp(R2D * Math.atan2(st.short || COURSE.coastal ? 4 : 12, D), 0.3, 3) * (st.coarse ? 1.3 : 1) : clamp(R2D * Math.atan2(0.25, D), 0.4, 5);
   const reachMax = 45 * dt * (st.race && COURSE.coastal ? 3 : 1) / 3600 + rr;
   for (; C.i < st.front.length; C.i++) {
-    if ((C.i & 31) === 31 && performance.now() > until) return null;
+    if ((C.i & 7) === 7 && performance.now() > until) return null;
     const n = st.front[C.i], w = windFc(n.lat, n.lon, n.t); ws[C.i] = w;
     if (Math.abs(n.lat - dest.lat) * 60 > reachMax) continue;
     const d = gcDist(n.lat, n.lon, dest.lat, dest.lon); if (d > reachMax) continue;
@@ -2481,7 +2508,7 @@ function routeStep(st, until = Infinity) {
     st.cur = null; return 'fail'; }
   const bins = C.bins, tol = Math.max(rr, st.race ? (COURSE.coastal ? 0.6 : 2.5) : 0.08), RM = st.mode ? RMODES[st.mode] : null, cAng = RM ? RM.ang : 80, cK = RM ? RM.dk : 1.15, cC = RM ? RM.dc : 50, vref = st.vref;
   for (; C.j < st.front.length; C.j++) {
-    if ((C.j & 7) === 7 && performance.now() > until) return null;
+    if (C.j > 0 && performance.now() > until) return null; // contrôle à chaque nœud : 35 caps testés par nœud
     const n = st.front[C.j], w = ws[C.j], brgD = gcBrg(n.lat, n.lon, dest.lat, dest.lon), cn = Math.cos(n.lat * D2R), ex = (dest.lon - n.lon) * 60 * cn, ey = (dest.lat - n.lat) * 60, eL = Math.hypot(ex, ey);
     for (let off = -102; off <= 102; off += 6) {
       const h = norm360(brgD + off), twa = norm180(w.twd - h), s = bestFast(Math.abs(twa), w.tws); if (s < 0.3) continue;
@@ -2536,13 +2563,13 @@ function scheduleBotRoute(b) {
     else b.route = { nodes: null, mi: dest.mi, t0: gameT };
     b.nextDecision = Math.min(b.nextDecision, 60);
   } };
-  b.routeJob = job; enqueueJob(job, false);
+  job.bot = true; b.routeJob = job; enqueueJob(job, false);
 }
 // pré-calcul de la branche suivante depuis la marque (à l'heure d'arrivée prévue)
 function scheduleNextLeg(b, dest, arrival) {
   const nd = markDest(dest.mi + 1); if (!nd || (b.nextRoute && b.nextRoute.mi === nd.mi && gameT - b.nextRoute.t0 < 6 * 3600)) return;
   const st = makeRouteState(nd, { lat: dest.lat, lon: dest.lon, hdg: arrival.hdg, t: arrival.t }, false);
-  enqueueJob({ st, onDone: (r, s) => { if (r === 'done') b.nextRoute = { nodes: flatNodes(s.best), mi: nd.mi, t0: gameT, eta: s.best.t }; } }, false);
+  enqueueJob({ bot: true, st, onDone: (r, s) => { if (r === 'done') b.nextRoute = { nodes: flatNodes(s.best), mi: nd.mi, t0: gameT, eta: s.best.t }; } }, false);
 }
 function routeAdviceFor(b, Rt) {
   const R = Rt.nodes; if (!R || R.length < 2) return null;
@@ -3237,6 +3264,7 @@ function showMenu(view = 'home') {
     html += `${BACK}<h3>⚙ ${T('Réglages', 'Settings')}</h3>
     <div class="setrow"><div><b>${T('Langue', 'Language')}</b></div>${seg('lang', [['fr', 'Français'], ['en', 'English']])}</div>
     <div class="setrow"><div><b>${T('Qualité graphique', 'Graphics quality')}</b><small>${T(`Actuelle : ${GFX.level === 'low' ? 'basse' : GFX.level === 'med' ? 'moyenne' : 'haute'}. Basse : résolution réduite, sans ombres, mer allégée.`, `Current: ${GFX.level}. Low: reduced resolution, no shadows, lighter sea mesh.`)}</small></div>${seg('gfx', [['auto', 'Auto'], ['low', T('Basse', 'Low')], ['med', T('Moyenne', 'Medium')], ['high', T('Haute', 'High')]])}</div>
+    <div class="setrow"><div><b>${T('Images par seconde', 'Frame rate')}</b><small>${T('60 : fluide et économe. Éco : 30 i/s, moitié moins de calcul (portable sur batterie). Max : fréquence de l\'écran (120 Hz, 144 Hz…).', '60: smooth and frugal. Eco: 30 fps, half the work (laptop on battery). Max: screen refresh rate (120 Hz, 144 Hz…).')}</small></div>${seg('fps', [['30', T('Éco', 'Eco')], ['60', '60'], ['max', 'Max']])}</div>
     <div class="setrow"><div><b>${T('Halo des bouées', 'Mark halos')}</b><small>${T('Disque lumineux sur la zone de validation de chaque marque.', 'Glowing disc over each mark\'s rounding zone.')}</small></div>${seg('halo', [[true, T('Oui', 'On')], [false, T('Non', 'Off')]])}</div>
     <div class="setrow"><div><b>${T('Hauts-fonds', 'Shallows')}</b><small>${T('Eau turquoise et ressac près des côtes, alerte « terre devant ».', 'Turquoise water and surf near coasts, “land ahead” warning.')}</small></div>${seg('shore', [[true, T('Oui', 'On')], [false, T('Non', 'Off')]])}</div>
     <div class="setrow"><div><b>${T('Interface', 'Layout')}</b></div><div class="seg"><button id="mobToggle" class="${isMobile() ? 'on' : ''}">📱 ${T('Téléphone', 'Phone')}</button></div></div>
@@ -4084,8 +4112,14 @@ function perfAdapt(ms) {
   if (sc !== PERF.scale) { PERF.scale = sc; renderer.setPixelRatio(GFX.pr * sc); }
 }
 
+/* Cadence : 60 i/s par défaut (30 en mode éco, « max » = fréquence de l'écran). On ne dessine qu'un rafraîchissement sur n,
+   n entier calculé sur la fréquence mesurée de l'écran : 120 Hz → 60 i/s, 144 Hz → 72, 75 Hz → 75 (pas de cadence saccadée). */
+const FCAP = { last: 0, ref: 16.7, k: 0 };
 function frame(now) {
-  perfAdapt(now - last); const rdt = Math.min(0.1, (now - last) / 1000); last = now; realT += rdt;
+  const dd = now - FCAP.last; FCAP.last = now; if (dd > 2 && dd < 50) FCAP.ref += (dd - FCAP.ref) * 0.05;
+  const tgt = SETTINGS.fps === 'max' ? 0 : SETTINGS.fps === '30' ? 30 : 60, nSkip = tgt ? Math.max(1, Math.round(1000 / tgt / FCAP.ref)) : 1;
+  if (++FCAP.k < nSkip && !document.hidden) { requestAnimationFrame(frame); return; } FCAP.k = 0;
+  perfAdapt((now - last) * (tgt === 30 ? 0.5 : 1)); const rdt = Math.min(0.1, (now - last) / 1000); last = now; realT += rdt;
   handleInput(rdt);
   if (running && !paused) {
     if (!player.finished) realRaceT += rdt;
@@ -4117,7 +4151,7 @@ function frame(now) {
   if (mapAcc > 0.1) { mapAcc = 0; drawMap(); }
   if (polAcc > 0.2) { polAcc = 0; drawPolar(); }
   renderer.render(scene, camera);
-  if (JOBS.length) { const idle = !running || paused || MENU_CINE, used = performance.now() - now; runJobs(idle ? 12 : clamp(11 - used, 2.5, 8)); }
+  if (JOBS.length) { const idle = !running || paused || MENU_CINE, used = performance.now() - now; runJobs(idle ? 12 : clamp(11 - used, 2.5, 8), idle ? 12 : 3); }
   requestAnimationFrame(frame);
 }
 resize(); { let c0 = 'imoca'; try { c0 = localStorage.getItem('gl3d_cls') || 'imoca'; } catch (e) {} setClass(c0); } setupMode('race', 'transat');
