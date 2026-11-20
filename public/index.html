@@ -2199,11 +2199,11 @@ function markDest(i) { const m = curMarks()[i]; return m ? { lat: m.lat, lon: m.
 function applyPenalty(b, label, f, dur) { b.pens = (b.pens || 0) + 1; if (b.penT > 0) { b.penF = Math.min(b.penF, f); b.penT = Math.max(b.penT, dur); } else { b.penF = f; b.penT = dur; } b.penDur = b.penT; b.penLabel = label; }
 function segFine(la1, lo1, la2, lo2, nm, step) { const n = Math.max(1, Math.ceil(nm / step)); for (let i = 1; i <= n; i++) { const f = i / n; if (landFast(la1 + (la2 - la1) * f, lo1 + (lo2 - lo1) * f)) return true; } return false; }
 const CZ = () => MODE === 'race' && !!COURSE.coastal;
-function landAhead(b, h) { const far = CZ() ? 4 : MODE === 'race' && COURSE.id === 'fastnet' ? 12 : 35, p1 = moveLL(b.lat, b.lon, h, 2); if (segFine(b.lat, b.lon, p1[0], p1[1], 2, 0.08)) return true; const p2 = moveLL(b.lat, b.lon, h, far); return segFine(p1[0], p1[1], p2[0], p2[1], far - 2, 1); }
-function vmcBest(b, wp, w) {
+function landAhead(b, h, lim) { const far = Math.min(CZ() ? 4 : MODE === 'race' && COURSE.id === 'fastnet' ? 12 : 35, lim || 1e9), n1 = Math.min(2, far), p1 = moveLL(b.lat, b.lon, h, n1); if (segFine(b.lat, b.lon, p1[0], p1[1], n1, 0.08)) return true; if (far <= 2) return false; const p2 = moveLL(b.lat, b.lon, h, far); return segFine(p1[0], p1[1], p2[0], p2[1], far - 2, 1); }
+function vmcBest(b, wp, w, lim) {
   const brg = gcBrg(b.lat, b.lon, wp[0], wp[1]), best = { 1: { v: -1e9, h: b.hdg }, '-1': { v: -1e9, h: b.hdg } };
-  for (let off = -120; off <= 120; off += 3) { const h = norm360(brg + off), twa = norm180(w.twd - h), v = bestFull(Math.abs(twa), w.tws) * Math.cos(off * D2R), side = twa >= 0 ? 1 : -1; if (v > best[side].v && !landAhead(b, h)) best[side] = { v, h }; }
-  if (best[1].v < -1e8 && best[-1].v < -1e8) for (let off = 123; off <= 357; off += 3) { const h = norm360(brg + off), twa = norm180(w.twd - h), v = bestFull(Math.abs(twa), w.tws) * Math.cos(off * D2R) - 50, side = twa >= 0 ? 1 : -1; if (v > best[side].v && !landAhead(b, h)) best[side] = { v, h }; }
+  for (let off = -120; off <= 120; off += 3) { const h = norm360(brg + off), twa = norm180(w.twd - h), v = bestFull(Math.abs(twa), w.tws) * Math.cos(off * D2R), side = twa >= 0 ? 1 : -1; if (v > best[side].v && !landAhead(b, h, lim)) best[side] = { v, h }; }
+  if (best[1].v < -1e8 && best[-1].v < -1e8) for (let off = 123; off <= 357; off += 3) { const h = norm360(brg + off), twa = norm180(w.twd - h), v = bestFull(Math.abs(twa), w.tws) * Math.cos(off * D2R) - 50, side = twa >= 0 ? 1 : -1; if (v > best[side].v && !landAhead(b, h, lim)) best[side] = { v, h }; }
   return best;
 }
 /* Les adversaires se routent eux aussi (isochrones), chacun à sa cadence ; secours VMC si pas encore de route */
@@ -2224,12 +2224,22 @@ function botDecide(b, w, dt) {
   // et les recalculs s'étalent au lieu de partir tous ensemble à la sortie du run.
   if (valid && R.fc !== FC.n) { if (b.fcPend == null) b.fcPend = gameT; } else b.fcPend = null;
   const lag = (b.every - 6) * 3600 * (COURSE.coastal ? 0.125 : 1);
+  // anti-blocage : aucun progrès vers la marque depuis 2 h (côtier) / 12 h (large) → route neuve depuis la position, suivie à la lettre un moment
+  const pr = b.prog || (b.prog = { t: gameT, d: dMk, mi: b.mi });
+  if (pr.mi !== b.mi || dMk < pr.d - (CZ() ? 0.5 : 3)) { pr.t = gameT; pr.d = dMk; pr.mi = b.mi; }
+  else if (gameT - pr.t > (CZ() ? 2 : 12) * 3600) { pr.t = gameT; pr.d = dMk; b.strictT = gameT + (CZ() ? 1.5 : 6) * 3600; if (!b.routeJob) scheduleBotRoute(b); }
   const stale = valid && b.fcPend != null && gameT - R.t0 > botEvery(b) * 3600 && gameT - b.fcPend >= lag, off = adv && adv.xtrack > (CZ() ? 3 : 10 + (b.every - 6) * 1.7);
   if (!b.routeJob && (!valid || stale || off)) scheduleBotRoute(b);
-  if (CZ() && dMk < 3) adv = null; // près de la marque : on vise la bouée
+  if (CZ() && dMk < 3 && !segLandLL(b.lat, b.lon, mk.lat, mk.lon, dMk)) adv = null; // près de la marque, en vue directe : on vise la bouée
   let h, side, cur = norm180(w.twd - b.hdg) >= 0 ? 1 : -1;
   let ah = adv ? adv.hdg : null;
-  if (ah !== null && landAhead(b, ah)) { const h2 = norm360(w.twd + norm180(w.twd - ah)); ah = landAhead(b, h2) ? null : h2; }
+  // terre entre le bateau et le point visé de la route (pas au-delà : la route contourne déjà ce qui suit)
+  if (ah !== null && !(b.strictT > gameT) && landAhead(b, ah, adv.aimD + 0.3)) {
+    const tw = norm180(w.twd - ah), A = Math.abs(tw), h2 = norm360(w.twd + tw);
+    // l'autre bord n'a de sens qu'au près ou au vent arrière (même angle, autre amure) ; au travers il renverrait le bateau à l'opposé
+    if ((A < 70 || A > 130) && !landAhead(b, h2, adv.aimD + 0.3)) ah = h2;
+    else { const bv = vmcBest(b, adv.aim, w, adv.aimD + 0.3), c2 = bv[cur].v >= bv[-cur].v ? bv[cur] : bv[-cur]; ah = c2.v > -1e8 ? c2.h : null; }
+  }
   if (ah !== null) { h = norm360(ah + (Math.random() - 0.5) * 3); side = norm180(w.twd - h) >= 0 ? 1 : -1; if (side !== cur && Math.abs(norm180(w.twd - h)) < 4) side = cur; }
   else {
     const dist = dMk, best = vmcBest(b, [mk.lat, mk.lon], w), hy = dist < 120 ? 0 : b.hyst, cv = best[cur].v;
@@ -2621,17 +2631,19 @@ function routeAdviceFor(b, Rt) {
   if (race) for (let k = 0; k < 4; k++) { const dd = gcDist(b.lat, b.lon, tgt[0], tgt[1]); if (!segFine(b.lat, b.lon, tgt[0], tgt[1], dd, 0.15)) break; tgt = posAt(tNear + (T - tNear) / Math.pow(2, k + 1)); }
   const w = wind(b.lat, b.lon, gameT), onRoute = bd < (race ? (COURSE.coastal ? 0.5 : COURSE.id === 'fastnet' ? 2 : 4) : 0.12);
   let hdg = onRoute ? R[Math.min(bi + 1, R.length - 1)].hdg : gcBrg(b.lat, b.lon, tgt[0], tgt[1]);
+  // point visé : la cible sur la route (hors route) ou le nœud suivant (sur la route) — la recherche de terre devant s'arrête là
+  let aim = onRoute ? [R[Math.min(bi + 1, R.length - 1)].lat, R[Math.min(bi + 1, R.length - 1)].lon] : tgt;
   // près de la marque visée : cap direct sur la bouée (la route peut la frôler sans entrer dans le cercle)
   { const mk = race ? curMarks()[b.mi] : null, clear = (la, lo) => !segLandLL(b.lat, b.lon, la, lo, gcDist(b.lat, b.lon, la, lo)); // jamais de cap direct à travers une île
-    if (mk && (gcDist(b.lat, b.lon, mk.lat, mk.lon) < (COURSE.coastal ? 2.5 : 8) || (bi >= R.length - 2 && bf > 0.9)) && clear(mk.lat, mk.lon)) hdg = gcBrg(b.lat, b.lon, mk.lat, mk.lon);
-    else if (!race && bi >= R.length - 2 && bf > 0.9 && clear(last.lat, last.lon)) hdg = gcBrg(b.lat, b.lon, last.lat, last.lon); }
+    if (mk && (gcDist(b.lat, b.lon, mk.lat, mk.lon) < (COURSE.coastal ? 2.5 : 8) || (bi >= R.length - 2 && bf > 0.9)) && clear(mk.lat, mk.lon)) { hdg = gcBrg(b.lat, b.lon, mk.lat, mk.lon); aim = [mk.lat, mk.lon]; }
+    else if (!race && bi >= R.length - 2 && bf > 0.9 && clear(last.lat, last.lon)) { hdg = gcBrg(b.lat, b.lon, last.lat, last.lon); aim = [last.lat, last.lon]; } }
   // cap non navigable (zone morte au près, trop abattu au portant) : bord le plus proche, sans terre devant, en gardant le bord courant si c'est équivalent
   { const A = Math.abs(norm180(w.twd - hdg)), up = vmgOpt(w.tws, true).ang, dn = vmgOpt(w.tws, false).ang;
     if (A < up - 2 || A > dn + 6) { const ang = A < 90 ? up : dn, c1 = norm360(w.twd - ang), c2 = norm360(w.twd + ang), d1 = Math.abs(norm180(c1 - hdg)), d2 = Math.abs(norm180(c2 - hdg)), curS = norm180(w.twd - b.hdg) >= 0 ? c1 : c2;
       let pick = Math.abs(d1 - d2) < 25 ? [curS, curS === c1 ? c2 : c1] : d1 <= d2 ? [c1, c2] : [c2, c1];
       if (race && landAhead(b, pick[0]) && !landAhead(b, pick[1])) pick = [pick[1], pick[0]]; hdg = pick[0]; } }
   const twa = norm180(w.twd - hdg), a = Math.abs(twa);
-  return { bi, tNear, hdg, twa, sail: bestSail(a, w.tws), foil: foilBoost(a, w.tws) > 0.02 ? (twa >= 0 ? 'bâbord' : 'tribord') : 'relevés', xtrack: bd, stale: bd > (race ? (COURSE.coastal ? 3 : COURSE.id === 'fastnet' ? 12 : 40) : 1.5) };
+  return { bi, tNear, hdg, twa, aim, aimD: Math.max(0.5, gcDist(b.lat, b.lon, aim[0], aim[1])), sail: bestSail(a, w.tws), foil: foilBoost(a, w.tws) > 0.02 ? (twa >= 0 ? 'bâbord' : 'tribord') : 'relevés', xtrack: bd, stale: bd > (race ? (COURSE.coastal ? 3 : COURSE.id === 'fastnet' ? 12 : 40) : 1.5) };
 }
 const _adv = { t: -1, nodes: null, v: null, g: 0 };
 function routeAdvice() {
