@@ -3761,7 +3761,7 @@ function updateBoatVisual(b, rdt) {
   let surfT = 1; if (cd.surf && a > 95 && a < 172 && b.sail > 0) { const amp = smooth(11, 20, b.tws || 0) * 0.45 * cd.surf * Math.exp(-(((a - 140) / 32) ** 2)); surfT = 1 + amp * clamp((hs - hb) / (0.8 + seaAmp * 0.6) + 0.15, -0.5, 1.2); }
   b.surfF = (b.surfF || 1) + (surfT - (b.surfF || 1)) * Math.min(1, rdt * 1.5);
   b.spdV = b.spdV === undefined ? b.spd : b.spdV + (b.spd - b.spdV) * Math.min(1, rdt / 1.6); b.dspd = b.spdV * b.surfF; // accélération visible en temps réel
-  b.heel += (heelT - b.heel) * Math.min(1, rdt * 1.5); b.lift += (boost * 2.3 * (cd ? cd.k : 1) - b.lift) * Math.min(1, rdt * 0.5);
+  b.heel += (heelT - b.heel) * Math.min(1, rdt * 1.5); b.lift += (boost * (cd && cd.imoca ? 3.7 : 2.3) * (cd ? cd.k : 1) - b.lift) * Math.min(1, rdt * 0.5); // IMOCA en vol : coque ≈ 1 m au-dessus de l'eau, seuls foil sous le vent, safrans et quille dans l'eau
   b.cant += ((a < 25 || !cd.cant ? 0 : side * 0.6) - b.cant) * Math.min(1, rdt * 1.2);
   const damp = 1 - Math.min(0.6, b.lift / 1.5);
   // inertie : pilonnement, tangage et roulis suivent la mer via un ressort amorti (période propre ≈ 1,4 s en Mini, 2,2 s en IMOCA)
