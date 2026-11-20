@@ -1923,16 +1923,63 @@ function getBest() { try { return parseFloat(localStorage.getItem(bestKey())) ||
 /* ----- Grille de proximité terre ----- */
 let LG = null; const LG0 = { lat: -6, lon: -92, step: 0.5, rows: 136, cols: 244 };
 function buildLandGrid() {
-  if (MODE !== 'race') { LG = null; return; }
+  if (MODE !== 'race') { LG = null; LGC = null; return; }
   Object.assign(LG0, COURSE.ocean === 'south' ? { lat: -67, lon: 4, step: 0.5, rows: 104, cols: 260 } : { lat: -6, lon: -92, step: 0.5, rows: 136, cols: 244 });
   const { lat, lon, step, rows, cols } = LG0, raw = new Uint8Array(rows * cols);
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (isLand(lat + (r + 0.5) * step, lon + (c + 0.5) * step)) raw[r * cols + c] = 1;
   ISLANDS.forEach(isl => { const dl = isl.rmax / 60, dn = isl.rmax / (60 * Math.cos(isl.lat * D2R)); for (let la = isl.lat - dl; la <= isl.lat + dl + step; la += step) for (let lo = isl.lon - dn; lo <= isl.lon + dn + step; lo += step) { const r = Math.floor((la - lat) / step), c = Math.floor((lo - lon) / step); if (r >= 0 && c >= 0 && r < rows && c < cols) raw[r * cols + c] = 1; } });
   LG = new Uint8Array(rows * cols);
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { let f = 0; for (let i = -1; i <= 1 && !f; i++) for (let j = -1; j <= 1; j++) { const rr = r + i, cc = c + j; if (rr >= 0 && cc >= 0 && rr < rows && cc < cols && raw[rr * cols + cc]) { f = 1; break; } } LG[r * cols + c] = f; }
+  buildLandFine();
+}
+/* Classement exact terre/mer pour les tests de routage (mêmes résultats que isLand, sans son coût) :
+   - une cellule de 0,5° que ne traverse aucun trait de côte ni aucune île est uniforme : un seul isLand à son centre la classe en entier ;
+   - les autres sont découpées en 20×20 cases de 0,025° (≈ 1,5 nm). Les traits de côte et les îles sont tracés dans ces cases avec une marge
+     d'une case : ce sont les cases « mixtes », seules à garder le test exact. Entre elles, chaque zone d'un seul tenant ne peut pas changer
+     de nature (on ne traverse pas de côte sans passer par une case mixte) : un isLand par zone la classe en entier (remplissage). */
+const LF_K = 20; let LGC = null, LGB = null, LFB = null;
+function buildLandFine() {
+  const { lat, lon, step, rows, cols } = LG0, K = LF_K, fs = step / K, FR = rows * K, FCn = cols * K;
+  LGC = new Uint8Array(rows * cols); LGB = new Int32Array(rows * cols).fill(-1);
+  const touched = new Uint8Array(rows * cols), marks = [];
+  const mark = (la, lo) => { const fr = Math.floor((la - lat) / fs), fc = Math.floor((lo - lon) / fs);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const a = fr + i, b = fc + j; if (a < 0 || b < 0 || a >= FR || b >= FCn) continue; marks.push(a, b); touched[Math.floor(a / K) * cols + Math.floor(b / K)] = 1; } };
+  // côtes : segments droits en lat/lon (exactement ce que teste inPoly) → on marque toutes les cases qu'ils traversent, et seulement elles
+  const cell = (a, b) => { if (a < 0 || b < 0 || a >= FR || b >= FCn) return; marks.push(a, b); touched[Math.floor(a / K) * cols + Math.floor(b / K)] = 1; };
+  const trace = (la1, lo1, la2, lo2) => {
+    const x0 = (lo1 - lon) / fs, y0 = (la1 - lat) / fs, dx = (lo2 - lo1) / fs, dy = (la2 - la1) / fs, sx = dx > 0 ? 1 : -1, sy = dy > 0 ? 1 : -1;
+    let cx = Math.floor(x0), cy = Math.floor(y0); const tdx = dx ? Math.abs(1 / dx) : Infinity, tdy = dy ? Math.abs(1 / dy) : Infinity;
+    let tx = dx ? (sx > 0 ? cx + 1 - x0 : x0 - cx) * tdx : Infinity, ty = dy ? (sy > 0 ? cy + 1 - y0 : y0 - cy) * tdy : Infinity;
+    cell(cy, cx);
+    while (Math.min(tx, ty) <= 1) {
+      if (Math.abs(tx - ty) < 1e-9) { cell(cy, cx + sx); cell(cy + sy, cx); cx += sx; cy += sy; tx += tdx; ty += tdy; } // passage par un coin
+      else if (tx < ty) { cx += sx; tx += tdx; } else { cy += sy; ty += tdy; }
+      cell(cy, cx);
+    }
+    cell(Math.floor((la2 - lat) / fs), Math.floor((lo2 - lon) / fs));
+  };
+  for (const P of POLYS) { const pts = P.pts; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) trace(pts[j][0], pts[j][1], pts[i][0], pts[i][1]); }
+  // îles : seul le contour (r = islandR(θ), même repère que isLand) est mixte ; l'intérieur est ensuite classé « terre » par remplissage
+  for (const isl of ISLANDS) { const cl = Math.cos(isl.lat * D2R), dth = Math.min(0.02, (fs * 60 / 4) / Math.max(isl.rmax, 0.1));
+    for (let th = -Math.PI; th <= Math.PI + dth; th += dth) { const R = islandR(isl, th); mark(isl.lat + R * Math.sin(th) / 60, isl.lon + R * Math.cos(th) / (60 * cl)); } }
+  let nb = 0; for (let o = 0; o < rows * cols; o++) { if (!LG[o]) continue; if (touched[o]) { LGB[o] = nb++; LGC[o] = 4; } else LGC[o] = isLand(lat + (Math.floor(o / cols) + 0.5) * step, lon + (o % cols + 0.5) * step) ? 2 : 1; }
+  LFB = new Uint8Array(nb * K * K); // 0 = à classer, 3 = mixte (test exact), 1 = mer, 2 = terre
+  const at = (a, b) => { const bi = LGB[Math.floor(a / K) * cols + Math.floor(b / K)]; return bi < 0 ? -1 : bi * K * K + (a % K) * K + (b % K); };
+  for (let i = 0; i < marks.length; i += 2) { const q = at(marks[i], marks[i + 1]); if (q >= 0) LFB[q] = 3; }
+  const stack = [];
+  for (let o = 0; o < rows * cols; o++) { if (LGB[o] < 0) continue; const r0 = Math.floor(o / cols) * K, c0 = (o % cols) * K;
+    for (let a = r0; a < r0 + K; a++) for (let b = c0; b < c0 + K; b++) { if (LFB[at(a, b)] !== 0) continue;
+      const v = isLand(lat + (a + 0.5) * fs, lon + (b + 0.5) * fs) ? 2 : 1; LFB[at(a, b)] = v; stack.push(a, b);
+      while (stack.length) { const x = stack.pop(), y = stack.pop();
+        for (let d = 0; d < 4; d++) { const yy = y + (d === 0 ? 1 : d === 1 ? -1 : 0), xx = x + (d === 2 ? 1 : d === 3 ? -1 : 0);
+          if (yy < 0 || xx < 0 || yy >= FR || xx >= FCn) continue; const q = at(yy, xx); if (q < 0 || LFB[q] !== 0) continue; LFB[q] = v; stack.push(yy, xx); } } } }
 }
 function landFast(la, lo) {
-  if (LG) { const r = Math.floor((la - LG0.lat) / LG0.step), c = Math.floor((lo - LG0.lon) / LG0.step); if (r >= 0 && c >= 0 && r < LG0.rows && c < LG0.cols && !LG[r * LG0.cols + c]) return false; }
+  if (LG) { const r = Math.floor((la - LG0.lat) / LG0.step), c = Math.floor((lo - LG0.lon) / LG0.step);
+    if (r >= 0 && c >= 0 && r < LG0.rows && c < LG0.cols) { const o = r * LG0.cols + c; if (!LG[o]) return false;
+      if (LGC) { const k = LGC[o]; if (k === 1) return false; if (k === 2) return true;
+        if (k === 4) { const fs = LG0.step / LF_K, fr = Math.floor((la - LG0.lat) / fs) - r * LF_K, fc = Math.floor((lo - LG0.lon) / fs) - c * LF_K;
+          if (fr >= 0 && fc >= 0 && fr < LF_K && fc < LF_K) { const v = LFB[LGB[o] * LF_K * LF_K + fr * LF_K + fc]; if (v === 1) return false; if (v === 2) return true; } } } } }
   return isLand(la, lo);
 }
 
