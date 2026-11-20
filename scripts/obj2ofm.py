@@ -25,6 +25,7 @@ G, parts, mat = load(OBJ)
 # franc-bord réduit : la coque (jusqu'au pont, y ≤ 2,3 m) est écrasée verticalement de FB au-dessus de la flottaison ;
 # tout ce qui est plus haut (mât, gréement, bôme) descend d'autant, sans être déformé
 FB, YD = 0.8, 2.3
+FOIL_S = 1.3  # échelle des foils
 def fy(y): return np.where(y <= 0, y, np.where(y <= YD, y * FB, y - YD * (1 - FB)))
 G[:, 1] = fy(G[:, 1])
 Kd = {}; Ns = {}; cur = None
@@ -80,6 +81,8 @@ def build(level):
     for name in parts:
         if name in SKIP or (level == 'lo' and name in LO_DROP): continue
         grp = GROUP.get(name, 'static'); m = mat[name]; V, F = part_arrays(name)
+        if name == 'foil_starboard':  # foils agrandis autour de leur sortie de coque (point le plus intérieur)
+            R0 = V[V[:, 0] < V[:, 0].min() + 0.2].mean(0); V = R0 + (V - R0) * FOIL_S
         if level == 'lo' and LO_TARGET.get(name, 1) < 1 and len(F) > 60:
             V2, F2 = fs.simplify(V.astype(np.float32), F.astype(np.int32), target_reduction=1 - LO_TARGET[name])
             if len(F2) > 8: V, F = V2.astype(np.float64), F2.astype(np.int64)
