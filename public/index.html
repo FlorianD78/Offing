@@ -822,7 +822,21 @@ const NOISE_TEX = (() => {
     R[j * S + i] = vn(x, y, P, 1) * 0.55 + vn(x * 2 + 7, y * 2 + 7, 2 * P, 2) * 0.28 + vn(x * 4 + 3, y * 4 + 3, 4 * P, 3) * 0.17; }
   const G = new Float32Array(S * S), B = new Float32Array(S * S); let d = 1e-6; const w = (i, j) => R[((j + S) % S) * S + ((i + S) % S)];
   for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const o = j * S + i; G[o] = (w(i + 1, j) - w(i - 1, j)) / (2 * du); B[o] = (w(i, j + 1) - w(i, j - 1)) / (2 * du); d = Math.max(d, Math.abs(G[o]), Math.abs(B[o])); }
-  const img = new Uint8Array(S * S * 4); for (let o = 0; o < S * S; o++) { img[o * 4] = Math.round(R[o] * 255); img[o * 4 + 1] = Math.round((G[o] / d * 0.5 + 0.5) * 255); img[o * 4 + 2] = Math.round((B[o] / d * 0.5 + 0.5) * 255); img[o * 4 + 3] = 255; }
+  // A = motif d'écume : réseau de bulles (bords de cellules de Voronoï, 2 échelles) mêlé au bruit, puis égalisé (rang / N) :
+  // le seuil 1 - c donne une couverture ≈ c, l'écume dense garde des trous et se défait en dentelle quand elle s'étale
+  const A = new Float32Array(S * S), vor = (C, s) => { const cs = S / C, px = new Float32Array(C * C * 2);
+      for (let j = 0; j < C; j++) for (let i = 0; i < C; i++) { px[(j * C + i) * 2] = (i + 0.15 + 0.7 * hsh(i, j, s)) * cs; px[(j * C + i) * 2 + 1] = (j + 0.15 + 0.7 * hsh(i, j, s + 11)) * cs; }
+      return (x, y) => { const ci = Math.floor(x / cs), cj = Math.floor(y / cs); let f1 = 1e9, f2 = 1e9;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const ii = ci + di, jj = cj + dj, q = (((jj % C) + C) % C * C + ((ii % C) + C) % C) * 2, X = px[q] + (ii - (((ii % C) + C) % C)) * cs, Y = px[q + 1] + (jj - (((jj % C) + C) % C)) * cs, dd = (X - x) ** 2 + (Y - y) ** 2;
+          if (dd < f1) { f2 = f1; f1 = dd; } else if (dd < f2) f2 = dd; }
+        return (Math.sqrt(f2) - Math.sqrt(f1)) / cs; }; };
+  const v1 = vor(28, 21), v2 = vor(64, 37);
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const o = j * S + i, x = i + 0.5, y = j + 0.5, e1 = Math.exp(-v1(x, y) * 9), e2 = Math.exp(-v2(x, y) * 7);
+    // taches : bruit large (8 et 16 périodes par tuile) ; les bords de cellules ne font que trouer et effranger la tache
+    const bl = vn(x / 64, y / 64, 8, 41) * 0.62 + vn(x / 32 + 3, y / 32 + 3, 16, 42) * 0.38;
+    A[o] = 0.8 * bl + 0.12 * R[o] + 0.16 * e1 + 0.1 * e2 + 0.03 * hsh(i, j, 5); }
+  const ord = new Uint32Array(S * S).map((_, i) => i).sort((p, q) => A[p] - A[q]), AE = new Uint8Array(S * S); for (let r = 0; r < S * S; r++) AE[ord[r]] = Math.min(255, Math.floor(r / (S * S) * 256));
+  const img = new Uint8Array(S * S * 4); for (let o = 0; o < S * S; o++) { img[o * 4] = Math.round(R[o] * 255); img[o * 4 + 1] = Math.round((G[o] / d * 0.5 + 0.5) * 255); img[o * 4 + 2] = Math.round((B[o] / d * 0.5 + 0.5) * 255); img[o * 4 + 3] = AE[o]; }
   const tex = new THREE.DataTexture(img, S, S, THREE.RGBAFormat); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.needsUpdate = true; // sans mipmaps : même grain net que le bruit calculé
   return { tex, d }; 
 })();
@@ -940,12 +954,13 @@ const OCN_RE = new Float32Array(FFT_N * FFT_N), OCN_IM = new Float32Array(FFT_N 
     OCN.tex[c] = mk(); (OCN.stex || (OCN.stex = []))[c] = mk(); } })();
 // spectre de Phillips (vent U m/s vers la direction dir, radians, repère du monde x/z), normalisé sur la hauteur significative visée
 function oceanSpectrum(U, dir, hs) {
-  const N = FFT_N, Lw = Math.max(0.5, U * U / FFT_G), wx = Math.sin(dir), wz = -Math.cos(dir), l = Lw / 900, kcut = Math.PI * N / OCN.L[0];
+  const N = FFT_N, Lw = Math.max(0.5, U * U / FFT_G), wx = Math.sin(dir), wz = -Math.cos(dir), l = Lw / 900, kcut = Math.PI * N / OCN.L[0], wp = 0.855 * FFT_G / U;
   let varSum = 0;
   for (let c = 0; c < 2; c++) { const dk = 2 * Math.PI / OCN.L[c], kx = OCN.kx[c], kz = OCN.kz[c], kk = OCN.kk[c], hr = OCN.h0r[c], hi = OCN.h0i[c];
     for (let o = 0; o < N * N; o++) { const k = kk[o];
       if (k < 1e-6 || (c === 1 && k <= kcut * 0.98)) { hr[o] = hi[o] = 0; continue; }
-      const d = (kx[o] * wx + kz[o] * wz) / k, dirF = d * d * (d < 0 ? 0.12 : 1), P = Math.exp(-1 / (k * Lw * k * Lw)) / (k * k * k * k) * dirF * Math.exp(-k * k * l * l);
+      const d = (kx[o] * wx + kz[o] * wz) / k, dirF = d * d * (d < 0 ? 0.12 : 1), om = Math.sqrt(FFT_G * k), sg = om <= wp ? 0.07 : 0.09, jw = Math.pow(3.3, Math.exp(-((om - wp) ** 2) / (2 * sg * sg * wp * wp)));
+      const P = Math.exp(-1 / (k * Lw * k * Lw)) / (k * k * k * k) * dirF * Math.exp(-k * k * l * l) * jw; // + renfort du pic (JONSWAP) : vagues dominantes plus nettes
       const a = Math.sqrt(P / 2) * dk, g = oGauss(c * 9000 + o); hr[o] = g[0] * a; hi[o] = g[1] * a; varSum += 2 * a * a * (g[0] * g[0] + g[1] * g[1]); } }
   const s = varSum > 0 ? (hs / 4) / Math.sqrt(varSum) : 0;
   for (let c = 0; c < 2; c++) { const hr = OCN.h0r[c], hi = OCN.h0i[c]; for (let o = 0; o < N * N; o++) { hr[o] *= s; hi[o] *= s; } }
@@ -969,12 +984,13 @@ function oceanFFTUpdate(rdt, force) {
       OCN_RE2[o] = ai * uz; OCN_IM2[o] = -ar * uz;                  // Dz
     }
     fft2(OCN_RE, OCN_IM); fft2(OCN_RE2, OCN_IM2);
-    const H = OCN.H[c], DX = OCN.DX[c], DZ = OCN.DZ[c], img = OCN.tex[c].image.data, simg = OCN.stex[c].image.data, dx2 = 2 * OCN.L[c] / N, F = OCN.foam;
+    // seuil de déferlement (jacobien) qui monte avec le vent : ≈ 1 % des crêtes moussent à 15 nd, ≈ 7 % à 28 nd
+    const jt = 0.83 + 0.06 * smooth(8, 30, tws), H = OCN.H[c], DX = OCN.DX[c], DZ = OCN.DZ[c], img = OCN.tex[c].image.data, simg = OCN.stex[c].image.data, dx2 = 2 * OCN.L[c] / N, F = OCN.foam;
     for (let o = 0; o < N * N; o++) { H[o] = OCN_RE[o]; DX[o] = OCN_IM[o] * lam; DZ[o] = OCN_RE2[o] * lam; }
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const o = j * N + i, ip = j * N + ((i + 1) % N), im = j * N + ((i + N - 1) % N), jp = ((j + 1) % N) * N + i, jm = ((j + N - 1) % N) * N + i;
       let f = 0;
       if (c === 0) { const J = (1 + (DX[ip] - DX[im]) / dx2) * (1 + (DZ[jp] - DZ[jm]) / dx2) - ((DX[jp] - DX[jm]) / dx2) * ((DZ[ip] - DZ[im]) / dx2);
-        f = F[o] = Math.max(F[o] * decay, clamp((0.92 - J) * 2.4, 0, 1)); }
+        f = F[o] = Math.max(F[o] * decay, clamp((jt - J) * 10, 0, 1)); }
       const q = o * 4; img[q] = toHalf(DX[o]); img[q + 1] = toHalf(H[o]); img[q + 2] = toHalf(DZ[o]); img[q + 3] = toHalf(f);
       // pentes (différences centrées sur la grille : identiques aux 4 lectures décalées d'un texel du fragment, filtrage linéaire compris)
       simg[q] = toHalf((H[ip] - H[im]) / dx2); simg[q + 1] = toHalf((H[jp] - H[jm]) / dx2); simg[q + 2] = img[q + 3]; }
@@ -1050,7 +1066,7 @@ const WAVE_DECL = `uniform float uTime; uniform float uAmp; uniform float uSwell
   uniform vec4 uBA[4]; uniform vec4 uBB[4]; uniform vec4 uBC[4]; uniform float uHB[16]; uniform float uNB;
   float hbAt(float u) { float x = clamp(u, 0.0, 1.0) * 15.0; float r = uHB[0]; for (int j = 0; j < 15; j++) { if (float(j) <= x) r = mix(uHB[j], uHB[j + 1], clamp(x - float(j), 0.0, 1.0)); } return r; }`;
 const oceanMat = new THREE.ShaderMaterial({
-  side: THREE.DoubleSide, fog: false, uniforms: oceanU,
+  side: THREE.DoubleSide, fog: false, uniforms: oceanU, extensions: { derivatives: true },
   vertexShader: WAVE_DECL + `
     varying vec3 vWorld; varying float vAtt; varying float vAttS; varying float vCrest; varying vec2 vP0;
     void main(){
@@ -1104,72 +1120,100 @@ const oceanMat = new THREE.ShaderMaterial({
         dx += c * uW[i].x * ks; dz += c * uW[i].y * ks; swS += c * ks;
       }
       float camD = length(cameraPosition - vWorld);
+      // empreinte du pixel sur l'eau (m) : une bande de détail plus fine que ~3 pixels n'est plus dessinée (sinon crénelage et traits
+      // qui scintillent à mi-distance) ; ce qu'on retire passe dans la rugosité du reflet (lost)
+      vec2 fwp = fwidth(vWorld.xz); float fp = max(max(fwp.x, fwp.y), 0.001), lost = 0.0;
+      float aaA = 1.0 - smoothstep(1.5, 5.0, fp), aaB = 1.0 - smoothstep(0.18, 0.6, fp), aaM = 1.0 - smoothstep(0.06, 0.25, fp), aaR = 1.0 - smoothstep(0.35, 1.2, fp);
+      lost = 0.3 * (1.0 - aaA) + 0.3 * (1.0 - aaB) + 0.25 * (1.0 - aaM) + 0.15 * (1.0 - aaR);
       if (uFOn > 0.5) { // pentes de la mer FFT (différences finies) et écume des crêtes déferlantes
         float e = 1.0 / 64.0; vec2 ua = (vP0 + uFG.xy) * uFL.x + 0.5 / 64.0, ub = (vP0 + uFG.zw) * uFL.y + 0.5 / 64.0;
-        float kA = (1.0 - smoothstep(900.0, 5000.0, camD)) * vAtt / (2.0 * e / uFL.x), kB = (1.0 - smoothstep(80.0, 450.0, camD)) / (2.0 * e / uFL.y);
+        float kA = (1.0 - smoothstep(900.0, 5000.0, camD)) * vAtt * aaA / (2.0 * e / uFL.x), kB = (1.0 - smoothstep(80.0, 450.0, camD)) * aaB / (2.0 * e / uFL.y);
         vec3 sa = texture2D(uSA, ua).xyz; vec2 sb = texture2D(uSB, ub).xy; float k2e = 2.0 * e; // pentes précalculées : 2 lectures au lieu de 9
         dx += sa.x * k2e / uFL.x * kA + sb.x * k2e / uFL.y * kB; dz += sa.y * k2e / uFL.x * kA + sb.y * k2e / uFL.y * kB;
         foamF = sa.z;
       }
       float df = 1.0 - smoothstep(40.0, 700.0, camD);
-      vec2 r1 = vec2(0.8,0.6); float c1 = 0.045*cos(dot(r1,p)*1.3 + uTime*3.6 + uPh[2]*7.0)*df;
-      vec2 r2 = vec2(-0.5,0.86); float c2 = 0.046*cos(dot(r2,p)*2.1 + uTime*4.5 + uPh[3]*5.0)*df;
-      vec2 r3 = vec2(0.17,-0.98); float c3 = 0.04*cos(dot(r3,p)*3.4 + uTime*5.8 + uPh[4]*3.0)*df;
-      vec2 wp = p + uG; vec2 wd = uWind.xy;
+      vec2 wp = p + uG; vec2 wd = uWind.xy; float ws = uWind.z;
+      // contact eau/coque, calculé avant les normales : liseré le long de la flottaison, bras de Kelvin, sillage
+      // (écume qui se défait en 1 à 2 longueurs, puis eau aérée, plus claire et lisse, qui persiste loin derrière)
+      float hf = 0.0, slick = 0.0, aer = 0.0;
+      if (uNB > 0.5) { float nn = fbmT(wp * 0.8 + vec2(uTime * 0.35, -uTime * 0.2));
+        for (int i = 0; i < 4; i++) { if (float(i) >= uNB) break;
+          vec2 d = vWorld.xz - uBA[i].xy, f = uBA[i].zw; float L = uBB[i].y, v = uBB[i].x, s = uBB[i].z - dot(d, f), at = abs(dot(d, vec2(-f.y, f.x))), u = s / L;
+          float sv = smoothstep(0.4, 3.5, v); if (sv <= 0.0 || u < -0.3 || u > 14.0) continue;
+          float sgn = dot(d, vec2(-f.y, f.x)) >= 0.0 ? 1.0 : -1.0, hl = sin(uBC[i].x) * sgn, fl = uBC[i].y, ds = at - hbAt(u) * (1.0 - 0.42 * hl) * (1.0 - 0.55 * fl);
+          if (u < 1.05) hf += exp(-max(ds, 0.0) / (0.25 + 0.05 * v)) * step(-0.15, ds) * (0.45 + 0.55 * (1.0 - smoothstep(0.0, 0.5, u))) * sv * (0.6 + 0.6 * nn) * (1.0 - 0.3 * hl) * (1.0 - 0.85 * fl);
+          float th = atan(at, max(s, 0.01)), thk = min(0.34, 0.42 / max(v / sqrt(9.81 * L), 0.01));
+          if (s > 0.0 && ds > 0.0) hf += exp(-pow((th - thk) * s / (0.4 + 0.04 * s), 2.0)) * exp(-s / (3.0 * L)) * sv * smoothstep(0.0, 0.3, u) * (0.3 + 0.7 * nn) * 0.5 * (1.0 - 0.6 * fl);
+          float s2 = s - L; if (s2 > -0.2 * L) { s2 = max(s2, 0.0); float w = uHB[15] * 1.1 + 0.05 * s2 + 0.6 * fl, core = 1.0 - smoothstep(w * 0.35, w, at);
+            hf += core * exp(-s2 / (1.3 * L)) * sv * (0.55 + 0.6 * nn) * (1.0 - 0.5 * fl);
+            float wide = 1.0 - smoothstep(w * 0.6, w * 1.5, at); slick = max(slick, wide * exp(-s2 / (7.0 * L)) * sv); aer = max(aer, wide * exp(-s2 / (2.5 * L)) * sv); }
+        }
+        hf = clamp(hf, 0.0, 1.0); }
+      float calm = 1.0 - 0.75 * slick; // sillage : petites rides écrasées, reflets plus nets
+      vec2 r1 = vec2(0.8,0.6); float c1 = 0.022*cos(dot(r1,p)*1.3 + uTime*3.6 + uPh[2]*7.0)*df;
+      vec2 r2 = vec2(-0.5,0.86); float c2 = 0.023*cos(dot(r2,p)*2.1 + uTime*4.5 + uPh[3]*5.0)*df;
+      vec2 r3 = vec2(0.17,-0.98); float c3 = 0.02*cos(dot(r3,p)*3.4 + uTime*5.8 + uPh[4]*3.0)*df;
       // risées (cat's paws) : plaques de vent plus fort qui défilent sous le vent, eau plus sombre et plus ridée
-      float gust = smoothstep(0.5, 0.78, fbmT(wp * 0.0045 - wd * uGustT * 0.0045)) * smoothstep(5.0, 14.0, uWind.z);
-      float rip = (0.6 + 0.4 * uAmp) * (1.0 + gust * 0.9);
+      float gust = smoothstep(0.5, 0.78, fbmT(wp * 0.0045 - wd * uGustT * 0.0045)) * smoothstep(5.0, 14.0, ws);
+      float rip = (0.4 + 0.05 * ws) * (1.0 + gust * 0.9) * calm * aaR;
       dx += (c1*r1.x + c2*r2.x + c3*r3.x) * rip; dz += (c1*r1.y + c2*r2.y + c3*r3.y) * rip;
       // micro-relief : clapot fin, en bruit, ancré dans l'eau
       float df2 = 1.0 - smoothstep(15.0, 220.0, camD);
       if (df2 > 0.0) { vec2 g = fbmTd(wp * 0.55 + wd * uTime * 0.9); // pente du bruit lue directement (avant : 3 fbm par différences finies)
-        float k = (0.2 + 0.25 * uAmp + gust * 0.25 + uRain * 0.35) * df2; dx += g.x * k; dz += g.y * k; }
+        float k = (0.12 + 0.018 * ws + gust * 0.25 + uRain * 0.35) * df2 * calm * aaM; dx += g.x * k; dz += g.y * k; }
       // gouttes de pluie : petits anneaux qui s'élargissent
       float ring = 0.0;
       if (uRain > 0.02 && df2 > 0.0) { vec2 g = wp * 1.4, ci = floor(g), f = fract(g) - 0.5; float h = hash12(ci), tt = fract(uTime * (0.9 + h) + h * 7.0);
         float rr = length(f + (vec2(hash12(ci + 3.1), hash12(ci + 7.7)) - 0.5) * 0.5); ring = smoothstep(0.06, 0.0, abs(rr - tt * 0.45)) * (1.0 - tt) * uRain * df2 * step(0.35, h); }
       vec3 n = normalize(vec3(-dx, 1.0, -dz));
       vec3 v = normalize(cameraPosition - vWorld);
-      float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+      // rugosité non dessinée (pentes de Cox et Munk : σ² = 0,003 + 0,00512 U) : de près une partie des pentes est déjà dans les normales,
+      // au loin plus aucune → le reflet du soleil s'étire en chemin de lumière, sans scintiller ni crénelage
+      float U = max(ws * 0.5144, 0.5), msq = 0.003 + 0.00512 * U * (1.0 + 0.5 * gust);
+      float sig2 = max(msq * mix(0.3, 1.0, max(smoothstep(40.0, 2500.0, camD), lost)) * (1.0 - 0.7 * slick), 0.0012);
+      float nv = max(dot(n, v), 0.0);
+      float fres = 0.02 + 0.98 * pow(1.0 - nv, 5.0) / (1.0 + 6.0 * sig2); // surface rugueuse : moins de reflet rasant
       vec3 r = reflect(-v, n); r.y = abs(r.y);
-      vec3 deep = vec3(0.005, 0.06, 0.12), shallow = vec3(0.03, 0.32, 0.38);
+      vec3 deep = vec3(0.004, 0.045, 0.095), shallow = vec3(0.02, 0.26, 0.33);
       float hh = clamp(vWorld.y * 0.24 / max(uSwell + uAmp, 0.4) + 0.5, 0.0, 1.0), trough = 1.0 - smoothstep(0.0, 0.45, hh);
-      float light = (0.1 + 0.9 * uDay) * (1.0 - 0.45 * uCloud), sunUp = smoothstep(-0.03, 0.06, uSun.y);
-      vec3 water = mix(deep, shallow, hh * 0.7) * (0.5 + 0.5 * max(dot(n, uSun), 0.0)) * light * (1.0 - gust * 0.18) * (1.0 - 0.28 * trough * vAtt);
-      // diffusion sous la surface sur les crêtes, à contre-jour
-      float sss = clamp(max(vCrest, (hh - 0.62) * 2.6), 0.0, 1.0) * pow(max(dot(normalize(vec3(-v.x, 0.0, -v.z)), normalize(vec3(uSun.x, 0.0, uSun.z))), 0.0), 2.0);
-      water += vec3(0.02, 0.3, 0.26) * sss * 0.55 * vAtt * uDay * (1.0 - 0.6 * uCloud);
-      vec3 col = mix(water, sky(r), fres * 0.9);
-      float clr = 1.0 - 0.85 * uCloud, sd = max(dot(r, uSun), 0.0);
-      col += uSunCol * (pow(sd, 350.0) * 1.6 * (0.35 + 0.65 * df) + pow(sd, 18.0) * 0.12) * sunUp * clr;
-      // scintillement : paillettes de soleil sur les facettes bien orientées
-      float gl = step(0.992 - 0.004 * df, hash12(floor(wp * 2.2) + floor(uTime * 7.0))) * pow(sd, 60.0) * df;
-      col += uSunCol * gl * 2.2 * sunUp * clr;
+      float light = (0.1 + 0.9 * uDay) * (1.0 - 0.45 * uCloud), sunUp = smoothstep(-0.03, 0.06, uSun.y), nl = max(dot(n, uSun), 0.0);
+      // corps de l'eau : bleu sombre vu d'en haut, un peu plus clair dans les faces éclairées ; plus sombre dans les creux
+      vec3 water = mix(deep, shallow, hh * 0.55) * (0.45 + 0.55 * nl) * light * (1.0 - gust * 0.15) * (1.0 - 0.3 * trough * vAtt);
+      // lumière qui traverse les crêtes fines (vert d'eau), surtout à contre-jour et sur les faces tournées vers la caméra
+      vec3 sh2 = normalize(vec3(uSun.x, 0.0, uSun.z)); float back = pow(max(dot(-normalize(vec3(v.x, 0.0, v.z)), sh2), 0.0), 2.0);
+      float thin = clamp(max(vCrest, (hh - 0.58) * 2.4), 0.0, 1.0) * (0.35 + 0.65 * (1.0 - nv));
+      water += vec3(0.03, 0.34, 0.3) * thin * (0.25 + 0.75 * back) * 0.6 * vAtt * uDay * (1.0 - 0.6 * uCloud);
+      // eau aérée du sillage : bulles en suspension, turquoise laiteux
+      water = mix(water, vec3(0.1, 0.42, 0.45) * light * (0.6 + 0.4 * nl), aer * 0.55);
+      vec3 col = mix(water, sky(r), fres);
+      float clr = 1.0 - 0.85 * uCloud;
+      // soleil : distribution de Beckmann sur la rugosité restante (au lieu d'un exposant fixe)
+      vec3 hv = normalize(v + uSun); float nh = max(dot(n, hv), 0.02), nh2 = nh * nh, Dsun = exp((nh2 - 1.0) / (nh2 * sig2)) / (3.14159 * sig2 * nh2 * nh2);
+      float Fh = 0.02 + 0.98 * pow(1.0 - max(dot(v, hv), 0.0), 5.0), sd = max(dot(r, uSun), 0.0);
+      col += uSunCol * min(Dsun * Fh / (4.0 * max(nv, 0.08)), 10.0) * 1.7 * sunUp * clr * step(0.0, dot(n, uSun));
+      // scintillement : paillettes sur les facettes bien orientées, d'autant plus nombreuses que le chemin du soleil est large
+      float gl = step(0.993 - 0.005 * df, hash12(floor(wp * 2.2) + floor(uTime * 7.0))) * smoothstep(0.15, 2.5, Dsun * Fh) * df * (1.0 - smoothstep(0.08, 0.3, fp));
+      col += uSunCol * gl * 1.8 * sunUp * clr;
       // reflet de lune la nuit
       col += vec3(0.8, 0.85, 0.95) * pow(max(dot(r, uMoon), 0.0), 260.0) * 0.9 * (1.0 - uDay) * clr * step(0.0, uMoon.y);
       col += vec3(0.75, 0.8, 0.95) * uFlash * (0.15 + 0.6 * fres);
       col = mix(col, col + vec3(0.18) * light, ring);
-      // moutons : crêtes de la mer du vent, fragmentés par du bruit ancré dans l'eau
-      float wk = smoothstep(0.55, 1.35, uAmp);
+      // écume : une couverture (moutons, stries, sillage) appliquée sur un motif de bulles égalisé : dense au cœur, en dentelle sur les bords ;
+      // au loin le motif se fond dans sa couverture moyenne
       float nz = fbmT(wp * 0.11 + vec2(uTime * 0.05, 0.0));
-      float caps = uFOn > 0.5 ? smoothstep(0.12, 0.75, foamF * (0.6 + 0.8 * nz)) * smoothstep(0.3, 0.9, uAmp) : smoothstep(0.62, 0.95, vCrest * 0.75 + nz * 0.55) * wk;
-      // stries d'écume dans le sens du vent par mer forte
+      float wk = smoothstep(9.0, 22.0, ws); // moutons dès force 3-4, nombreux en force 6
+      float caps = uFOn > 0.5 ? clamp(foamF * (0.45 + 0.9 * nz) * (0.15 + 1.0 * wk), 0.0, 1.0) * smoothstep(6.0, 12.0, ws) : smoothstep(0.62, 0.95, vCrest * 0.75 + nz * 0.55) * wk;
       vec2 q = vec2(dot(wp, wd), dot(wp, vec2(-wd.y, wd.x)));
-      float streak = smoothstep(0.62, 0.9, fbmT(vec2(q.x * 0.012, q.y * 0.18))) * smoothstep(22.0, 34.0, uWind.z) * 0.6;
-      float foam = clamp(caps * (1.0 + gust * 0.6) + streak * (0.4 + 0.6 * clamp(vCrest, 0.0, 1.0)), 0.0, 1.0) * vAtt * (0.4 + 0.6 * df);
-      col = mix(col, vec3(0.9, 0.95, 0.98) * (light * 0.95 + 0.05) + vec3(0.5) * uFlash, foam * 0.85);
-      // contact eau/coque : liseré d'écume le long de la flottaison, bras de Kelvin depuis l'étrave, sillage turbulent derrière le tableau
-      if (uNB > 0.5) { float hf = 0.0, nn = fbmT(wp * 0.8 + vec2(uTime * 0.35, -uTime * 0.2));
-        for (int i = 0; i < 4; i++) { if (float(i) >= uNB) break;
-          vec2 d = vWorld.xz - uBA[i].xy, f = uBA[i].zw; float L = uBB[i].y, v = uBB[i].x, s = uBB[i].z - dot(d, f), at = abs(dot(d, vec2(-f.y, f.x))), u = s / L;
-          float sv = smoothstep(0.4, 3.5, v); if (sv <= 0.0 || u < -0.3 || u > 9.0) continue;
-          float sgn = dot(d, vec2(-f.y, f.x)) >= 0.0 ? 1.0 : -1.0, hl = sin(uBC[i].x) * sgn, fl = uBC[i].y, ds = at - hbAt(u) * (1.0 - 0.42 * hl) * (1.0 - 0.55 * fl);
-          if (u < 1.05) hf += exp(-max(ds, 0.0) / (0.3 + 0.05 * v)) * step(-0.15, ds) * (0.45 + 0.55 * (1.0 - smoothstep(0.0, 0.5, u))) * sv * (0.6 + 0.6 * nn) * (1.0 - 0.3 * hl) * (1.0 - 0.85 * fl);
-          float th = atan(at, max(s, 0.01)), thk = min(0.34, 0.42 / max(v / sqrt(9.81 * L), 0.01));
-          if (s > 0.0 && ds > 0.0) hf += exp(-pow((th - thk) * s / (0.5 + 0.05 * s), 2.0)) * exp(-s / (4.0 * L)) * sv * smoothstep(0.0, 0.3, u) * (0.35 + 0.65 * nn) * 0.55 * (1.0 - 0.6 * fl);
-          float s2 = s - L; if (s2 > 0.0) { float w = uHB[15] * 1.05 + 0.07 * s2; hf += (1.0 - smoothstep(w * 0.5, w, at)) * exp(-s2 / (3.5 * L)) * sv * (0.4 + 0.7 * nn); }
-        }
-        hf = clamp(hf, 0.0, 1.0); col += vec3(0.02, 0.09, 0.1) * light * clamp(hf * 2.0, 0.0, 1.0); col = mix(col, vec3(0.92, 0.96, 1.0) * (light * 0.95 + 0.05), hf * 0.85); }
+      float streak = smoothstep(0.55, 0.9, fbmT(vec2(q.x * 0.012, q.y * 0.18))) * smoothstep(24.0, 36.0, ws) * 0.55; // stries d'écume (force 7 et plus)
+      float cov = clamp((caps * (1.0 + gust * 0.6) + streak * (0.4 + 0.6 * clamp(vCrest, 0.0, 1.0))) * vAtt + hf, 0.0, 1.0);
+      vec2 fq = wp * 0.045 + fbmTd(wp * 0.07) * 0.02;
+      float pat = texture2D(uNz, fq).a, far = smoothstep(70.0, 420.0, camD);
+      far = max(far, smoothstep(0.12, 0.45, fp)); float lace = smoothstep(1.0 - cov - 0.05, 1.0 - cov + 0.05, pat), foam = mix(lace, cov * 0.9, far);
+      float halo = (1.0 - foam) * smoothstep(1.0 - min(cov * 2.2, 1.0) - 0.08, 1.0 - min(cov * 2.2, 1.0) + 0.08, pat) * (1.0 - far); // bulles juste sous la surface
+      col = mix(col, vec3(0.12, 0.5, 0.52) * light * (0.6 + 0.4 * nl), halo * 0.4);
+      vec3 foamCol = vec3(0.9, 0.94, 0.97) * (light * (0.72 + 0.28 * nl) + 0.05) + vec3(0.5) * uFlash;
+      col = mix(col, foamCol, foam * 0.92);
       // hauts-fonds : eau turquoise puis sableuse près des côtes, ressac blanc sur la ligne d'échouement
       if (uSdfOn > 0.5) {
         vec2 su = (vWorld.xz - uSdfC) / uSdfS + 0.5;
@@ -1754,24 +1798,19 @@ function makeWake() {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('aUV', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('aType', new THREE.Float32BufferAttribute(typ, 1)); g.setIndex(idx);
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    uniforms: { uOdo: { value: 0 }, uTime: { value: 0 }, uStr: { value: 0 }, uLen: { value: 60 }, uLight: UL },
+    uniforms: { uOdo: { value: 0 }, uTime: { value: 0 }, uStr: { value: 0 }, uLen: { value: 60 }, uLight: UL, uNz: { value: NOISE_TEX.tex } },
     vertexShader: `attribute vec2 aUV; attribute float aType; varying vec2 vUV; varying float vType;
       void main(){ vUV = aUV; vType = aType; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: NOISE_GLSL + `uniform float uOdo; uniform float uTime; uniform float uStr; uniform float uLen; uniform float uLight; varying vec2 vUV; varying float vType;
+    fragmentShader: `uniform float uOdo; uniform float uTime; uniform float uStr; uniform float uLen; uniform float uLight; uniform sampler2D uNz; varying vec2 vUV; varying float vType;
       void main(){
-        float d = vUV.x, ac = abs(vUV.y), foam;
-        float wx = mod(uOdo, 5000.0) - d * uLen;
-        if (vType < 0.5) {
-          float prof = smoothstep(1.0, 0.15, ac);
-          float n = fbm(vec2(wx * 0.22, vUV.y * 2.6 + uTime * 0.25)) + 0.35 * vnoise(vec2(wx * 1.3, vUV.y * 9.0));
-          foam = prof * smoothstep(0.35, 0.85, n * 0.8 + 0.55 * (1.0 - d)) * pow(1.0 - d, 1.2);
-          foam += prof * (1.0 - smoothstep(0.0, 0.12, d)) * 0.5;
-        } else {
-          float line = smoothstep(1.0, 0.0, ac);
-          float n = fbm(vec2(wx * 0.5, vUV.y * 1.7 + 3.0));
-          foam = line * smoothstep(0.45, 0.85, n + 0.15) * pow(1.0 - d, 2.2) * smoothstep(0.0, 0.08, d) * 0.5;
-        }
-        gl_FragColor = vec4(vec3(0.93, 0.97, 1.0) * uLight, clamp(foam, 0.0, 1.0) * uStr);
+        // écume du sillage : couverture (dense au tableau, qui se défait vers l'arrière et sur les bords) appliquée au motif de bulles de l'océan
+        float d = vUV.x, ac = abs(vUV.y), cov;
+        float wx = mod(uOdo, 5000.0) - d * uLen, hw = 2.3 + d * uLen * 0.11;
+        vec2 q = vec2(wx, vUV.y * hw + sin(wx * 0.07) * 0.8) * 0.045;
+        if (vType < 0.5) cov = smoothstep(1.0, 0.1, ac) * (0.95 * exp(-d * 4.5) + 0.25 * exp(-d * 1.2)) * (0.75 + 0.25 * texture2D(uNz, q * 0.21).r);
+        else cov = smoothstep(1.0, 0.0, ac) * exp(-d * 3.0) * smoothstep(0.0, 0.08, d) * 0.55;
+        float pat = texture2D(uNz, q + vec2(uTime * 0.004, 0.0)).a, lace = smoothstep(1.0 - cov - 0.06, 1.0 - cov + 0.06, pat);
+        gl_FragColor = vec4(vec3(0.92, 0.95, 0.98) * uLight, lace * uStr * 0.9);
       }`,
   });
   const m = new THREE.Mesh(g, mat); m.frustumCulled = false; m.renderOrder = 1; scene.add(m); return m;
@@ -1831,6 +1870,7 @@ function boatSpray(b, px, pz, fx, fz, rx, rz, hb, rdt) {
   b.slamCd -= rdt; const dh = (hb - b.prevHb) / Math.max(rdt, 1e-3); b.prevHb = hb;
   if (dh > (0.9 + 0.3 / Math.max(seaAmp, 0.3)) * (0.6 + 0.4 * k) && sp0 > 7 * k + 1.5 && b.slamCd <= 0 && b.lift < 0.8) {
     b.slamCd = 0.7 + Math.random() * 0.5; const power = clamp(dh / 3 * (sp0 / (18 * k + 2)), 0.3, 1.4), cnt = Math.round((30 + 50 * power) * sz);
+    if (b.mz) { b.mz.vp += 0.07 * power; b.mz.vy += 0.25 * power; b.mz.shu = Math.min(1.2, b.mz.shu + power); } // l'étrave est rejetée vers le haut, le gréement vibre
     sideSheet(P, hb, fx, fz, rx, rz, bv, power, sz, cnt, 5.5, 9, 2.2);
     if (b.isPlayer) { sfxSplash(power); camKick = Math.min(0.6, camKick + power * 0.35); }
   }
@@ -3763,8 +3803,9 @@ function updateBoatVisual(b, rdt) {
   const h = b.dispHdg * D2R, fx = Math.sin(h), fz = -Math.cos(h), rx = Math.cos(h), rz = Math.sin(h);
   // mer « vue par la coque » : houle + grandes vagues seulement, moyennée sur 3×3 points de la carène (le clapot ne fait pas bouger plusieurs tonnes)
   const fp = v.fp || (v.root.visible ? hullFootprint(v) : null), l = (fp ? fp.L : 18 * v.cd.k) * 0.38, w = (fp ? Math.max(...fp.hb) : 2.6 * v.cd.k) * 0.75;
-  let hb = 0, hs = 0, hr = 0, hl = 0, hm = 0;
-  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const q = seaLow(px + fx * l * i + rx * w * j, pz + fz * l * i + rz * w * j); hm += q / 9; if (i > 0) hb += q / 3; if (i < 0) hs += q / 3; if (j > 0) hr += q / 3; if (j < 0) hl += q / 3; }
+  let hb = 0, hs = 0, hr = 0, hl = 0, hm = 0, yb = 0, ys = 0;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const q = seaLow(px + fx * l * i + rx * w * j, pz + fz * l * i + rz * w * j); hm += q / 9; if (i > 0) hb += q / 3; if (i < 0) hs += q / 3; if (j > 0) hr += q / 3; if (j < 0) hl += q / 3;
+    if (i > 0) yb += j * q; if (i < 0) ys += j * q; } // pente transversale à l'étrave et au tableau : moment de lacet
   const twa = norm180((b.twd || 0) - b.dispHdg), a = Math.abs(twa), side = twa >= 0 ? 1 : -1;
   // décollage vu en temps réel quelle que soit l'accélération du temps : ≥ 6 s pour sortir la coque, retombée immédiate au plantage
   if (CLS.foils && b.fly !== undefined) { const fv = b.flyV || 0; b.flyV = b.fly < fv ? (b.crashT > 0 ? b.fly : Math.max(b.fly, fv - rdt / 2.5)) : Math.min(b.fly, fv + rdt / 6); }
@@ -3776,6 +3817,9 @@ function updateBoatVisual(b, rdt) {
   if (boost > 0.01 && a >= 40) heelT = side * Math.max(Math.abs(heelT), CLS.heelMax * (0.6 + 0.5 * Math.min(1, boost / 0.45)) * Math.min(1, b.spd / 12));
   if (CLS.foils && b.fly !== undefined && a >= 40 && fV > 0.08) heelT = side * Math.max(Math.abs(heelT), CLS.heelMax * (0.7 + 0.35 * smooth(0.08, 0.35, fV))); // les foils portent : le bateau se cale sur sa gîte
   heelT *= 1 - 0.14 * (b.reef || 0);
+  // la gîte respire avec les risées (visuel : 3 sinus incommensurables, propres à chaque bateau)
+  const sd0 = (b.seedM || (b.seedM = 1 + Math.random() * 50)), gn = 0.55 * Math.sin(realT * 0.41 + sd0) + 0.3 * Math.sin(realT * 0.97 + sd0 * 2.3) + 0.15 * Math.sin(realT * 2.3 + sd0 * 0.7);
+  heelT *= 1 + gn * 0.08 * smooth(8, 25, b.tws || 0) * (1 + 1.5 * (b.sq || 0)) * (CLS.foils && b.fly !== undefined ? 1 - 0.6 * fV : 1);
   // matossage : le poids au vent redresse le bateau, sous le vent il le couche ; l'assiette suit le poids avant/arrière.
   // Dans l'eau la coque est portée par sa carène : gîte et assiette restent celles du vent et des vagues, le poids ne joue presque pas (15 %) ;
   // l'effet monte avec le décollage et devient entier en vol, quand le bateau n'est plus tenu que par le foil et le safran.
@@ -3792,15 +3836,27 @@ function updateBoatVisual(b, rdt) {
   b.heel += (heelT - b.heel) * Math.min(1, rdt * 1.5); b.lift += (boost * (cd && cd.imoca ? 3.7 : 2.3) * (cd ? cd.k : 1) - b.lift) * Math.min(1, rdt * 0.5); // IMOCA en vol : coque ≈ 1 m au-dessus de l'eau, seuls foil sous le vent, safrans et quille dans l'eau
   b.cant += ((a < 25 || !cd.cant ? 0 : side * 0.6) - b.cant) * Math.min(1, rdt * 1.2);
   const damp = 1 - Math.min(0.6, b.lift / 1.5);
-  // inertie : pilonnement, tangage et roulis suivent la mer via un ressort amorti (période propre ≈ 1,4 s en Mini, 2,2 s en IMOCA)
-  const M = b.mz || (b.mz = { y: hm, vy: 0, p: 0, vp: 0, r: 0, vr: 0 }), Tn = 1.6 * Math.sqrt((fp ? fp.L : 18) / 9), om = 2 * Math.PI / Tn, ze = 0.6;
-  const tP = Math.atan2(hb - hs, 2 * l) * (cd.imoca ? 1 : 0.8), tR = Math.atan2(hr - hl, 2 * w) * 0.7;
+  // inertie : chaque mouvement suit la mer par un ressort amorti, avec sa propre période et son amortissement :
+  //  pilonnement et tangage ≈ 1,4 s (Mini) / 2,3 s (IMOCA), peu amortis (ζ ≈ 0,3) → le bateau monte, pique et se relève franchement ;
+  //  roulis plus lent (×1,6-1,9), freiné par les voiles (ζ ≈ 0,45 au près, moins au portant où le bateau roule davantage) ;
+  //  lacet : la mer pousse l'étrave et le tableau de travers (surtout au grand largue), le pilote rattrape (ζ ≈ 0,6).
+  const M = b.mz || (b.mz = { y: hm, vy: 0, p: 0, vp: 0, r: 0, vr: 0, yw: 0, vyw: 0, shu: 0 }), Tn = 1.6 * Math.sqrt((fp ? fp.L : 18) / 9), om = 2 * Math.PI / Tn;
+  const dw = smooth(130, 170, a), sea = smooth(12, 30, b.tws || 0), up = b.sail > 0 ? 1 : 0.4;
+  const omR = om / (cd.imoca ? 1.9 : 1.6), zR = (0.22 + 0.25 * up) * (1 - 0.35 * dw), omY = om / 2.2;
+  const tP = Math.atan2(hb - hs, 2 * l) * (cd.imoca ? 1 : 0.85), tR = Math.atan2(hr - hl, 2 * w) * 0.65 * (1 + 0.6 * dw * sea), tY = clamp(Math.atan2(yb - ys, 4 * w) * (1 + 1.5 * smooth(110, 165, a)) + (b.surfF - 1) * side * 0.25, -0.07, 0.07);
   for (let k = 0, n = Math.ceil(rdt / 0.02), dt = rdt / Math.max(1, n); k < n; k++) {
-    M.vy += (om * om * (hm - M.y) - 2 * ze * om * M.vy) * dt; M.y += M.vy * dt;
-    M.vp += (om * om * (tP - M.p) - 2 * ze * om * M.vp) * dt; M.p += M.vp * dt;
-    M.vr += (om * om * 0.8 * (tR - M.r) - 2 * ze * om * M.vr) * dt; M.r += M.vr * dt; }
-  v.root.position.set(px, M.y * damp + b.lift - 0.1, pz);
-  v.root.rotation.set(M.p * damp + b.lift * 0.025 - (b.surfF - 1) * 0.12 + (b.pitchV || 0), -h, M.r * damp + b.heel * D2R);
+    M.vy += (om * om * (hm - M.y) - 2 * 0.32 * om * M.vy) * dt; M.y += M.vy * dt;
+    M.vp += (om * om * 1.1 * (tP - M.p) - 2 * 0.28 * om * M.vp) * dt; M.p += M.vp * dt;
+    M.vr += (omR * omR * (tR - M.r) - 2 * zR * omR * M.vr) * dt; M.r += M.vr * dt;
+    M.vyw += (omY * omY * (tY - M.yw) - 2 * 0.6 * omY * M.vyw) * dt; M.yw += M.vyw * dt; }
+  // assiette avec la vitesse : l'étrave se lève à l'approche de la vitesse de carène (≈ 2° en Mini, 1° en IMOCA), puis le bateau se met à plat en planant
+  const vh = 2.43 * Math.sqrt((fp ? fp.L : 18) * 0.92), sq = (b.dspd || 0) / vh, trimS = (cd.imoca ? 0.018 : 0.035) * (smooth(0.55, 1.1, sq) - 0.5 * smooth(1.3, 2.0, sq)) * (1 - hullUp);
+  // en vol : légère respiration de la hauteur et de l'assiette (réglage du foil et du safran)
+  const flyW = b.lift > 0.3 ? Math.sin(realT * 2.4 + sd0) * (0.04 * b.lift) : 0, flyP = b.lift > 0.3 ? Math.sin(realT * 2.4 + sd0 + 1.2) * 0.004 * Math.min(1, b.lift) : 0;
+  // vibration du coup de bélier (déclenchée par boatSpray), 9 Hz, amortie en 0,4 s
+  M.shu = Math.max(0, M.shu - rdt * 2.5); const shake = M.shu > 0 ? Math.sin(realT * 57) * 0.006 * M.shu * M.shu : 0;
+  v.root.position.set(px, M.y * damp + b.lift + flyW - 0.1, pz);
+  v.root.rotation.set(M.p * damp + b.lift * 0.025 - (b.surfF - 1) * 0.12 + (b.pitchV || 0) + trimS + flyP + shake, -h + M.yw * (1 - 0.6 * hullUp), M.r * damp + b.heel * D2R + shake * 0.5);
   if (b.crashFx > 0.98 && !b.crashShown) { b.crashShown = true; crashSplash(b, px, pz, fx, fz, rx, rz); } else if (b.crashFx < 0.5) b.crashShown = false;
   if (!b.isGhost && V_MASK_ON && v.maskKey !== (v.stl || 'param')) waterMask(v, MASK_Y[CLS.id] || 0.5);
   if (!b.isGhost && Math.hypot(px - camera.position.x, pz - camera.position.z) < 900) bowImpact(b, v, M, fp, px, pz, fx, fz, rx, rz, rdt);
@@ -4134,7 +4190,8 @@ function frame(now) {
   const hv = player.dispHdg * D2R, v = player.spd * KN * VF, bvx = Math.sin(hv) * v, bvz = -Math.cos(hv) * v; GX += bvx * rdt; GZ += bvz * rdt;
   seaTick(); const tws = SS.tws;
   const SEA = MODE === 'race' ? COURSE.sea || 1 : 1;
-  seaAmp += (clamp(tws / 18 * SEA, 0.3, 2.1 * SEA) - seaAmp) * Math.min(1, rdt * 0.25);
+  // mer du vent : hauteur significative ≈ 0,16 U²/g (mer bien levée, un peu sous Pierson-Moskowitz) → 1 m à 15 nd, 3,4 m à 28 nd ; seaAmp = Hs / 1,5
+  const Uw = tws * 0.5144; seaAmp += (clamp(0.16 * Uw * Uw / 9.81 / 1.5 * SEA, 0.25, 3.6 * SEA) - seaAmp) * Math.min(1, rdt * 0.25);
   const lowB = MODE === 'race' ? (SOUTH() ? smooth(1000, 965, SS.pres) : smooth(1010, 984, SS.pres)) : 0;
   swellAmp += (clamp(Math.max(MODE === 'race' ? COURSE.swellMin || 0 : 0, (0.45 + tws / 26) * (1 + 0.55 * lowB) * SEA), 0.5, 2.6 * SEA) - swellAmp) * Math.min(1, rdt * 0.08);
   for (let i = 0; i < NW; i++) { const w = WAVES[i]; wavePh[i] = ((w.dx * GX + w.dz * GZ) * w.k) % (Math.PI * 2); oceanU.uPh.value[i] = wavePh[i]; }
