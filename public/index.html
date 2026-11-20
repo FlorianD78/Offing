@@ -2057,7 +2057,15 @@ function botDecide(b, w, dt) {
   let R = b.route; if (!(R && R.mi === b.mi && R.nodes) && b.nextRoute && b.nextRoute.mi === b.mi && b.nextRoute.nodes) b.route = R = b.nextRoute;
   const valid = R && R.mi === b.mi && R.nodes;
   let adv = valid ? routeAdviceFor(b, R) : (legRoutes[b.mi] ? routeAdviceFor(b, legRoutes[b.mi]) : null);
-  if (!b.routeJob && (!valid || gameT - R.t0 > botEvery(b) * 3600 || (adv && adv.xtrack > (CZ() ? 3 : 25)))) scheduleBotRoute(b);
+  // Recalcul seulement s'il peut changer la route : avec la même prévision, repartir d'un point de la route redonne la même route
+  // (principe d'optimalité). Donc : route périmée = intervalle du bot écoulé ET nouveau run de prévision ; ou bot sorti de sa route
+  // (seuil propre à chaque bot : 10 nm pour Albatros → 40 nm pour Puffin) ; ou route absente / mauvaise marque.
+  // Un nouveau run n'est adopté qu'après un délai propre au bot (Albatros tout de suite → Puffin 18 h) : niveaux différenciés,
+  // et les recalculs s'étalent au lieu de partir tous ensemble à la sortie du run.
+  if (valid && R.fc !== FC.n) { if (b.fcPend == null) b.fcPend = gameT; } else b.fcPend = null;
+  const lag = (b.every - 6) * 3600 * (COURSE.coastal ? 0.125 : 1);
+  const stale = valid && b.fcPend != null && gameT - R.t0 > botEvery(b) * 3600 && gameT - b.fcPend >= lag, off = adv && adv.xtrack > (CZ() ? 3 : 10 + (b.every - 6) * 1.7);
+  if (!b.routeJob && (!valid || stale || off)) scheduleBotRoute(b);
   if (CZ() && dMk < 3) adv = null; // près de la marque : on vise la bouée
   let h, side, cur = norm180(w.twd - b.hdg) >= 0 ? 1 : -1;
   let ah = adv ? adv.hdg : null;
@@ -2429,9 +2437,9 @@ function startRouting(dest, shareWithBots) {
 const botEvery = b => COURSE.coastal ? b.every / 8 : b.every;
 function scheduleBotRoute(b) {
   const dest = markDest(b.mi); if (!dest) return;
-  const st = makeRouteState(dest, b, false), job = { st, onDone: (r, s) => {
+  const fc = FC.n, st = makeRouteState(dest, b, false), job = { st, onDone: (r, s) => {
     b.routeJob = null;
-    if (r === 'done') { b.route = { nodes: flatNodes(s.best), mi: dest.mi, t0: gameT, eta: s.best.t }; if (!dest.finish && !curMarks()[dest.mi].finish) scheduleNextLeg(b, dest, s.best); }
+    if (r === 'done') { b.route = { nodes: flatNodes(s.best), mi: dest.mi, t0: gameT, eta: s.best.t, fc }; if (!dest.finish && !curMarks()[dest.mi].finish) scheduleNextLeg(b, dest, s.best); }
     else b.route = { nodes: null, mi: dest.mi, t0: gameT };
     b.nextDecision = Math.min(b.nextDecision, 60);
   } };
