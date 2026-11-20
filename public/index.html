@@ -834,7 +834,7 @@ const NOISE_TEX = (() => {
   for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const o = j * S + i, x = i + 0.5, y = j + 0.5, e1 = Math.exp(-v1(x, y) * 9), e2 = Math.exp(-v2(x, y) * 7);
     // taches : bruit large (8 et 16 périodes par tuile) ; les bords de cellules ne font que trouer et effranger la tache
     const bl = vn(x / 64, y / 64, 8, 41) * 0.62 + vn(x / 32 + 3, y / 32 + 3, 16, 42) * 0.38;
-    A[o] = 0.8 * bl + 0.12 * R[o] + 0.16 * e1 + 0.1 * e2 + 0.03 * hsh(i, j, 5); }
+    A[o] = 0.86 * bl + 0.14 * R[o] + 0.07 * e1 + 0.045 * e2 + 0.02 * hsh(i, j, 5); }
   const ord = new Uint32Array(S * S).map((_, i) => i).sort((p, q) => A[p] - A[q]), AE = new Uint8Array(S * S); for (let r = 0; r < S * S; r++) AE[ord[r]] = Math.min(255, Math.floor(r / (S * S) * 256));
   const img = new Uint8Array(S * S * 4); for (let o = 0; o < S * S; o++) { img[o * 4] = Math.round(R[o] * 255); img[o * 4 + 1] = Math.round((G[o] / d * 0.5 + 0.5) * 255); img[o * 4 + 2] = Math.round((B[o] / d * 0.5 + 0.5) * 255); img[o * 4 + 3] = AE[o]; }
   const tex = new THREE.DataTexture(img, S, S, THREE.RGBAFormat); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.needsUpdate = true; // sans mipmaps : même grain net que le bruit calculé
@@ -1872,7 +1872,7 @@ function boatSpray(b, px, pz, fx, fz, rx, rz, hb, rdt) {
     b.slamCd = 0.7 + Math.random() * 0.5; const power = clamp(dh / 3 * (sp0 / (18 * k + 2)), 0.3, 1.4), cnt = Math.round((30 + 50 * power) * sz);
     if (b.mz) { b.mz.vp += 0.07 * power; b.mz.vy += 0.25 * power; b.mz.shu = Math.min(1.2, b.mz.shu + power); } // l'étrave est rejetée vers le haut, le gréement vibre
     sideSheet(P, hb, fx, fz, rx, rz, bv, power, sz, cnt, 5.5, 9, 2.2);
-    if (b.isPlayer) { sfxSplash(power); camKick = Math.min(0.6, camKick + power * 0.35); }
+    if (b.isPlayer) { sfxSplash(power); camKick = Math.min(0.6, camKick + power * 0.35); lensHit(Math.round(4 + 10 * power), true); }
   }
   // foil : gerbe en bout de foil quand le bateau vole
   if (b.lift > 0.25) { let k = Math.floor(40 * b.lift * rdt * 3 + Math.random()); const fxl = side > 0 ? -4.1 : 4.1;
@@ -4066,6 +4066,144 @@ function updateEnv(rdt) {
   pLines.material.opacity = 0.25 + 0.75 * light;
   updateRain(rdt, rn);
 }
+/* ----- Faune du large (purement visuel, tirages propres : n'entre jamais dans la course) -----
+   Dauphins : une bande vient jouer dans la vague d'étrave entre 4 et 22 nd, sauts en marsouinage, éclaboussures à l'entrée dans l'eau.
+   Oiseaux de mer : albatros / puffins au large (vol plané en huit, rase les vagues en virage), goélands près des côtes (battements).
+   Poissons volants : sous les tropiques, s'échappent de l'étrave et planent 1 à 3 s.  Baleine : rare, au loin, 3 souffles puis sonde (caudale). */
+const FA = { s: 0x51f15e, r: () => (FA.s = (Math.imul(FA.s, 1664525) + 1013904223) >>> 0) / 4294967296, pod: null, birds: [], fish: [], whale: null, tP: 70, tB: 20, tF: 25, tW: 300 };
+const frnd = (a, b) => a + (b - a) * FA.r();
+function faMat(c, o = {}) { return new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.45, metalness: 0.05 }, o)); }
+// corps de révolution le long de +z (nez en +z), ventre éclairci par couleurs de sommets
+function faBody(prof, top, belly, seg = 14) {
+  const g = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), seg); g.rotateX(Math.PI / 2); g.computeVertexNormals();
+  const n = g.attributes.normal, c = new Float32Array(n.count * 3), A = new THREE.Color(top), B = new THREE.Color(belly), t = new THREE.Color();
+  for (let i = 0; i < n.count; i++) { t.copy(A).lerp(B, smooth(0.05, -0.55, n.getY(i))); c.set([t.r, t.g, t.b], i * 3); }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3)); return g;
+}
+function faShape(pts, rot) { const s = new THREE.Shape(); pts.forEach(([x, y], i) => i ? s.lineTo(x, y) : s.moveTo(x, y)); const g = new THREE.ShapeGeometry(s); rot(g); return g; }
+const FA_GEO = (() => {
+  const dB = faBody([[0, 0], [0.07, 0.08], [0.13, 0.3], [0.2, 0.6], [0.24, 0.95], [0.23, 1.3], [0.16, 1.62], [0.1, 1.8], [0.11, 1.86], [0.06, 1.98], [0.035, 2.1], [0, 2.14]], 0x47525c, 0xc9ced2);
+  const dF = faShape([[0, 0], [-0.12, 0.3], [0.22, 0.08], [0.3, 0]], g => { g.rotateY(-Math.PI / 2); g.translate(0, 0.2, 0.85); });
+  const dT = faShape([[0, 0], [-0.32, -0.22], [-0.26, -0.3], [0, -0.12], [0.26, -0.3], [0.32, -0.22]], g => { g.rotateX(-Math.PI / 2); g.translate(0, 0, 0.05); });
+  const dP = faShape([[0, 0], [0.28, -0.14], [0.22, -0.2], [0, -0.1]], g => { g.rotateX(-Math.PI / 2); g.rotateZ(-0.5); g.translate(0.15, -0.1, 1.55); });
+  const wB = faBody([[0, 0], [0.07, 0.3], [0.1, 0.6], [0.09, 0.8], [0.05, 0.95], [0, 1.02]], 0xf2f2f0, 0xffffff, 8);
+  const wing = s => faShape([[0, 0.12], [1.5 * s, 0.02], [1.55 * s, -0.04], [0.9 * s, -0.08], [0, -0.14]], g => { g.rotateX(-Math.PI / 2); });
+  const fB = faBody([[0, 0], [0.02, 0.06], [0.03, 0.18], [0.02, 0.27], [0, 0.3]], 0x3a5a7a, 0xd8e2ea, 6);
+  const fW = faShape([[0, 0.04], [0.16, 0.0], [0.15, -0.06], [-0.15, -0.06], [-0.16, 0.0]], g => { g.rotateX(-Math.PI / 2); g.translate(0, 0.01, 0.2); });
+  const kB = faBody([[0, 0], [0.5, 0.6], [1.1, 2], [1.55, 4.5], [1.6, 7], [1.4, 9.5], [1.2, 11], [0.9, 12.3], [0.4, 13.2], [0, 13.5]], 0x2b3136, 0x8a9096, 16);
+  const kT = faShape([[0, 0], [-1.9, -0.9], [-1.6, -1.25], [-0.2, -0.7], [0, -0.85], [0.2, -0.7], [1.6, -1.25], [1.9, -0.9]], g => { g.rotateX(-Math.PI / 2); });
+  return { dB, dF, dT, dP, wB, wL: wing(1), wR: wing(-1), fB, fW, kB, kT };
+})();
+const FA_M = { dol: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.05 }), dolF: faMat(0x434e58, { side: THREE.DoubleSide, roughness: 0.3 }),
+  bird: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), wingD: faMat(0x2a2c2e, { side: THREE.DoubleSide, roughness: 0.8 }), wingG: faMat(0xb9bec4, { side: THREE.DoubleSide, roughness: 0.8 }),
+  fish: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.25, metalness: 0.5 }), fishW: faMat(0x9fb6c8, { side: THREE.DoubleSide, roughness: 0.3, metalness: 0.4, transparent: true, opacity: 0.85 }),
+  whale: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5 }), whaleT: faMat(0x2b3136, { side: THREE.DoubleSide, roughness: 0.5 }) };
+function faMesh(geo, mat) { const m = new THREE.Mesh(geo, mat); m.castShadow = false; m.receiveShadow = false; return m; }
+function faDolphin() { const g = new THREE.Group(); g.add(faMesh(FA_GEO.dB, FA_M.dol), faMesh(FA_GEO.dF, FA_M.dolF), faMesh(FA_GEO.dP, FA_M.dolF));
+  const pr = faMesh(FA_GEO.dP, FA_M.dolF); pr.scale.x = -1; g.add(pr); const t = new THREE.Group(); t.add(faMesh(FA_GEO.dT, FA_M.dolF)); g.add(t); g.userData.tail = t; scene.add(g); return g; }
+function faBird(gull) { const g = new THREE.Group(), s = gull ? 0.55 : 1; g.add(faMesh(FA_GEO.wB, FA_M.bird));
+  const L = new THREE.Group(), R = new THREE.Group(); L.add(faMesh(FA_GEO.wL, gull ? FA_M.wingG : FA_M.wingD)); R.add(faMesh(FA_GEO.wR, gull ? FA_M.wingG : FA_M.wingD)); L.position.set(0.06, 0.03, 0.62); R.position.set(-0.06, 0.03, 0.62); g.add(L, R);
+  g.scale.setScalar(s); g.userData = { L, R }; scene.add(g); return g; }
+function faFish() { const g = new THREE.Group(); g.add(faMesh(FA_GEO.fB, FA_M.fish), faMesh(FA_GEO.fW, FA_M.fishW)); scene.add(g); return g; }
+function faFree(o) { scene.remove(o); }
+const _fv = new THREE.Vector3();
+function faSplash(x, y, z, n, p) { for (let i = 0; i < n; i++) spawn(x + frnd(-0.3, 0.3), y + 0.1, z + frnd(-0.3, 0.3), frnd(-1.5, 1.5) * p, frnd(1.5, 4) * p, frnd(-1.5, 1.5) * p, frnd(0.5, 1.1), frnd(0.15, 0.4)); }
+function updateFauna(rdt, svx, svz) {
+  const P = player, V = P && P.vis; if (!V || !V.root.visible || rdt <= 0) return;
+  const day = 1 - ENV.night, spd = P.dspd || P.spd || 0, h = P.dispHdg * D2R, fx = Math.sin(h), fz = -Math.cos(h), rx = Math.cos(h), rz = Math.sin(h);
+  const coast = MODE === 'race' && COURSE.coastal, trop = FA.trop !== undefined ? FA.trop : Math.abs(P.lat) < 26, bow = (V.fp ? V.fp.bow : 9 * V.cd.k), live = GFX.level !== 'low';
+  const bx = V.root.position.x, bz = V.root.position.z, mv = (o, d) => { o.x -= svx * d; o.z -= svz * d; }; // objets ancrés dans l'eau : la scène défile sous le bateau
+  // --- dauphins ---
+  FA.tP -= rdt;
+  if (!FA.pod && FA.tP <= 0) { FA.tP = frnd(150, 330);
+    if (live && day > 0.5 && spd > 4 && spd < 22 && P.lift < 0.6) { const n = 3 + Math.floor(FA.r() * 4), side = FA.r() < 0.5 ? 1 : -1;
+      FA.pod = { t: 0, dur: frnd(35, 60), m: [] };
+      for (let i = 0; i < n; i++) FA.pod.m.push({ o: faDolphin(), ox: side * frnd(1.5, 6) * (i % 2 ? -1 : 1), oz: frnd(-6, 14), ph: FA.r(), T: frnd(2.0, 2.9), hj: frnd(0.5, 1.2), big: 0, lx: 0, lz: 0, sp: 0 });
+      if (P.isPlayer) toast(T('🐬 Des dauphins jouent dans l\'étrave', '🐬 Dolphins playing in the bow wave'), 3200); } }
+  if (FA.pod) { const D = FA.pod; D.t += rdt; const leave = smooth(D.dur - 8, D.dur, D.t), come = 1 - smooth(0, 6, D.t), done = D.t > D.dur + 2 || spd > 26;
+    D.m.forEach((d, k) => { if (done) { faFree(d.o); return; }
+      d.ph += rdt / d.T; if (d.ph >= 1) { d.ph -= 1; d.big = FA.r() < 0.12 ? 1 : 0; d.ox += frnd(-1.2, 1.2); d.oz += frnd(-2, 2); d.ox = clamp(d.ox, -7, 7); d.oz = clamp(d.oz, -8, 16); }
+      // marsouinage : 40 % du cycle hors de l'eau (parabole), le reste sous la surface (invisible : l'eau est opaque)
+      const u = d.ph / 0.4, air = u < 1, hj = d.hj * (1 + 1.6 * d.big), y = air ? 4 * hj * u * (1 - u) - 0.25 : -1.6;
+      const ahead = bow + d.oz - (come + leave) * 40, x = bx + fx * ahead + rx * d.ox, z = bz + fz * ahead + rz * d.ox, wy = waveH(x, z);
+      d.o.position.set(x, wy + y, z); const vy = air ? 4 * hj * (1 - 2 * u) / (0.4 * d.T) : 0, vf = Math.max(spd * KN * VF * 0.25, 4);
+      _fv.set(x + fx * vf, wy + y + vy, z + fz * vf); d.o.lookAt(_fv); d.o.visible = air || y > -1;
+      d.o.userData.tail.rotation.x = Math.sin(realT * 9 + k) * 0.35;
+      if (air && !d.air) faSplash(x - fx * 0.5, wy, z - fz * 0.5, 10, 0.9); if (!air && d.air) faSplash(x + fx * 1.5, wy, z + fz * 1.5, 18 + 20 * d.big, 1 + d.big); d.air = air; });
+    if (done) FA.pod = null; }
+  // --- oiseaux : vol plané en huit autour du bateau, rase-mottes dans les virages, s'éloignent au bout d'un moment ---
+  FA.tB -= rdt;
+  if (FA.tB <= 0) { FA.tB = frnd(60, 160); if (live && day > 0.35 && FA.birds.length < 3) { const gull = coast; for (let i = 0, n = gull ? 1 + Math.floor(FA.r() * 3) : 1 + (FA.r() < 0.3 ? 1 : 0); i < n; i++)
+      FA.birds.push({ o: faBird(gull), gull, cx: frnd(-60, 60), cz: frnd(-40, 80), R: frnd(25, 60), th: frnd(0, 6.3), w: frnd(0.12, 0.22) * (FA.r() < 0.5 ? 1 : -1), t: 0, dur: frnd(50, 130), flap: 0, prev: null }); } }
+  FA.birds = FA.birds.filter(B => { B.t += rdt; if (B.t > B.dur + 25 || day < 0.2) { faFree(B.o); return false; }
+    const away = smooth(B.dur, B.dur + 25, B.t) * 400, th = (B.th += B.w * rdt * (B.gull ? 1.4 : 1)), R = B.R + away;
+    const lx = B.cx + R * Math.cos(th), lz = B.cz + R * Math.sin(2 * th) * 0.5 + away * 0.6; // repère du bateau (x à droite, z vers l'avant)
+    const x = bx + rx * lx + fx * lz, z = bz + rz * lx + fz * lz, alt = (B.gull ? 6 : 1.2) + (B.gull ? 4 : 9) * Math.abs(Math.sin(th)) + away * 0.05, y = Math.max(waveH(x, z) + 0.6, alt);
+    if (B.prev) { _fv.set(x * 2 - B.prev[0], y * 2 - B.prev[1], z * 2 - B.prev[2]); B.o.position.set(x, y, z); B.o.lookAt(_fv); }
+    B.o.position.set(x, y, z); const bank = clamp(-B.w * 2.2 * (1 + Math.cos(2 * th)), -1.1, 1.1); B.o.rotateZ(bank * (B.gull ? 0.6 : 1));
+    if (B.gull ? FA.r() < rdt * 0.6 : FA.r() < rdt * 0.05) B.flap = B.gull ? 2.5 : 1.2; B.flap = Math.max(0, B.flap - rdt);
+    const fl = B.flap > 0 ? Math.sin(realT * (B.gull ? 14 : 9)) * 0.55 : 0.06 * Math.sin(realT * 1.3), dih = B.gull ? 0.12 : 0.03;
+    B.o.userData.L.rotation.z = dih + fl; B.o.userData.R.rotation.z = -dih - fl; B.prev = [x, y, z]; return true; });
+  // --- poissons volants (tropiques) : un banc s'échappe de l'étrave et plane ---
+  FA.tF -= rdt;
+  if (FA.tF <= 0) { FA.tF = frnd(25, 70); if (live && trop && day > 0.4 && spd > 6 && FA.fish.length === 0) { const side = FA.r() < 0.5 ? 1 : -1, n = 4 + Math.floor(FA.r() * 7);
+      for (let i = 0; i < n; i++) { const a = side * frnd(0.4, 1.3), sp2 = frnd(11, 17), x = bx + fx * (bow + frnd(2, 8)) + rx * side * frnd(1, 4), z = bz + fz * (bow + frnd(2, 8)) + rz * side * frnd(1, 4);
+        FA.fish.push({ o: faFish(), x, z, y: waveH(x, z), vx: (fx * Math.cos(a) + rx * Math.sin(a)) * sp2, vz: (fz * Math.cos(a) + rz * Math.sin(a)) * sp2, t: -i * 0.07, dur: frnd(1.2, 3.2), hh: frnd(0.3, 0.8), cv: frnd(-0.4, 0.4) }); } } }
+  FA.fish = FA.fish.filter(F => { F.t += rdt; if (F.t < 0) { F.o.visible = false; return true; } if (F.t > F.dur) { faSplash(F.x, F.y, F.z, 4, 0.5); faFree(F.o); return false; }
+    const c = Math.cos(F.cv * rdt), s = Math.sin(F.cv * rdt), vx = F.vx * c - F.vz * s; F.vz = F.vx * s + F.vz * c; F.vx = vx; F.x += F.vx * rdt; F.z += F.vz * rdt; mv(F, rdt);
+    const u = F.t / F.dur, wy = waveH(F.x, F.z); F.y = wy + F.hh * Math.min(1, u * 8) * (1 - smooth(0.75, 1, u)); F.o.visible = true;
+    F.o.position.set(F.x, F.y, F.z); _fv.set(F.x + F.vx, F.y, F.z + F.vz); F.o.lookAt(_fv); return true; });
+  // --- baleine : au loin, 3 souffles (dos qui roule), puis sonde en montrant la caudale ---
+  FA.tW -= rdt;
+  if (!FA.whale && FA.tW <= 0) { FA.tW = frnd(420, 900);
+    if (live && day > 0.45 && !coast) { const a = frnd(-1.2, 1.2) + (FA.r() < 0.5 ? 0 : Math.PI), d = frnd(160, 420), lx = Math.sin(a) * d, lz = Math.cos(a) * d + 80, wa = frnd(0, 6.3);
+      const g = new THREE.Group(), body = faMesh(FA_GEO.kB, FA_M.whale), tail = new THREE.Group(), tf = faMesh(FA_GEO.kT, FA_M.whaleT); tail.add(tf); g.add(body, tail); scene.add(g);
+      FA.whale = { o: g, body, tail, x: bx + rx * lx + fx * lz, z: bz + rz * lx + fz * lz, dx: Math.sin(wa), dz: Math.cos(wa), t: 0, blow: [0, 0, 0] };
+      if (P.isPlayer) toast(T('🐋 Une baleine souffle au loin', '🐋 A whale is blowing in the distance'), 3200); } }
+  if (FA.whale) { const W = FA.whale; W.t += rdt; W.x += W.dx * 1.6 * rdt; W.z += W.dz * 1.6 * rdt; mv(W, rdt);
+    if (W.t > 30) { faFree(W.o); FA.whale = null; }
+    else { const k = Math.min(2, Math.floor(W.t / 7)), tt = W.t - k * 7, sonde = smooth(21, 24, W.t), roll = W.t < 21 ? Math.sin(Math.PI * clamp(tt / 5, 0, 1)) : 0;
+      const wy = waveH(W.x, W.z), y = -2.5 + 1.9 * roll - 3 * smooth(24, 28, W.t) + 1.1 * sonde;
+      W.o.position.set(W.x, wy + y, W.z); W.o.rotation.set(0, Math.atan2(W.dx, W.dz), 0); W.body.position.set(0, 0, -6.5); W.body.rotation.x = W.t < 21 ? -0.16 * Math.cos(Math.PI * clamp(tt / 5, 0, 1)) : 0.5 * sonde; // tête qui sort, dos qui roule, tête qui replonge
+      // caudale : se lève au-dessus de l'eau pendant la sonde, puis glisse dedans
+      W.tail.position.set(0, -1.2 + 5.6 * sonde * (1 - smooth(25.5, 28, W.t)), -6.5 - 2.5 * sonde); W.tail.rotation.x = -1.35 * sonde; W.tail.visible = sonde > 0.02;
+      if (W.t < 21 && tt > 0.3 && !W.blow[k]) { W.blow[k] = 1; const bxw = W.x + W.dx * 4.5, bzw = W.z + W.dz * 4.5, ws = (SS.tws || 10) * KN, wa = (SS.twd + 180) * D2R;
+        for (let i = 0; i < 110; i++) { const up = frnd(8, 13), sp = frnd(0, 1); spawn(bxw + frnd(-0.2, 0.2), wy + 0.3, bzw + frnd(-0.2, 0.2), Math.sin(wa) * ws * 0.3 + frnd(-0.5, 0.5) * (1 + 2 * sp), up, -Math.cos(wa) * ws * 0.3 + frnd(-0.5, 0.5) * (1 + 2 * sp), frnd(1.2, 2.2), frnd(0.35, 0.9)); } } } }
+}
+/* ----- Gouttes sur l'objectif (vue à bord seulement) : après un coup de bélier, sous les embruns à haute vitesse, sous la pluie.
+   Calque 2D par-dessus la scène ; les grosses gouttes glissent en laissant une traînée, toutes sèchent en quelques secondes. ----- */
+const LENS = { cv: null, g: null, d: [], w: 0, h: 0, drawn: false };
+function lensHit(n, big) {
+  if (cam.mode !== 'onboard' || Math.abs(cam.obAz) > 110 || GFX.level === 'low') return;
+  if (!LENS.cv) { const c = document.createElement('canvas'); c.id = 'lens'; c.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none';
+    canvas.parentNode.insertBefore(c, canvas.nextSibling); LENS.cv = c; LENS.g = c.getContext('2d'); }
+  const k = Math.min(innerWidth, innerHeight) / 800;
+  for (let i = 0; i < n && LENS.d.length < 70; i++) { const r = (big && Math.random() < 0.45 ? rnd(9, 24) : rnd(2.5, 9)) * k;
+    LENS.d.push({ x: rnd(0.03, 0.97) * innerWidth, y: rnd(0.02, 0.85) * innerHeight, r, t: 0, max: rnd(2.5, 7) * (r > 9 * k ? 1.3 : 1), vy: 0, slide: r > 11 * k && Math.random() < 0.7, tx: 0, ty: 0 }); }
+}
+function updateLens(rdt) {
+  if (cam.mode === 'onboard') {
+    if (ENV.rain > 0.05 && Math.random() < ENV.rain * rdt * 5) lensHit(1, false);
+    const s = player.dspd || 0; if (s > 11 && Math.random() < rdt * 0.3 * smooth(11, 22, s) * (0.4 + seaAmp * 0.4) * (1 - Math.min(0.8, player.lift))) lensHit(1 + Math.floor(Math.random() * 3), false);
+  } else if (LENS.d.length) LENS.d.length = 0;
+  if (!LENS.cv) return;
+  const c = LENS.cv, g = LENS.g;
+  if (!LENS.d.length) { if (LENS.drawn) { g.clearRect(0, 0, c.width, c.height); LENS.drawn = false; } return; }
+  if (c.width !== innerWidth || c.height !== innerHeight) { c.width = innerWidth; c.height = innerHeight; }
+  g.clearRect(0, 0, c.width, c.height); LENS.drawn = true; const L = 0.35 + 0.65 * (1 - ENV.night);
+  LENS.d = LENS.d.filter(d => { d.t += rdt; if (d.t > d.max) return false;
+    const a = (1 - smooth(d.max * 0.55, d.max, d.t)) * Math.min(1, d.t * 12), r = d.r * (1 - 0.25 * d.t / d.max);
+    if (d.slide && d.t > 0.4) { d.vy = Math.min(d.vy + 60 * rdt, 140); const y0 = d.y; d.y += d.vy * rdt; d.x += Math.sin(d.t * 3 + d.r) * 8 * rdt;
+      g.strokeStyle = `rgba(210,225,235,${0.12 * a})`; g.lineWidth = r * 0.5; g.beginPath(); g.moveTo(d.x, y0 - r * 2.5); g.lineTo(d.x, d.y); g.stroke(); }
+    // lentille d'eau : elle renverse la scène (mer sombre en haut, ciel clair en bas), bord sombre, reflet ponctuel en haut à gauche
+    const ry = r * (d.slide && d.vy > 20 ? 1.25 : 1), lg = g.createLinearGradient(0, d.y - ry, 0, d.y + ry);
+    lg.addColorStop(0, `rgba(18,38,52,${0.42 * a})`); lg.addColorStop(0.45, `rgba(70,95,110,${0.22 * a})`); lg.addColorStop(1, `rgba(225,238,248,${0.38 * a * L})`);
+    g.fillStyle = lg; g.beginPath(); g.ellipse(d.x, d.y, r, ry, 0, 0, Math.PI * 2); g.fill();
+    const gr = g.createRadialGradient(d.x, d.y, r * 0.55, d.x, d.y, r * 1.05); gr.addColorStop(0, 'rgba(10,20,30,0)'); gr.addColorStop(0.8, `rgba(10,20,30,${0.28 * a})`); gr.addColorStop(1, 'rgba(10,20,30,0)');
+    g.fillStyle = gr; g.beginPath(); g.ellipse(d.x, d.y, r * 1.05, ry * 1.05, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = `rgba(255,255,255,${0.7 * a * L})`; g.beginPath(); g.ellipse(d.x - r * 0.35, d.y - ry * 0.45, Math.max(0.8, r * 0.16), Math.max(0.6, r * 0.1), -0.6, 0, Math.PI * 2); g.fill();
+    return d.y < c.height + 40; });
+}
 /* pluie : traits de gouttes autour de la caméra, poussés par le vent apparent */
 const RN_N = 1600, RN_R = 42, rnGeo = new THREE.BufferGeometry(), rnPos = new Float32Array(RN_N * 6), rnD = new Float32Array(RN_N * 3);
 for (let i = 0; i < RN_N; i++) { rnD[i * 3] = (Math.random() * 2 - 1) * RN_R; rnD[i * 3 + 1] = Math.random() * 40; rnD[i * 3 + 2] = (Math.random() * 2 - 1) * RN_R; }
@@ -4201,7 +4339,7 @@ function frame(now) {
   const wa = (SS.twd + 180) * D2R; oceanU.uWind.value.set(Math.sin(wa), -Math.cos(wa), tws);
   camera.updateMatrixWorld(); _wkF.setFromProjectionMatrix(_wkM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   boats.forEach(b => { if (active.includes(b)) updateBoatVisual(b, rdt); }); updateGhost(rdt);
-  updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(rdt); updateAudio(rdt);
+  updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFauna(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(rdt); updateLens(rdt); updateAudio(rdt);
   hudAcc += rdt; mapAcc += rdt; polAcc += rdt; projAcc += rdt;
   if (projAcc > 0.5) { projAcc = 0; computeProjection(); }
   if (hudAcc > 0.1) { hudAcc = 0; updateHUD(); }
