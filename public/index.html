@@ -226,8 +226,8 @@ body.mobile #mstrip{display:grid;position:fixed;top:0;left:0;right:0;grid-templa
 #mstrip small{display:block;font-size:9px;letter-spacing:.06em;color:#7fa3bd}
 #mstrip b{font-size:17px;font-variant-numeric:tabular-nums}
 body.mobile #tr{top:58px;right:6px;width:132px;padding:3px}
-body.mobile #tr:not(.big) .maptools,body.mobile #tr:not(.big) #legend{display:none}
-body.mobile #tr:not(.big) #map{height:100px;cursor:pointer}
+body.mobile #tr:not(.big):not(.mid) .maptools,body.mobile #tr:not(.big) #legend{display:none}
+body.mobile #tr:not(.big):not(.mid) #map{height:100px;cursor:pointer}
 body.mobile #tr.big{top:0;left:0;right:0;bottom:0;width:auto;height:auto;border-radius:0;z-index:20}
 body.mobile #tr.big #map{height:calc(100% - 64px)}
 body.mobile #tr.big .fc input{width:90px}
@@ -250,15 +250,41 @@ body.mobile .modes,body.mobile .modes.three{grid-template-columns:1fr}
 body.mobile .card h1{font-size:22px}
 body.mobile.fold #msails,body.mobile.fold #foilLine,body.mobile.fold #reefLine,body.mobile.fold #trimLine,body.mobile.fold #manq,body.mobile.fold #manCancel{display:none!important}
 body.mobile #bc{background:rgba(8,22,36,.66)}
+/* actions rapides : conseil du routeur, pilote, temps — sans ouvrir de panneau */
+body.mobile #mquick button{min-height:40px;font-size:14px;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.mobile #qAdv{flex:1.7!important;background:rgba(255,79,216,.16);border-color:rgba(255,79,216,.45)}
+body.mobile #qAdv.ok{background:rgba(93,255,158,.1);border-color:rgba(93,255,158,.38)}
+body.mobile #qAdv.off{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:#a9c3d6}
+body.mobile #qPilot.on{background:rgba(255,79,216,.5);border-color:#ff8fe6;color:#fff;font-weight:700}
+body.mobile #qAcc{font-variant-numeric:tabular-nums}
+body.mobile #rnext{cursor:pointer;font-size:13px;padding:6px 8px;margin-top:0}
+body.mobile #man.idle{display:none}
+#mstrip b i{font-style:normal;font-size:10px;font-weight:800;margin-left:3px;vertical-align:2px}
+/* panneaux Course / Réglages en tiroir : la scène et les commandes restent visibles ; poignée ou tap sur la scène pour fermer */
+.grab{display:none}
+body.mobile #tl,body.mobile #br{top:auto;bottom:calc(var(--bcH,260px) + 6px);max-height:min(56vh,calc(100vh - var(--bcH,260px) - 72px));border-radius:14px;box-shadow:0 -8px 28px rgba(0,0,0,.5);padding-top:0;overscroll-behavior:contain}
+body.mobile .grab{display:block;position:sticky;top:0;height:24px;margin:0 -10px 2px;z-index:3;cursor:pointer;background:linear-gradient(rgba(10,26,42,.96),rgba(10,26,42,.8))}
+body.mobile .grab::after{content:'';position:absolute;left:50%;top:9px;width:44px;height:5px;margin-left:-22px;border-radius:3px;background:rgba(255,255,255,.4)}
+/* carte mi-écran : route et vent visibles en barrant */
+body.mobile #tr.mid{top:62px;left:6px;right:6px;width:auto;height:min(46vh,calc(100vh - var(--bcH,260px) - 80px));z-index:9;padding:4px}
+body.mobile #tr.mid #map{height:calc(100% - 36px);cursor:grab}
+body.mobile #tr.mid .fc{display:none}
 @media (max-width:900px){.modes.three{grid-template-columns:1fr}}
 @media (max-height:520px){
   body.mobile #mstrip{padding:3px 6px} body.mobile #mstrip b{font-size:14px}
-  body.mobile #tr{top:44px} body.mobile #tl,body.mobile #br{top:44px}
-  body.mobile #bc{display:grid;grid-template-columns:1fr 1fr;left:50%;transform:translateX(-50%);width:min(100%,920px);column-gap:8px}
-  body.mobile #bc .line>button{min-height:36px;font-size:13px}
-  body.mobile #manq,body.mobile #manCancel{display:none!important}
-  body.mobile .mtabs button{min-height:36px!important}
+  body.mobile #mstrip small{font-size:8px}
+  body.mobile #tr{top:42px;right:calc(var(--bcW,340px) + 6px)}
+  body.mobile #bc{top:34px;bottom:0;right:0;left:auto;width:var(--bcW,340px);transform:none;display:flex;flex-direction:column;gap:3px;overflow-y:auto;border-radius:14px 0 0 0;padding:5px 6px 0;overscroll-behavior:contain}
+  body.mobile #bc .line>button,body.mobile #mquick button{min-height:34px;font-size:13px}
+  body.mobile .mtabs{position:sticky;bottom:0;margin-top:auto!important;padding:3px 0 5px;background:rgba(8,22,36,.94)}
+  body.mobile .mtabs button{min-height:34px!important;font-size:15px!important}
   body.mobile .mtabs small{display:none}
+  body.mobile #manq,body.mobile #manCancel{display:none!important}
+  body.mobile #tl,body.mobile #br{top:40px;bottom:6px;left:6px;right:auto;width:min(calc(100vw - var(--bcW,340px) - 18px),420px);max-height:none;box-shadow:8px 0 28px rgba(0,0,0,.5)}
+  body.mobile #br #polar{height:150px}
+  body.mobile #tr.mid{top:40px;left:6px;right:calc(var(--bcW,340px) + 6px);bottom:6px;height:auto}
+  body.mobile #toast{left:calc((100vw - var(--bcW,340px)) / 2);top:42px;max-width:calc(100vw - var(--bcW,340px) - 20px)}
+}
 }
 </style>
 </head>
@@ -266,6 +292,7 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
 <canvas id="c"></canvas>
 
 <div id="tl" class="panel">
+  <div class="grab" title="Fermer"></div>
   <div class="title"><span id="tlTitle">TRANSAT</span><span class="btns"><button id="mobBtn" title="Interface téléphone">📱</button><button id="dnBtn" title="Cycle jour / nuit (J)">🌗</button><button id="sndBtn" title="Son (X)">🔊</button><button id="menuBtn" title="Menu (Échap)">☰</button><button id="helpBtn" title="Aide / pause (H)">?</button></span></div>
   <div id="tlBody"></div>
   <div id="router">
@@ -316,6 +343,7 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
     <button id="tackBtn" title="Virer / empanner (Espace)">⟲ Virer</button>
     <button id="vmgBtn" title="Angle VMG optimal (V)">VMG</button>
   </div>
+  <div class="line mob" id="mquick"><button id="qAdv">🧭 –</button><button id="qPilot">🤖 Pilote</button><button id="qAcc">⏩ –</button></div>
   <div class="line mob" id="msails"></div>
   <div class="line" id="foilLine">
     <span class="lbl">FOILS</span>
@@ -363,6 +391,7 @@ body.mobile #bc{background:rgba(8,22,36,.66)}
 <div id="balP" class="panel"></div>
 
 <div id="br" class="panel">
+  <div class="grab" title="Fermer"></div>
   <canvas id="polar"></canvas>
   <div class="sails" id="sails"></div>
   <div class="assist">
@@ -2802,7 +2831,13 @@ $('zIn').onclick = () => { if (cam.mode === 'onboard') cam.obFov = clamp(cam.obF
 $('zOut').onclick = () => { if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov * 1.2, 35, 90); else cam.dist = clamp(cam.dist * 1.4, CLS.cam * 0.25, 4000); };
 $('mobBtn').onclick = () => setMobile(!isMobile());
 $('tabDesk').onclick = () => setMobile(false); $('tabFold').onclick = () => setFold(!document.body.classList.contains('fold')); $('tabCourse').onclick = () => setSheet('course'); $('tabSails').onclick = () => setSheet('sails');
-$('tabMap').onclick = () => { setSheet(null); toggleMapBig(); }; $('mapClose').onclick = () => toggleMapBig();
+$('tabMap').onclick = () => { setSheet(null); setMapView(mapView() === 'mini' ? 'mid' : 'mini'); }; $('mapClose').onclick = () => isMobile() ? setMapView('mini') : toggleMapBig();
+document.querySelectorAll('.grab').forEach(g => g.addEventListener('pointerup', () => setSheet(null)));
+// actions rapides (téléphone)
+$('qAdv').onclick = () => { buzz(12); if (!ROUTE.nodes) { $('rFinish').click(); toast(T('Calcul de la route vers la marque…', 'Routing to the mark…'), 1500); } else applyAdvice(); };
+$('qPilot').onclick = () => { buzz(12); if (!ROUTE.nodes) { toast(T('Pas de route : touche 🧭 pour en calculer une', 'No route: tap 🧭 to compute one'), 2000); return; } $('rFollow').click(); };
+$('qAcc').onclick = () => { buzz(12); const i = ACCELS.indexOf(accel); setAccel(ACCELS[(i + 1) % ACCELS.length]); toast(T('Temps : ', 'Time: ') + accelLabel(accel), 900); };
+$('rnext').onclick = () => { if (!isMobile()) return; buzz(15); if (RALERT.nowState) doTack(); else applyAdvice(); };
 $('tabCam').onclick = () => toggleCam(); $('tabPause').onclick = () => togglePause(); $('tabMenu').onclick = () => showMenu();
 $('helpBtn').onclick = () => showHelp(); $('menuBtn').onclick = () => showMenu(); $('sndBtn').onclick = () => setSound(!AUD.on); $('dnBtn').onclick = () => setCycle(!ENV.cycle); $('dnBtn').style.opacity = ENV.cycle ? 1 : 0.5; $('sndBtn').textContent = AUD.on ? '🔊' : '🔇';
 function cancelLastMan(b) { const r = b.queue.pop(); if (r && r.type === 'foil') { b.tgtP = b.foilP > 0.5 ? 1 : 0; b.tgtS = b.foilS > 0.5 ? 1 : 0; b.queue.forEach(q => { if (q.type === 'foil') { b.tgtP = q.P; b.tgtS = q.S; } }); } }
@@ -2826,11 +2861,14 @@ function accelLabel(a) { return MODE === 'race' ? (a < 60 ? a + 's/s' : (a / 60)
 function buildAccel() { const el = $('accel'); el.querySelectorAll('button').forEach(b => b.remove()); ACCELS.forEach(a => { const b = document.createElement('button'); b.textContent = accelLabel(a); if (a === accel) b.className = 'on'; b.onclick = () => setAccel(a); el.appendChild(b); }); }
 
 const pointers = new Map(); let pinchD = 0;
-canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinchD = Math.hypot(a.x - b.x, a.y - b.y); } });
+let tapS = null;
+canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); tapS = pointers.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null; if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinchD = Math.hypot(a.x - b.x, a.y - b.y); } });
 canvas.addEventListener('pointermove', e => { const p = pointers.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
   if (pointers.size === 1 && cam.mode === 'onboard') { cam.obAz = clamp(cam.obAz - dx * 0.25, -170, 170); cam.obEl = clamp(cam.obEl - dy * 0.18, -45, 35); cam.obIdle = 0; }
   else if (pointers.size === 1) { cam.az -= dx * 0.3; cam.elev = clamp(cam.elev + dy * 0.2, 2, 88); } else if (pointers.size === 2) { const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); if (pinchD > 0 && d > 0) { if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov * pinchD / d, 35, 90); else cam.dist = clamp(cam.dist * pinchD / d, CLS.cam * 0.25, 4000); } pinchD = d; } });
-const pUp = e => { pointers.delete(e.pointerId); pinchD = 0; }; canvas.addEventListener('pointerup', pUp); canvas.addEventListener('pointercancel', pUp);
+const pUp = e => { pointers.delete(e.pointerId); pinchD = 0;
+  if (tapS && isMobile() && e.type === 'pointerup' && performance.now() - tapS.t < 350 && Math.hypot(e.clientX - tapS.x, e.clientY - tapS.y) < 8) { if (document.body.classList.contains('sheet-course') || document.body.classList.contains('sheet-sails')) setSheet(null); else if (mapView() === 'mid') setMapView('mini'); }
+  tapS = null; }; canvas.addEventListener('pointerup', pUp); canvas.addEventListener('pointercancel', pUp);
 canvas.addEventListener('wheel', e => { e.preventDefault(); if (cam.mode === 'onboard') cam.obFov = clamp(cam.obFov * Math.exp(e.deltaY * 0.0008), 35, 90); else cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), CLS.cam * 0.25, 4000); }, { passive: false });
 
 /* ===================== CARTE ===================== */
@@ -2845,7 +2883,7 @@ function fitBox(la0, la1, lo0, lo1) { if (!mapCv._w) return; view.cLon = (lo0 + 
 function mapFit() { if (MODE === 'race') { const b = COURSE.box; fitBox(b[0], b[1], b[2], b[3]); } else fitBox(TC.lat - 0.38, TC.lat + 0.4, TC.lon - 0.48, TC.lon + 0.48); }
 function mapBoat() { view.cLon = player.lon; view.cMy = mercY(player.lat); if (MODE === 'race') view.zoom = Math.max(view.zoom, COURSE.id === 'fastnet' ? 250 : 40); windDirty = true; }
 const isMobile = () => document.body.classList.contains('mobile');
-function setSheet(name) { const b = document.body, cur = b.classList.contains('sheet-' + name); b.classList.remove('sheet-course', 'sheet-sails'); if (name && !cur) b.classList.add('sheet-' + name); $('tabCourse').classList.toggle('on', b.classList.contains('sheet-course')); $('tabSails').classList.toggle('on', b.classList.contains('sheet-sails')); requestAnimationFrame(sizeCanvases); }
+function setSheet(name) { const b = document.body, cur = b.classList.contains('sheet-' + name); b.classList.remove('sheet-course', 'sheet-sails'); if (name && !cur) { b.classList.add('sheet-' + name); if (isMobile()) setMapView('mini'); } $('tabCourse').classList.toggle('on', b.classList.contains('sheet-course')); $('tabSails').classList.toggle('on', b.classList.contains('sheet-sails')); requestAnimationFrame(sizeCanvases); }
 function setMobile(on, quiet) {
   document.body.classList.toggle('mobile', on); setSheet(null);
   try { localStorage.setItem('gl3d_mobile', on ? '1' : '0'); } catch (e) {}
@@ -2857,27 +2895,41 @@ function setMobile(on, quiet) {
   resize(); updateBcH(); mapFit();
   if (!quiet) toast(on ? 'Interface téléphone activée' : 'Interface ordinateur activée', 1500);
 }
-function updateBcH() { document.documentElement.style.setProperty('--bcH', $('bc').getBoundingClientRect().height + 'px'); updateViewOffset(); }
+const landMob = () => innerHeight <= 520 && innerWidth > innerHeight; // téléphone en paysage : commandes en colonne à droite
+function updateBcH() { const R = document.documentElement.style; R.setProperty('--bcW', Math.round(Math.min(360, Math.max(300, innerWidth * 0.42))) + 'px'); R.setProperty('--bcH', $('bc').getBoundingClientRect().height + 'px'); updateViewOffset(); }
 function updateViewOffset() {
   if (!isMobile()) { if (camera.view && camera.view.enabled) camera.clearViewOffset(); return; }
-  const top = $('mstrip').getBoundingClientRect().height || 0, bot = $('bc').getBoundingClientRect().height || 0, d = Math.round((bot - top) / 2);
-  if (d > 4) camera.setViewOffset(innerWidth, innerHeight, 0, d, innerWidth, innerHeight); else if (camera.view && camera.view.enabled) camera.clearViewOffset();
+  // recentre le bateau dans la zone de scène libre : entre le bandeau et les commandes (portrait), à gauche de la colonne (paysage)
+  const bc = $('bc').getBoundingClientRect(), side = landMob(), top = $('mstrip').getBoundingClientRect().height || 0, bot = side ? 0 : bc.height || 0;
+  const d = Math.round((bot - top) / 2), x = side ? Math.round((innerWidth - bc.left) / 2) : 0;
+  if (Math.abs(d) > 4 || x > 4) camera.setViewOffset(innerWidth, innerHeight, x, d, innerWidth, innerHeight); else if (camera.view && camera.view.enabled) camera.clearViewOffset();
 }
 function setFold(on) { document.body.classList.toggle('fold', on); $('tabFold').innerHTML = on ? '▴<small>Plus</small>' : '▾<small>Réduire</small>'; try { localStorage.setItem('gl3d_fold', on ? '1' : '0'); } catch (e) {} requestAnimationFrame(updateBcH); }
 try { new ResizeObserver(updateBcH).observe($('bc')); } catch (e) {}
-function toggleMapBig() { $('tr').classList.toggle('big'); sizeCanvases(); mapFit(); }
-$('mapBig').onclick = toggleMapBig; $('mapFit').onclick = mapFit; $('mapBoat').onclick = mapBoat;
+function toggleMapBig() { $('tr').classList.remove('mid'); $('tr').classList.toggle('big'); sizeCanvases(); mapFit(); }
+// téléphone : vignette → mi-écran (scène toujours visible) → plein écran
+function setMapView(v) { const t = $('tr'), was = t.classList.contains('mid') ? 'mid' : t.classList.contains('big') ? 'big' : 'mini'; if (v === was) return;
+  t.classList.toggle('mid', v === 'mid'); t.classList.toggle('big', v === 'big'); if (v !== 'mini') { document.body.classList.remove('sheet-course', 'sheet-sails'); $('tabCourse').classList.remove('on'); $('tabSails').classList.remove('on'); }
+  $('tabMap').classList.toggle('on', v !== 'mini'); requestAnimationFrame(() => { sizeCanvases(); if (v === 'big') mapFit(); else if (v === 'mid' && was === 'mini') mapBoat(); windDirty = true; }); }
+const mapView = () => $('tr').classList.contains('big') ? 'big' : $('tr').classList.contains('mid') ? 'mid' : 'mini';
+const buzz = p => { try { if (isMobile() && navigator.vibrate) navigator.vibrate(p); } catch (e) {} };
+$('mapBig').onclick = () => isMobile() ? setMapView(mapView() === 'big' ? 'mid' : 'big') : toggleMapBig(); $('mapFit').onclick = mapFit; $('mapBoat').onclick = mapBoat;
 $('mapIso').onclick = () => { ROUTE.showIso = !ROUTE.showIso; $('mapIso').classList.toggle('on', ROUTE.showIso); };
 $('fcst').oninput = e => { fcstH = +e.target.value; $('fcstL').textContent = '+' + fcstH + (MODE === 'race' ? ' h' : ' min'); windDirty = true; };
-let mDrag = null;
-mapCv.addEventListener('pointerdown', e => { mapCv.setPointerCapture(e.pointerId); mDrag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY }; });
-mapCv.addEventListener('pointermove', e => { if (!mDrag) return; view.cLon -= (e.clientX - mDrag.x) / view.zoom; view.cMy += (e.clientY - mDrag.y) / view.zoom; mDrag.x = e.clientX; mDrag.y = e.clientY; windDirty = true; });
+let mDrag = null; const mPts = new Map(); let mPinch = 0;
+mapCv.addEventListener('pointerdown', e => { mapCv.setPointerCapture(e.pointerId); mPts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (mPts.size === 2) { const [a, b] = [...mPts.values()]; mPinch = Math.hypot(a.x - b.x, a.y - b.y); mDrag = null; return; } mDrag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY }; });
+mapCv.addEventListener('pointermove', e => { const q = mPts.get(e.pointerId); if (q) { q.x = e.clientX; q.y = e.clientY; }
+  if (mPts.size === 2) { const [a, b] = [...mPts.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (mPinch > 0 && d > 0) { // zoom autour du milieu des deux doigts
+      const r = mapCv.getBoundingClientRect(), x = (a.x + b.x) / 2 - r.left, y = (a.y + b.y) / 2 - r.top, lon = unX(x), my = mercY(unY(y)); view.zoom = clamp(view.zoom * d / mPinch, 2, 8000); view.cLon += lon - unX(x); view.cMy += my - mercY(unY(y)); windDirty = true; }
+    mPinch = d; return; }
+  if (!mDrag) return; view.cLon -= (e.clientX - mDrag.x) / view.zoom; view.cMy += (e.clientY - mDrag.y) / view.zoom; mDrag.x = e.clientX; mDrag.y = e.clientY; windDirty = true; });
+['pointerup', 'pointercancel'].forEach(ev => mapCv.addEventListener(ev, e => { mPts.delete(e.pointerId); if (mPts.size < 2) mPinch = 0; }));
 mapCv.addEventListener('pointerup', e => {
   if (mDrag && Math.hypot(e.clientX - mDrag.sx, e.clientY - mDrag.sy) < 5 && ROUTE.pick) {
     const r = mapCv.getBoundingClientRect(), lat = unY(e.clientY - r.top), lon = unX(e.clientX - r.left);
     if (isLand(lat, lon)) toast('Ce point est à terre : choisis un point en mer');
     else { ROUTE.pick = false; startRouting({ lat, lon, r: 0, name: `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(2)}°${lon < 0 ? 'W' : 'E'}` }); }
-  } else if (mDrag && Math.hypot(e.clientX - mDrag.sx, e.clientY - mDrag.sy) < 5 && isMobile() && !$('tr').classList.contains('big')) toggleMapBig();
+  } else if (mDrag && Math.hypot(e.clientX - mDrag.sx, e.clientY - mDrag.sy) < 5 && isMobile() && mapView() === 'mini') setMapView('mid');
   mDrag = null;
 });
 mapCv.addEventListener('pointercancel', () => mDrag = null);
@@ -3074,8 +3126,10 @@ function row(l, v) { return `<div class="row"><span>${l}</span><b>${v}</b></div>
 const twaTxt = t => `${Math.round(Math.abs(t))}° ${t >= 0 ? 'Tb' : 'Bd'}`;
 const RALERT = { warned: null, nowState: false };
 function updateRouteBanner() {
-  const el = $('rnext'), pl = (ROUTE.nodes && !player.finished) ? routePlan() : null;
-  if (!pl) { el.className = ''; RALERT.nowState = false; return; }
+  const el = $('rnext'), pl = (ROUTE.nodes && !player.finished) ? routePlan() : null, qa = $('qAdv');
+  if (!pl) { el.className = ''; RALERT.nowState = false; qa.className = 'off'; qa.textContent = ROUTE.nodes ? '🧭 –' : T('🧭 Router', '🧭 Route'); return; }
+  { const ad = pl.adv, cur = norm180(curWind().twd - player.hdg), same = Math.sign(ad.twa) === Math.sign(cur) || Math.abs(ad.twa) < 2, ok = same && Math.abs(Math.abs(ad.twa) - Math.abs(cur)) < 1.5;
+    qa.className = ok ? 'ok' : ''; qa.textContent = ok ? `✓ ${twaTxt(ad.twa)}` : same ? `🧭 ${twaTxt(ad.twa)}` : `⟲ ${twaTxt(ad.twa)}`; }
   const lead = MODE === 'race' ? 1800 : 90, soon = pl.turn && pl.turn.dt <= lead;
   let txt;
   if (pl.turnNow) txt = `🧭 <b>${pl.turnNowType} maintenant</b> (Espace) · ensuite foil <b>${foilName(foilState(Math.abs(pl.adv.twa), pl.adv.twa, curWind().tws))}</b>`;
@@ -3083,8 +3137,8 @@ function updateRouteBanner() {
   el.innerHTML = txt; el.className = 'on' + (pl.turnNow || soon ? ' now' : '');
   // alertes : une fois à l'approche, une fois au moment de la manœuvre
   if (running && !paused) {
-    if (soon && !pl.turnNow) { const key = Math.round(pl.turn.t / 60); if (RALERT.warned !== key) { RALERT.warned = key; toast(`🧭 Routeur : ${pl.turn.type.toLowerCase()} dans ${fmtIn(pl.turn.dt)}`, 3000); sfxChime(); } }
-    if (pl.turnNow && !RALERT.nowState) { toast(`🧭 Routeur : ${pl.turnNowType.toLowerCase()} à faire maintenant (Espace)`, 3500); sfxChime(); }
+    if (soon && !pl.turnNow) { const key = Math.round(pl.turn.t / 60); if (RALERT.warned !== key) { RALERT.warned = key; toast(`🧭 Routeur : ${pl.turn.type.toLowerCase()} dans ${fmtIn(pl.turn.dt)}`, 3000); sfxChime(); buzz(40); } }
+    if (pl.turnNow && !RALERT.nowState) { toast(isMobile() ? `🧭 ${pl.turnNowType} maintenant : touche le bandeau rose` : `🧭 Routeur : ${pl.turnNowType.toLowerCase()} à faire maintenant (Espace)`, 3500); sfxChime(); buzz([80, 60, 80]); }
   }
   RALERT.nowState = pl.turnNow;
 }
@@ -3135,8 +3189,10 @@ function updateHUD() {
     let last;
     if (MODE === 'race') { const mk = curMarks()[player.mi], r = rankOf(player); last = cell(mk ? `${r}${r === 1 ? 'ER' : 'E'} · MARQUE` : 'ARRIVÉ', mk ? gcDist(player.lat, player.lon, mk.lat, mk.lon).toFixed(0) + ' nm' : '✓'); }
     else last = cell('BOUÉES', `${TRAIN_BUOYS.filter(b => b.done).length}/${TRAIN_BUOYS.length}`);
-    $('mstrip').innerHTML = cell('VITESSE', (player.dspd || player.spd).toFixed(1)) + cell('TWA', twaTxt(twa), twa >= 0 ? '#5dff9e' : '#ff6b6b') + cell('VENT', w.tws.toFixed(0) + ' nd', `rgb(${windRGB(w.tws).join(',')})`) + cell('CAP', Math.round(player.hdg) + '°') + last;
+    const potM = bestFull(a, w.tws), pc = potM > 0.5 ? Math.round(player.spd / potM * 100) : 0, pcC = pc >= 97 ? '#5dff9e' : pc >= 90 ? '#ffd166' : '#ff8a6b';
+    $('mstrip').innerHTML = cell('VITESSE', (player.dspd || player.spd).toFixed(1) + (pc ? `<i style="color:${pcC}">${pc}%</i>` : '')) + cell('TWA', twaTxt(twa), twa >= 0 ? '#5dff9e' : '#ff6b6b') + cell('VENT', w.tws.toFixed(0) + ' nd', `rgb(${windRGB(w.tws).join(',')})`) + cell('CAP', Math.round(player.hdg) + '°') + last;
     $('tabPause').classList.toggle('on', paused); $('tabCam').classList.toggle('on', cam.mode !== 'chase');
+    $('qPilot').classList.toggle('on', !!(ROUTE.follow && ROUTE.nodes)); $('qAcc').textContent = (paused ? '⏸ ' : '⏩ ') + accelLabel(accel);
   }
   $('iSog').textContent = (player.dspd || player.spd).toFixed(1); $('iHdg').textContent = Math.round(player.hdg) + '°';
   const tw = $('iTwa'); tw.textContent = twaTxt(twa); tw.style.color = twa >= 0 ? '#5dff9e' : '#ff6b6b';
@@ -3210,6 +3266,7 @@ function updateHUD() {
   if (m) { const p = clamp(m.t / m.dur, 0, 1); $('manbar').style.width = (p * 100) + '%'; $('manbar').style.background = isTurnMan(m) ? 'rgba(255,140,40,.45)' : 'rgba(31,143,214,.5)'; $('mantxt').textContent = `${m.label} · ${Math.ceil((m.dur - m.t) / 60)} min · vitesse ${Math.round(manFactor(m, p) * 100)} %`; }
   else if (player.penT > 0) { $('manbar').style.width = (player.penT / player.penDur * 100) + '%'; $('manbar').style.background = 'rgba(255,80,80,.4)'; $('mantxt').textContent = `${player.penLabel} · −${Math.round((1 - player.penF) * 100)} % · ${Math.ceil(player.penT / 60)} min`; }
   else { $('manbar').style.width = '0'; $('mantxt').textContent = player.grounded ? T('⚠ Échoué', '⚠ Aground') : T('Aucune manœuvre en cours', 'No manoeuvre in progress'); }
+  $('man').classList.toggle('idle', !m && !(player.penT > 0) && !player.grounded);
   $('manq').innerHTML = player.queue.length ? 'En file : ' + player.queue.map(q => `<span class="chip">${reqLabel(q)}</span>`).join('') : '';
   $('manCancel').style.display = player.queue.length ? 'inline-block' : 'none';
   if (finishedShown === true) renderResults();
@@ -3594,7 +3651,7 @@ const I18N = {
   'Larguer un ris (O)': 'Shake a reef (O)', 'Prendre un ris (I)': 'Take a reef (I)', 'Caméra suiveuse / libre / à bord (C)': 'Chase / free / onboard camera (C)', 'Zoom avant': 'Zoom in', 'Zoom arrière': 'Zoom out', 'Réduire / agrandir les commandes': 'Fold / unfold controls',
   'Choix automatique de la voile (A) — coûte 1,5 % de vitesse': 'Automatic sail choice (A) — costs 1.5 % speed', 'Réglage automatique de l\'écoute (R) — 95 % d\'efficacité au plus': 'Automatic sheet trim (R) — 95 % efficiency at most', 'Gestion automatique des foils (G) — coûte 1,5 %': 'Automatic foils (G) — costs 1.5 %',
 };
-const I18N_SKIP = new Set(['card', 'tlBody', 'rInfo', 'board', 'foilHint', 'trimTxt', 'mantxt', 'rnext', 'manq', 'toast', 'shoreWarn', 'tlTitle', 'iAll', 'iPerf', 'iHeel', 'iBaro', 'fcstL', 'reefTxt', 'msails', 'sails', 'accel']);
+const I18N_SKIP = new Set(['card', 'mquick', 'tlBody', 'rInfo', 'board', 'foilHint', 'trimTxt', 'mantxt', 'rnext', 'manq', 'toast', 'shoreWarn', 'tlTitle', 'iAll', 'iPerf', 'iHeel', 'iBaro', 'fcstL', 'reefTxt', 'msails', 'sails', 'accel']);
 function applyStaticLang() {
   const walk = el => { if (el.id && I18N_SKIP.has(el.id)) return;
     if (el.title) { if (el.__ttl === undefined) el.__ttl = el.title; el.title = LANG === 'en' ? (I18N[el.__ttl] || el.__ttl) : el.__ttl; }
