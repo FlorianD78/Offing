@@ -1000,6 +1000,8 @@ function oceanFFTUpdate(rdt, force) {
   OCN.rb = (OCN.rb || 0) + (rdt || 0); // petits pas (≤ 1,5°, 0,25 m/s, 3 cm) au plus 4 fois par seconde : la mer se transforme sans à-coup
   if (force || (OCN.rb > 0.25 && (Math.abs(U - OCN.U) > 0.25 || Math.abs(norm180((dir - OCN.dir) * R2D)) > 1.5 || Math.abs(hs - OCN.hs) > 0.03))) { oceanSpectrum(U, dir, hs); OCN.rb = 0; }
   OCN.acc = (OCN.acc || 0) + (rdt || 0); if (!force && OCN.acc < 1 / 30) return; const dtF = OCN.acc; OCN.acc = 0;
+  // crêtes plus pointues et creux plus plats quand le vent forcit (déplacement horizontal « choppy » : 1,0 par petit temps → 1,5 en force 8)
+  OCN.lambda = 1.0 + 0.5 * smooth(10, 34, tws);
   OCN.t += dtF; const t = OCN.t, lam = OCN.lambda, decay = Math.exp(-dtF / 2.2);
   for (let c = 0; c < (GFX.level === 'low' ? 1 : 2); c++) {
     const kx = OCN.kx[c], kz = OCN.kz[c], kk = OCN.kk[c], w = OCN.w[c], hr = OCN.h0r[c], hi = OCN.h0i[c];
@@ -1013,8 +1015,8 @@ function oceanFFTUpdate(rdt, force) {
       OCN_RE2[o] = ai * uz; OCN_IM2[o] = -ar * uz;                  // Dz
     }
     fft2(OCN_RE, OCN_IM); fft2(OCN_RE2, OCN_IM2);
-    // seuil de déferlement (jacobien) qui monte avec le vent : ≈ 1 % des crêtes moussent à 15 nd, ≈ 7 % à 28 nd
-    const jt = 0.83 + 0.06 * smooth(8, 30, tws), H = OCN.H[c], DX = OCN.DX[c], DZ = OCN.DZ[c], img = OCN.tex[c].image.data, simg = OCN.stex[c].image.data, dx2 = 2 * OCN.L[c] / N, F = OCN.foam;
+    // seuil de déferlement (jacobien), calé avec les crêtes plus pointues du gros temps : ≈ 1 % des crêtes moussent à 15 nd, ≈ 6 % à 28 nd
+    const jt = 0.86 - 0.016 * smooth(15, 30, tws), H = OCN.H[c], DX = OCN.DX[c], DZ = OCN.DZ[c], img = OCN.tex[c].image.data, simg = OCN.stex[c].image.data, dx2 = 2 * OCN.L[c] / N, F = OCN.foam;
     for (let o = 0; o < N * N; o++) { H[o] = OCN_RE[o]; DX[o] = OCN_IM[o] * lam; DZ[o] = OCN_RE2[o] * lam; }
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const o = j * N + i, ip = j * N + ((i + 1) % N), im = j * N + ((i + N - 1) % N), jp = ((j + 1) % N) * N + i, jm = ((j + N - 1) % N) * N + i;
       let f = 0;
@@ -1024,6 +1026,20 @@ function oceanFFTUpdate(rdt, force) {
       // pentes (différences centrées sur la grille : identiques aux 4 lectures décalées d'un texel du fragment, filtrage linéaire compris)
       simg[q] = toHalf((H[ip] - H[im]) / dx2); simg[q + 1] = toHalf((H[jp] - H[jm]) / dx2); simg[q + 2] = img[q + 3]; }
     OCN.tex[c].needsUpdate = true; OCN.stex[c].needsUpdate = true;
+  }
+}
+/* Embruns arrachés aux crêtes qui déferlent (force 6 et plus) : là où la grande cascade mousse (jacobien), des bouffées d'eau pulvérisée
+   partent sous le vent, plus nombreuses et plus longues quand ça souffle. Tirage dans le champ de la caméra, 15 à 180 m. */
+let sdAcc = 0; const _sdF = new THREE.Vector3();
+function updateSpindrift(rdt) {
+  const W = oceanU.uWind.value, tws = W.z, k = smooth(17, 34, tws); if (k <= 0 || GFX.level === 'low' || !OCN.ok || paused) { sdAcc = 0; return; }
+  sdAcc = Math.min(sdAcc + rdt * 170 * k * GFX.parts, 60); const N = FFT_N, L = OCN.L[0], F = OCN.foam, U = tws * KN; camera.getWorldDirection(_sdF); const th0 = Math.atan2(_sdF.x, _sdF.z);
+  for (; sdAcc >= 1; sdAcc--) {
+    const d = 15 + Math.pow(Math.random(), 1.6) * 165, th = th0 + (Math.random() - 0.5) * 1.6, x = camera.position.x + Math.sin(th) * d, z = camera.position.z + Math.cos(th) * d;
+    const i = Math.floor((((x + GX) % L) + L) % L / L * N), j = Math.floor((((z + GZ) % L) + L) % L / L * N), f = F[j * N + i];
+    // fine poussière d'eau : beaucoup de petites gouttes, rasantes et rapides, étirées le long du vent sur la crête
+    if (f < 0.28) continue; const y = waveH(x, z) + 0.2, n = 4 + Math.round(12 * k * f), sz = (0.16 + 0.22 * k) * (0.6 + 0.02 * d);
+    for (let m = 0; m < n; m++) { const a = rnd(-1.5, 1.5); spawn(x + W.x * a + rnd(-0.4, 0.4), y + rnd(0, 0.25), z + W.y * a + rnd(-0.4, 0.4), W.x * U * rnd(0.35, 0.75) + rnd(-0.4, 0.4), rnd(0.4, 1.6) * (0.6 + k), W.y * U * rnd(0.35, 0.75) + rnd(-0.4, 0.4), rnd(0.45, 1.0), sz * rnd(0.6, 1.4)); }
   }
 }
 // hauteur FFT au point (x, z) du monde affiché (bilinéaire), pour l'assiette des bateaux, la caméra, les bouées
@@ -1112,8 +1128,10 @@ const oceanMat = new THREE.ShaderMaterial({
       // mer du vent FFT (2 cascades) + vague d'étrave, creux et vague de hanche ; eau aplatie dans l'empreinte des coques
       vec2 ua = (p0 + uFG.xy) * uFL.x + 0.5 / 64.0, ub = (p0 + uFG.zw) * uFL.y + 0.5 / 64.0;
       vec4 fa = texture2D(uFA, ua) * uFOn, fb = texture2D(uFB, ub) * uFOn;
-      float attF = 1.0 - smoothstep(250.0, 900.0, d); // au-delà, le maillage est trop lâche : la mer FFT ne passe plus que par les normales
-      P += fa.xyz * attF; crest += fa.y * attF + fb.y * 0.5 * attS;
+      // grandes vagues en relief jusqu'à 1,5 km (le maillage y garde ~8 points par longueur d'onde dominante) ; au-delà, normales seules
+      float attF = 1.0 - smoothstep(400.0, 1500.0, d), attB = 1.0 - smoothstep(110.0, 320.0, d);
+      // petite cascade (37 m) aussi en relief près de la caméra : vagues courtes et clapot visibles autour du bateau, pas seulement en reflets
+      P += fa.xyz * attF + fb.xyz * attB; crest += fa.y * attF + fb.y * 0.5 * attS;
       for (int i = 0; i < 4; i++) { if (float(i) >= uNB) break;
         vec2 d = p0 - uBA[i].xy, f = uBA[i].zw; float L = uBB[i].y, v = uBB[i].x, s = uBB[i].z - dot(d, f), t = dot(d, vec2(-f.y, f.x)), u = s / L;
         if (u < -0.4 || u > 1.6 || abs(t) > L * 0.7) continue;
@@ -1232,13 +1250,13 @@ const oceanMat = new THREE.ShaderMaterial({
       // au loin le motif se fond dans sa couverture moyenne
       float nz = fbmT(wp * 0.11 + vec2(uTime * 0.05, 0.0));
       float wk = smoothstep(9.0, 22.0, ws); // moutons dès force 3-4, nombreux en force 6
-      float caps = uFOn > 0.5 ? clamp(foamF * (0.45 + 0.9 * nz) * (0.15 + 1.0 * wk), 0.0, 1.0) * smoothstep(6.0, 12.0, ws) : smoothstep(0.62, 0.95, vCrest * 0.75 + nz * 0.55) * wk;
+      float caps = uFOn > 0.5 ? clamp(foamF * (0.45 + 0.9 * nz) * (0.15 + 0.85 * wk), 0.0, 1.0) * smoothstep(6.0, 12.0, ws) : smoothstep(0.62, 0.95, vCrest * 0.75 + nz * 0.55) * wk;
       vec2 q = vec2(dot(wp, wd), dot(wp, vec2(-wd.y, wd.x)));
-      float streak = smoothstep(0.55, 0.9, fbmT(vec2(q.x * 0.012, q.y * 0.18))) * smoothstep(24.0, 36.0, ws) * 0.55; // stries d'écume (force 7 et plus)
+      float streak = smoothstep(0.55, 0.9, fbmT(vec2(q.x * 0.012, q.y * 0.18))) * smoothstep(24.0, 36.0, ws) * 0.45; // stries d'écume (force 7 et plus)
       float cov = clamp((caps * (1.0 + gust * 0.6) + streak * (0.4 + 0.6 * clamp(vCrest, 0.0, 1.0))) * vAtt + hf, 0.0, 1.0);
       vec2 fq = wp * 0.045 + fbmTd(wp * 0.07) * 0.02;
       float pat = texture2D(uNz, fq).a, far = smoothstep(70.0, 420.0, camD);
-      far = max(far, smoothstep(0.12, 0.45, fp)); float lace = smoothstep(1.0 - cov - 0.05, 1.0 - cov + 0.05, pat), foam = mix(lace, cov * 0.9, far);
+      far = max(far, smoothstep(0.12, 0.45, fp)); float lace = smoothstep(1.0 - cov - 0.05, 1.0 - cov + 0.05, pat), foam = mix(lace, cov * 0.55, far); // au loin : couverture moyenne atténuée (sinon voile gris uniforme par gros temps)
       float halo = (1.0 - foam) * smoothstep(1.0 - min(cov * 2.2, 1.0) - 0.08, 1.0 - min(cov * 2.2, 1.0) + 0.08, pat) * (1.0 - far); // bulles juste sous la surface
       col = mix(col, vec3(0.12, 0.5, 0.52) * light * (0.6 + 0.4 * nl), halo * 0.4);
       vec3 foamCol = vec3(0.9, 0.94, 0.97) * (light * (0.72 + 0.28 * nl) + 0.05) + vec3(0.5) * uFlash;
@@ -4420,15 +4438,16 @@ function frame(now) {
   const hv = player.dispHdg * D2R, v = player.spd * KN * VF, bvx = Math.sin(hv) * v, bvz = -Math.cos(hv) * v; GX += bvx * rdt; GZ += bvz * rdt;
   seaTick(); const tws = SS.tws;
   const SEA = MODE === 'race' ? COURSE.sea || 1 : 1;
-  // mer du vent : hauteur significative ≈ 0,16 U²/g (mer bien levée, un peu sous Pierson-Moskowitz) → 1 m à 15 nd, 3,4 m à 28 nd ; seaAmp = Hs / 1,5
-  const Uw = tws * 0.5144; seaAmp += (clamp(0.16 * Uw * Uw / 9.81 / 1.5 * SEA, 0.25, 3.6 * SEA) - seaAmp) * Math.min(1, rdt * 0.25);
+  // mer du vent : hauteur significative ≈ 0,16 U²/g, qui tend vers Pierson-Moskowitz (0,2 U²/g) dans le gros temps
+  // → 1 m à 15 nd, 4 m à 28 nd, 7 m à 36 nd ; seaAmp = Hs / 1,5
+  const Uw = tws * 0.5144; seaAmp += (clamp(0.16 * Uw * Uw / 9.81 * (1 + 0.25 * smooth(18, 35, tws)) / 1.5 * SEA, 0.25, 4.6 * SEA) - seaAmp) * Math.min(1, rdt * 0.25);
   const lowB = MODE === 'race' ? (SOUTH() ? smooth(1000, 965, SS.pres) : smooth(1010, 984, SS.pres)) : 0;
   swellAmp += (clamp(Math.max(MODE === 'race' ? COURSE.swellMin || 0 : 0, (0.45 + tws / 26) * (1 + 0.55 * lowB) * SEA), 0.5, 2.6 * SEA) - swellAmp) * Math.min(1, rdt * 0.08);
   for (let i = 0; i < NW; i++) { const w = WAVES[i]; wavePh[i] = ((w.dx * GX + w.dz * GZ) * w.k) % (Math.PI * 2); oceanU.uPh.value[i] = wavePh[i]; }
   updateEnv(rdt);
   oceanU.uTime.value = realT; oceanU.uAmp.value = seaAmp; oceanU.uSwell.value = swellAmp; oceanU.uG.value.set(GX % 2048, GZ % 2048);
   oceanFFTUpdate(rdt); const md = (a, L) => ((a % L) + L) % L; oceanU.uFG.value.set(md(GX, OCN.L[0]), md(GZ, OCN.L[0]), md(GX, OCN.L[1]), md(GZ, OCN.L[1])); oceanU.uHs.value = OCN.hs; updateHullContact();
-  const wa = (SS.twd + 180) * D2R; oceanU.uWind.value.set(Math.sin(wa), -Math.cos(wa), tws);
+  const wa = (SS.twd + 180) * D2R; oceanU.uWind.value.set(Math.sin(wa), -Math.cos(wa), tws); updateSpindrift(rdt);
   camera.updateMatrixWorld(); _wkF.setFromProjectionMatrix(_wkM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   boats.forEach(b => { if (active.includes(b)) updateBoatVisual(b, rdt); }); updateGhost(rdt);
   updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFauna(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(rdt); updateLens(rdt); updateAudio(rdt);
