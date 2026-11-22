@@ -3132,7 +3132,7 @@ function updateRouteBanner() {
     qa.className = ok ? 'ok' : ''; qa.textContent = ok ? `✓ ${twaTxt(ad.twa)}` : same ? `🧭 ${twaTxt(ad.twa)}` : `⟲ ${twaTxt(ad.twa)}`; }
   const lead = MODE === 'race' ? 1800 : 90, soon = pl.turn && pl.turn.dt <= lead;
   let txt;
-  if (pl.turnNow) txt = `🧭 <b>${pl.turnNowType} maintenant</b> (Espace) · ensuite foil <b>${foilName(foilState(Math.abs(pl.adv.twa), pl.adv.twa, curWind().tws))}</b>`;
+  if (pl.turnNow) txt = `🧭 <b>${pl.turnNowType} maintenant</b> ${isMobile() ? T('· touche ici', '· tap here') : T('(Espace)', '(Space)')} · ensuite foil <b>${foilName(foilState(Math.abs(pl.adv.twa), pl.adv.twa, curWind().tws))}</b>`;
   else txt = `🧭 ${pl.turn ? `${pl.turn.type} ${T('dans', 'in')} <b>${fmtIn(pl.turn.dt)}</b>` : T('Pas de manœuvre prévue', 'No manoeuvre planned')} · foil <b>${foilName(pl.foilNow)}</b>${pl.foilOk ? ' ✓' : ' <b style="color:#ffb36b">⚠</b>'}${pl.sail && pl.sail.dt < (MODE === 'race' ? 3 * 3600 : 300) ? ` · ${SAILS[pl.sail.to].name} dans ${fmtIn(pl.sail.dt)}` : ''}`;
   el.innerHTML = txt; el.className = 'on' + (pl.turnNow || soon ? ' now' : '');
   // alertes : une fois à l'approche, une fois au moment de la manœuvre
@@ -4225,7 +4225,7 @@ function updateFauna(rdt, svx, svz) {
   // --- baleine : au loin, 3 souffles (dos qui roule), puis sonde en montrant la caudale ---
   FA.tW -= rdt;
   if (!FA.whale && FA.tW <= 0) { FA.tW = frnd(420, 900);
-    if (live && day > 0.45 && !coast) { const a = frnd(-1.2, 1.2) + (FA.r() < 0.5 ? 0 : Math.PI), d = frnd(160, 420), lx = Math.sin(a) * d, lz = Math.cos(a) * d + 80, wa = frnd(0, 6.3);
+    if (live && (day > 0.45 || FA.force) && !coast) { const a = frnd(-1.2, 1.2) + (FA.r() < 0.5 ? 0 : Math.PI), d = frnd(160, 420), lx = Math.sin(a) * d, lz = Math.cos(a) * d + 80, wa = frnd(0, 6.3);
       const g = new THREE.Group(), body = faMesh(FA_GEO.kB, FA_M.whale), tail = new THREE.Group(), tf = faMesh(FA_GEO.kT, FA_M.whaleT); tail.add(tf); g.add(body, tail); scene.add(g);
       FA.whale = { o: g, body, tail, x: bx + rx * lx + fx * lz, z: bz + rz * lx + fz * lz, dx: Math.sin(wa), dz: Math.cos(wa), t: 0, blow: [0, 0, 0] };
       if (P.isPlayer) toast(T('🐋 Une baleine souffle au loin', '🐋 A whale is blowing in the distance'), 3200); } }
