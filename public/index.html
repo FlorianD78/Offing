@@ -1607,10 +1607,30 @@ function applyImocaModel(V) {
   if (V.ghost) list.forEach(o => { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; });
   V.stlMeshes = list; V.stl = M; V.fp = null;
 }
+// binaire OFM1 encodé en base64 dans un JSON (servi tel quel par Vercel comme par l'hébergement d'artifacts)
+const b64buf = t => { const bin = atob(t), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
+/* Mini 6.50 et Class40 dérivés du modèle IMOCA (t/obj2ofm_small.py) : même coque, pont, rouf et cockpit retaillés sur les formes
+   de chaque classe (étrave large, franc-bord, bau), sans outriggers ni foils ; mât, gréement, voiles et bout-dehors restent ceux de la classe.
+   Chargés à la première construction d'un bateau de la classe ; en attendant, le modèle procédural reste affiché. */
+const SMALL_MODEL = { mini: { hi: null, lo: null }, c40: { hi: null, lo: null } }, SMALL_VIS = [], SMALL_REQ = {};
+function loadSmallModels(kind) {
+  if (SMALL_REQ[kind] || typeof fetch !== 'function') return SMALL_REQ[kind]; const get = lvl => fetch(`models/${kind}-${lvl}.json`).then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(j => { const M = parseModelBin(b64buf(j.b64)); M.mats = j.mats || {}; SMALL_MODEL[kind][lvl] = M; SMALL_VIS.forEach(applySmallModel); }).catch(() => {});
+  return SMALL_REQ[kind] = get('lo').then(() => get('hi'));
+}
+function applySmallModel(V) {
+  const S = SMALL_MODEL[V.kind], M = (V.isPlayer && GFX.level !== 'low' ? S.hi : S.lo) || S.hi || S.lo; if (!M || V.stl === M) return;
+  if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
+  V.param.forEach(o => o.visible = false); const C = imocaMats(M), list = [], matOf = k => k === 'hull' ? V.mats.hullMat : k === 'acc' ? V.mats.accMat : C[k] || C.vcol;
+  V.keel.position.set(...M.meta.keelPivot);
+  for (const p of M.parts) { const m = new THREE.Mesh(p.geo, matOf(p.mat)); (p.grp === 'keel' ? V.keel : V.root).add(m); list.push(m); }
+  if (V.isPlayer) list.forEach(o => { o.castShadow = true; o.receiveShadow = true; });
+  if (V.ghost) list.forEach(o => { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; });
+  V.stlMeshes = list; V.stl = M; V.fp = null;
+}
+const applyModel = V => V.kind ? applySmallModel(V) : applyImocaModel(V);
 function loadImocaModels() {
-  if (typeof fetch !== 'function') return;
-  // binaire OFM1 encodé en base64 dans un JSON (servi tel quel par Vercel comme par l'hébergement d'artifacts)
-  const b64 = t => { const bin = atob(t), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
+  if (typeof fetch !== 'function') return; const b64 = b64buf;
   const get = (lvl, url) => fetch(url).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(j => { IMOCA_MODEL[lvl] = parseModelBin(b64(j.b64)); IMOCA_MODEL[lvl].mats = j.mats || {}; IMOCA_VIS.forEach(applyImocaModel); }).catch(() => {});
   return get('lo', 'models/imoca-lo.json').then(() => get('hi', 'models/imoca-hi.json'));
 }
@@ -1707,17 +1727,17 @@ function makeMini(hull, accent, name, isPlayer, proto, c40) {
   const res = isPlayer ? 512 : 256, num = String(c40 ? (isPlayer ? 229 : 150 + (hull % 140)) : isPlayer ? (proto ? 1129 : 1029) : (proto ? 1000 : 800) + (hull % 190));
   const accMat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.35, side: THREE.DoubleSide }), hullMat = new THREE.MeshStandardMaterial({ color: hull, roughness: 0.3, metalness: 0.2, side: THREE.DoubleSide });
   const liv = m => new THREE.MeshStandardMaterial({ map: hullTexture(hull, accent, num, m, isPlayer ? 1024 : 512), roughness: 0.28, metalness: 0.15, side: THREE.DoubleSide });
-  const add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); root.add(m); return m; };
-  const H = K.HULL; add(H.deck, MAT.deck); add(H.topS, liv(false)); add(H.topP, liv(true)); add(H.strS, accMat); add(H.strP, accMat); add(H.bottom, MAT.bottom); add(H.ends, hullMat);
-  add(K.COACH, MAT.roof); add(K.WIN, MAT.glass);
-  const solarMat = new THREE.MeshStandardMaterial({ color: 0x1a2a4a, roughness: 0.2, metalness: 0.5 }); [0.33, -0.33].forEach(x => add(K.SOLAR, solarMat, x, 1.0, -0.7));
-  [0.95, -0.95].forEach(x => add(K.WINCH, MAT.winch, x, 0.66, 0.55)); add(K.WINCH, MAT.winch, 0.45, 1.0, 0.15); add(K.WINCH, MAT.winch, -0.45, 1.0, 0.15);
-  root.add(new THREE.LineSegments(K.RAIL, MAT.rail));
+  const param = [], add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); root.add(m); return m; }, addP = (...a) => { const m = add(...a); param.push(m); return m; };
+  const H = K.HULL; addP(H.deck, MAT.deck); addP(H.topS, liv(false)); addP(H.topP, liv(true)); addP(H.strS, accMat); addP(H.strP, accMat); addP(H.bottom, MAT.bottom); addP(H.ends, hullMat);
+  addP(K.COACH, MAT.roof); addP(K.WIN, MAT.glass);
+  const solarMat = new THREE.MeshStandardMaterial({ color: 0x1a2a4a, roughness: 0.2, metalness: 0.5 }); [0.33, -0.33].forEach(x => addP(K.SOLAR, solarMat, x, 1.0, -0.7));
+  [0.95, -0.95].forEach(x => addP(K.WINCH, MAT.winch, x, 0.66, 0.55)); addP(K.WINCH, MAT.winch, 0.45, 1.0, 0.15); addP(K.WINCH, MAT.winch, -0.45, 1.0, 0.15);
+  { const r = new THREE.LineSegments(K.RAIL, MAT.rail); root.add(r); param.push(r); }
   // safrans jumeaux suspendus au tableau + barre franche
-  [1, -1].forEach(k => { const g = new THREE.Group(); g.position.set(k * 0.78, 0.0, 3.3); g.scale.x = k; g.add(new THREE.Mesh(K.RUDDER, MAT.bottom)); const st = new THREE.Mesh(K.STOCK, MAT.dark); st.position.y = 0.55; g.add(st); root.add(g); });
+  [1, -1].forEach(k => { const g = new THREE.Group(); g.position.set(k * 0.78, 0.0, 3.3); g.scale.x = k; g.add(new THREE.Mesh(K.RUDDER, MAT.bottom)); const st = new THREE.Mesh(K.STOCK, MAT.dark); st.position.y = 0.55; g.add(st); root.add(g); param.push(g); });
   const til = add(K.TILLER, MAT.dark, 0, 0.78, 2.65);
   const keel = new THREE.Group(); keel.position.set(0, -0.24, 0.15); root.add(keel);
-  keel.add(new THREE.Mesh(K.KEEL, accMat)); const bulb = new THREE.Mesh(K.BULB, accMat); bulb.scale.set(1, 1, 3.6); bulb.position.set(0, -1.38, 0.1); keel.add(bulb);
+  const kf = new THREE.Mesh(K.KEEL, accMat); keel.add(kf); const bulb = new THREE.Mesh(K.BULB, accMat); bulb.scale.set(1, 1, 3.6); bulb.position.set(0, -1.38, 0.1); keel.add(bulb); param.push(kf, bulb);
   const mast = add(K.MAST, MAT.dark, 0, 0.62 + 5.8, -0.5); mast.scale.set(1, 1, 1.5);
   [[4.6, 0.62, 0.35], [8.4, 0.4, 0.2]].forEach(([y, w, sw]) => [1, -1].forEach(k => { const L = Math.hypot(w, sw), s2 = add(K.SPREAD, MAT.dark, k * w / 2, y, -0.5 + sw / 2); s2.scale.x = L; s2.rotation.y = -k * Math.atan2(sw, w); }));
   root.add(new THREE.LineSegments(K.RIG, MAT.rig));
@@ -1743,7 +1763,9 @@ function makeMini(hull, accent, name, isPlayer, proto, c40) {
   scene.add(root);
   useHull('imoca');
   if (c40) { root.scale.setScalar(C40S); label.scale.multiplyScalar(1 / C40S); }
-  return { root, boomPivot, mainMesh, heads, sheets, bowWave, keel, mast, hd: til, foilS, foilP, wake: makeWake(), navMats, vane, awa: 0, cd: proto ? CD_PROTO : c40 ? CD_C40 : CD_MINI };
+  const V = { root, boomPivot, mainMesh, heads, sheets, bowWave, keel, mast, hd: til, foilS, foilP, wake: makeWake(), navMats, vane, awa: 0, cd: proto ? CD_PROTO : c40 ? CD_C40 : CD_MINI,
+    kind: c40 ? 'c40' : 'mini', param, mats: { hullMat, accMat }, isPlayer };
+  SMALL_VIS.push(V); loadSmallModels(V.kind); applySmallModel(V); return V;
 }
 
 /* ----- Îles 3D ----- */
@@ -2039,14 +2061,14 @@ const curMarks = () => COURSE.marks;
 /* ===================== FLOTTE ===================== */
 /* Niveaux des concurrents (vitesse relative à des réglages parfaits, assistances comprises côté joueur, mesurée vent et mer imposés) :
    joueur tout-auto ≈ 0,91 · joueur manuel centré ≈ 1,00 (IMOCA) · réglage fin au pic ≈ 1,03.
-   Les bots s'étagent de 0,79 à 0,975 : le tout-auto lutte avec la queue de flotte, le manuel soigné vise le podium, le réglage fin la victoire. */
+   Les bots s'étagent de 0,815 à 0,955 : le tout-auto lutte avec la queue de flotte, le manuel soigné vise le podium, le réglage fin la victoire. */
 const BOAT_DEFS = [
   { name: 'Vous', hull: 0xd62839, acc: 0xff5d73, player: true },
-  { name: 'Albatros', hull: 0x1d3557, acc: 0x4ea8de, skill: 0.975, every: 6, hyst: 0.06, strat: 'Routage toutes les 6 h · régleur d’élite' },
+  { name: 'Albatros', hull: 0x1d3557, acc: 0x4ea8de, skill: 0.955, every: 6, hyst: 0.06, strat: 'Routage toutes les 6 h · régleur d’élite' },
   { name: 'Sterne', hull: 0xf4a261, acc: 0xe76f51, skill: 0.885, every: 12, hyst: 0.1, strat: 'Routage toutes les 12 h · bon régleur' },
   { name: 'Fou de Bassan', hull: 0x2a9d8f, acc: 0x8ad9c9, skill: 0.93, every: 9, hyst: 0.05, strat: 'Routage toutes les 9 h · très bon régleur' },
-  { name: 'Puffin', hull: 0xffd60a, acc: 0x222222, skill: 0.79, every: 24, hyst: 0.12, strat: 'Routage toutes les 24 h · régleur prudent' },
-  { name: 'Goéland', hull: 0x6a4c93, acc: 0xc77dff, skill: 0.835, every: 18, hyst: 0.08, strat: 'Routage toutes les 18 h · régleur moyen' },
+  { name: 'Puffin', hull: 0xffd60a, acc: 0x222222, skill: 0.815, every: 24, hyst: 0.12, strat: 'Routage toutes les 24 h · régleur prudent' },
+  { name: 'Goéland', hull: 0x6a4c93, acc: 0xc77dff, skill: 0.855, every: 18, hyst: 0.08, strat: 'Routage toutes les 18 h · régleur moyen' },
 ];
 const boats = BOAT_DEFS.map(d => ({
   name: d.name, isPlayer: !!d.player, skill: d.skill || 1, hyst: d.hyst || 0, every: d.every || 12, strat: d.strat, color: hexCss(d.player ? d.acc : d.hull),
@@ -3445,7 +3467,8 @@ async function launch(info, prep, msg) {
     const r = await prep(); if (m === undefined) m = r;
     step(T('Modèles 3D…', '3D models…'), 0.2); await nextFrame();
     if (CLS.id === 'imoca') await Promise.race([MODELS_P, ldSleep(6000)]);
-    IMOCA_VIS.forEach(applyImocaModel); if (player.vis) player.vis.fp = null;
+    if (CLS.id !== 'imoca') { const k = CLS.id === 'c40' ? 'c40' : 'mini'; await Promise.race([loadSmallModels(k) || Promise.resolve(), ldSleep(6000)]); }
+    IMOCA_VIS.forEach(applyImocaModel); SMALL_VIS.forEach(applySmallModel); if (player.vis) player.vis.fp = null;
     step(T('Météo et prévisions…', 'Weather and forecasts…'), 0.3); await nextFrame(); try { drawMap(); } catch (e) {}
     const t0 = performance.now();
     while (ROUTE.busy && performance.now() - t0 < 15000) { const t1 = performance.now(); while (ROUTE.busy && performance.now() - t1 < 40) runJobs();
@@ -3495,7 +3518,7 @@ const GCOL = ['#d9f2ff', '#ffe8a3', '#c9ffd9', '#ffd0e6', '#d6d0ff', '#bff4ff', 
 const ghostKey = () => 'gl3d_ghost_' + COURSE.id + '_' + CLS.id;
 function ghostPool() {
   let P = GHOST.pools[CLS.id]; if (P) return P; P = GHOST.pools[CLS.id] = [];
-  for (let i = 0; i < 4; i++) { const v = makeBoatOf(CLS.id, { hull: 0xdfe9f2, acc: 0x9fd8ff, name: '👻' }); v.root.traverse(o => { if (o.material && !o.isSprite) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; } o.castShadow = false; }); v.ghost = true; if (v.stlMeshes) { v.stl = null; applyImocaModel(v); } v.wake.visible = false; v.bowWave.visible = false; v.root.visible = false; P.push(v); }
+  for (let i = 0; i < 4; i++) { const v = makeBoatOf(CLS.id, { hull: 0xdfe9f2, acc: 0x9fd8ff, name: '👻' }); v.root.traverse(o => { if (o.material && !o.isSprite) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; } o.castShadow = false; }); v.ghost = true; if (v.stlMeshes) { v.stl = null; applyModel(v); } v.wake.visible = false; v.bowWave.visible = false; v.root.visible = false; P.push(v); }
   return P;
 }
 const hideGhosts = () => Object.values(GHOST.pools).forEach(P => P.forEach(v => { v.root.visible = false; v.wake.visible = false; }));
@@ -4139,7 +4162,7 @@ function updateEnv(rdt) {
    Dauphins : une bande vient jouer dans la vague d'étrave entre 4 et 22 nd, sauts en marsouinage, éclaboussures à l'entrée dans l'eau.
    Oiseaux de mer : albatros / puffins au large (vol plané en huit, rase les vagues en virage), goélands près des côtes (battements).
    Poissons volants : sous les tropiques, s'échappent de l'étrave et planent 1 à 3 s.  Baleine : rare, au loin, 3 souffles puis sonde (caudale). */
-const FA = { s: 0x51f15e, r: () => (FA.s = (Math.imul(FA.s, 1664525) + 1013904223) >>> 0) / 4294967296, pod: null, birds: [], fish: [], whale: null, tP: 70, tB: 20, tF: 25, tW: 300 };
+const FA = { s: 0x51f15e, r: () => (FA.s = (Math.imul(FA.s, 1664525) + 1013904223) >>> 0) / 4294967296, pod: null, birds: [], fish: [], whale: null, tP: 200, tB: 90, tF: 90, tW: 900 };
 const frnd = (a, b) => a + (b - a) * FA.r();
 function faMat(c, o = {}) { return new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.45, metalness: 0.05 }, o)); }
 // corps de révolution le long de +z (nez en +z), ventre éclairci par couleurs de sommets
@@ -4184,11 +4207,11 @@ function updateFauna(rdt, svx, svz) {
   const bx = V.root.position.x, bz = V.root.position.z, mv = (o, d) => { o.x -= svx * d; o.z -= svz * d; }; // objets ancrés dans l'eau : la scène défile sous le bateau
   // --- dauphins ---
   FA.tP -= rdt;
-  if (!FA.pod && FA.tP <= 0) { FA.tP = frnd(150, 330);
+  if (!FA.pod && FA.tP <= 0) { FA.tP = frnd(360, 720);
     if (live && day > 0.5 && spd > 4 && spd < 22 && P.lift < 0.6) { const n = 3 + Math.floor(FA.r() * 4), side = FA.r() < 0.5 ? 1 : -1;
       FA.pod = { t: 0, dur: frnd(35, 60), m: [] };
       for (let i = 0; i < n; i++) FA.pod.m.push({ o: faDolphin(), ox: side * frnd(1.5, 6) * (i % 2 ? -1 : 1), oz: frnd(-6, 14), ph: FA.r(), T: frnd(2.0, 2.9), hj: frnd(0.5, 1.2), big: 0, lx: 0, lz: 0, sp: 0 });
-      if (P.isPlayer) toast(T('🐬 Des dauphins jouent dans l\'étrave', '🐬 Dolphins playing in the bow wave'), 3200); } }
+    } }
   if (FA.pod) { const D = FA.pod; D.t += rdt; const leave = smooth(D.dur - 8, D.dur, D.t), come = 1 - smooth(0, 6, D.t), done = D.t > D.dur + 2 || spd > 26;
     D.m.forEach((d, k) => { if (done) { faFree(d.o); return; }
       d.ph += rdt / d.T; if (d.ph >= 1) { d.ph -= 1; d.big = FA.r() < 0.12 ? 1 : 0; d.ox += frnd(-1.2, 1.2); d.oz += frnd(-2, 2); d.ox = clamp(d.ox, -7, 7); d.oz = clamp(d.oz, -8, 16); }
@@ -4202,7 +4225,7 @@ function updateFauna(rdt, svx, svz) {
     if (done) FA.pod = null; }
   // --- oiseaux : vol plané en huit autour du bateau, rase-mottes dans les virages, s'éloignent au bout d'un moment ---
   FA.tB -= rdt;
-  if (FA.tB <= 0) { FA.tB = frnd(60, 160); if (live && day > 0.35 && FA.birds.length < 3) { const gull = coast; for (let i = 0, n = gull ? 1 + Math.floor(FA.r() * 3) : 1 + (FA.r() < 0.3 ? 1 : 0); i < n; i++)
+  if (FA.tB <= 0) { FA.tB = frnd(180, 360); if (live && day > 0.35 && FA.birds.length < 2) { const gull = coast; for (let i = 0, n = gull ? 1 + Math.floor(FA.r() * 2) : 1; i < n; i++)
       FA.birds.push({ o: faBird(gull), gull, cx: frnd(-60, 60), cz: frnd(-40, 80), R: frnd(25, 60), th: frnd(0, 6.3), w: frnd(0.12, 0.22) * (FA.r() < 0.5 ? 1 : -1), t: 0, dur: frnd(50, 130), flap: 0, prev: null }); } }
   FA.birds = FA.birds.filter(B => { B.t += rdt; if (B.t > B.dur + 25 || day < 0.2) { faFree(B.o); return false; }
     const away = smooth(B.dur, B.dur + 25, B.t) * 400, th = (B.th += B.w * rdt * (B.gull ? 1.4 : 1)), R = B.R + away;
@@ -4215,7 +4238,7 @@ function updateFauna(rdt, svx, svz) {
     B.o.userData.L.rotation.z = dih + fl; B.o.userData.R.rotation.z = -dih - fl; B.prev = [x, y, z]; return true; });
   // --- poissons volants (tropiques) : un banc s'échappe de l'étrave et plane ---
   FA.tF -= rdt;
-  if (FA.tF <= 0) { FA.tF = frnd(25, 70); if (live && trop && day > 0.4 && spd > 6 && FA.fish.length === 0) { const side = FA.r() < 0.5 ? 1 : -1, n = 4 + Math.floor(FA.r() * 7);
+  if (FA.tF <= 0) { FA.tF = frnd(90, 200); if (live && trop && day > 0.4 && spd > 6 && FA.fish.length === 0) { const side = FA.r() < 0.5 ? 1 : -1, n = 4 + Math.floor(FA.r() * 7);
       for (let i = 0; i < n; i++) { const a = side * frnd(0.4, 1.3), sp2 = frnd(11, 17), x = bx + fx * (bow + frnd(2, 8)) + rx * side * frnd(1, 4), z = bz + fz * (bow + frnd(2, 8)) + rz * side * frnd(1, 4);
         FA.fish.push({ o: faFish(), x, z, y: waveH(x, z), vx: (fx * Math.cos(a) + rx * Math.sin(a)) * sp2, vz: (fz * Math.cos(a) + rz * Math.sin(a)) * sp2, t: -i * 0.07, dur: frnd(1.2, 3.2), hh: frnd(0.3, 0.8), cv: frnd(-0.4, 0.4) }); } } }
   FA.fish = FA.fish.filter(F => { F.t += rdt; if (F.t < 0) { F.o.visible = false; return true; } if (F.t > F.dur) { faSplash(F.x, F.y, F.z, 4, 0.5); faFree(F.o); return false; }
@@ -4224,11 +4247,11 @@ function updateFauna(rdt, svx, svz) {
     F.o.position.set(F.x, F.y, F.z); _fv.set(F.x + F.vx, F.y, F.z + F.vz); F.o.lookAt(_fv); return true; });
   // --- baleine : au loin, 3 souffles (dos qui roule), puis sonde en montrant la caudale ---
   FA.tW -= rdt;
-  if (!FA.whale && FA.tW <= 0) { FA.tW = frnd(420, 900);
+  if (!FA.whale && FA.tW <= 0) { FA.tW = frnd(1200, 2400);
     if (live && (day > 0.45 || FA.force) && !coast) { const a = frnd(-1.2, 1.2) + (FA.r() < 0.5 ? 0 : Math.PI), d = frnd(160, 420), lx = Math.sin(a) * d, lz = Math.cos(a) * d + 80, wa = frnd(0, 6.3);
       const g = new THREE.Group(), body = faMesh(FA_GEO.kB, FA_M.whale), tail = new THREE.Group(), tf = faMesh(FA_GEO.kT, FA_M.whaleT); tail.add(tf); g.add(body, tail); scene.add(g);
       FA.whale = { o: g, body, tail, x: bx + rx * lx + fx * lz, z: bz + rz * lx + fz * lz, dx: Math.sin(wa), dz: Math.cos(wa), t: 0, blow: [0, 0, 0] };
-      if (P.isPlayer) toast(T('🐋 Une baleine souffle au loin', '🐋 A whale is blowing in the distance'), 3200); } }
+    } }
   if (FA.whale) { const W = FA.whale; W.t += rdt; W.x += W.dx * 1.6 * rdt; W.z += W.dz * 1.6 * rdt; mv(W, rdt);
     if (W.t > 30) { faFree(W.o); FA.whale = null; }
     else { const k = Math.min(2, Math.floor(W.t / 7)), tt = W.t - k * 7, sonde = smooth(21, 24, W.t), roll = W.t < 21 ? Math.sin(Math.PI * clamp(tt / 5, 0, 1)) : 0;
