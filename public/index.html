@@ -1315,7 +1315,9 @@ function rotAxis(p, o, k, ang) { // rotation de p autour de l'axe (o, k unitaire
   return [o[0] + vx * c + (k[1] * vz - k[2] * vy) * sn + k[0] * d, o[1] + vy * c + (k[2] * vx - k[0] * vz) * sn + k[1] * d, o[2] + vz * c + (k[0] * vy - k[1] * vx) * sn + k[2] * d];
 }
 // angle d'écoute (deg) → points ; renvoie la position du point d'écoute pour les écoutes
-function updateSailGeo(geo, D, angDeg, side, hoist, flutter, t, seed, chord = 1) {
+// fx (facultatif) : luff 0..1 guindant qui faseye (trop choqué), stall 0..1 trop bordé (voile qui se ferme en haut),
+// leech 0..1 chute qui vibre dans la brise, gust -1..1 respiration du creux dans les risées
+function updateSailGeo(geo, D, angDeg, side, hoist, flutter, t, seed, chord = 1, fx = null) {
   const T = D.T, H = D.H, C = D.C, HA = D.HA || D.H, pos = geo.attributes.position.array;
   const kx = H[0] - T[0], ky = H[1] - T[1], kz = H[2] - T[2], kl = Math.hypot(kx, ky, kz), k = [kx / kl, ky / kl, kz / kl];
   const hz = Math.max(0.05, hoist), lee = -side; let o = 0, clew = null;
@@ -1331,16 +1333,52 @@ function updateSailGeo(geo, D, angDeg, side, hoist, flutter, t, seed, chord = 1)
     if (nx * lee < 0) { nx = -nx; ny = -ny; nz = -nz; }
     let cv = D.kind === 'main' ? (0.35 + 0.65 * Math.min(1, v * 3)) * (1 - 0.35 * v) : D.kind === 'spi' ? 0.55 + 0.6 * Math.sin(Math.PI * Math.min(1, v * 1.05)) : (1 - 0.4 * v);
     cv *= D.camber * (hoist < 0.98 ? 0.4 + 0.6 * hoist : 1) * (chord < 1 ? chord * chord : 1);
+    if (fx) cv *= (1 - 0.28 * fx.stall * v) * (1 + 0.07 * fx.gust); // trop bordée : le haut s'aplatit et la chute se ferme ; risées : le creux respire
+    const spiK = D.kind === 'spi' ? 1.6 : 1;
     for (let i = 0; i <= SNU; i++) {
       const u = i / SNU, sh = Math.sin(Math.PI * Math.pow(u, 0.85));
       let off = cv * ch * sh;
-      if (flutter > 0) off += flutter * ch * 0.05 * Math.sin(t * 19 + v * 10 + u * 5 + seed) * (1.15 - u) * sh;
+      if (fx && chord > 0.5) {
+        // guindant qui faseye : le bord d'attaque se creuse à contre (bulle) et bat, d'autant plus vers le haut ; très marqué sous spi
+        if (fx.luff > 0) { const zone = Math.exp(-u * (D.kind === 'spi' ? 4.5 : 7)) * (0.6 + 0.4 * v); off -= fx.luff * spiK * cv * ch * 2.1 * zone * (0.7 + 0.3 * Math.sin(t * 23 + v * 13 + seed)); }
+        // chute qui vibre dans la brise (et se referme si la voile est trop bordée)
+        const lz = smooth(0.78, 1, u); if (fx.leech > 0) off += fx.leech * ch * 0.011 * Math.sin(t * 33 + v * 19 + seed * 1.7) * lz; off -= fx.stall * ch * 0.018 * lz * v;
+      }
+      if (flutter > 0) off += flutter * ch * 0.05 * (0.7 * Math.sin(t * 19 + v * 10 + u * 5 + seed) + 0.3 * Math.sin(t * 41 + v * 23 - u * 9 + seed * 2)) * (1.15 - u) * sh;
       pos[o++] = L[0] + ex * u + nx * off; pos[o++] = L[1] + ey * u + ny * off; pos[o++] = L[2] + ez * u + nz * off;
     }
     if (j === 0) clew = [L[0] + ex, L[1] + ey, L[2] + ez];
   }
   geo.attributes.position.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere();
   return clew;
+}
+/* Penons (brins de laine) : 3 paires près du guindant de la voile d'avant, 4 au bord de fuite de la grand-voile. Ils filent vers l'arrière
+   quand le réglage est bon ; au vent ils se lèvent et tournent si la voile est trop choquée, sous le vent ils décrochent si elle est trop bordée.
+   Calculés sur la forme courante des voiles (bateau du joueur, caméra proche). */
+const TT_N = 10, TT_SEG = 3, _tq = [0, 0, 0];
+function sailPt(P, i, j) { const o = (j * (SNU + 1) + i) * 3; _tq[0] = P[o]; _tq[1] = P[o + 1]; _tq[2] = P[o + 2]; return [_tq[0], _tq[1], _tq[2]]; }
+function updateTelltales(b, v, cd, side, fx) {
+  if (!v.tt) { const g = new THREE.BufferGeometry(), n = TT_N * TT_SEG * 2; g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); const col = new Float32Array(n * 3);
+    for (let r = 0; r < TT_N; r++) { const c = r < 6 ? (r % 2 ? [0.15, 0.85, 0.35] : [0.95, 0.2, 0.2]) : [0.95, 0.75, 0.15]; for (let k = 0; k < TT_SEG * 2; k++) col.set(c, (r * TT_SEG * 2 + k) * 3); }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3)); v.tt = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true })); v.tt.frustumCulled = false; v.root.add(v.tt); }
+  const head = v.heads[b.sail], spi = b.sail === 2, A = v.tt.geometry.attributes.position.array, len = 0.5 * Math.max(0.45, cd.k || 1), t = realT; let o = 0;
+  const put = (base, dir, nrm, ph, lift) => { // brin en 3 segments, ondulant ; lift : écart (rad) à la direction de l'écoulement
+    let p = base; for (let s = 0; s < TT_SEG; s++) { const w = Math.sin(t * (13 + 6 * lift) + ph + s * 1.3) * (0.12 + 0.9 * lift) * (s + 1) / TT_SEG, a = lift * (0.6 + 0.4 * s / TT_SEG) + w;
+      const d = [dir[0] * Math.cos(a) + nrm[0] * Math.sin(a), dir[1] * Math.cos(a) + nrm[1] * Math.sin(a) + 0.04 * lift, dir[2] * Math.cos(a) + nrm[2] * Math.sin(a)], q = [p[0] + d[0] * len / TT_SEG, p[1] + d[1] * len / TT_SEG, p[2] + d[2] * len / TT_SEG];
+      A.set(p, o); A.set(q, o + 3); o += 6; p = q; } };
+  const frame = (P, i, j) => { const a = sailPt(P, i, j), bq = sailPt(P, i + 1, j), c = sailPt(P, i, j + 1), du = [bq[0] - a[0], bq[1] - a[1], bq[2] - a[2]], dv = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const l = Math.hypot(...du) || 1, dir = [du[0] / l, du[1] / l, du[2] / l]; let n = [du[1] * dv[2] - du[2] * dv[1], du[2] * dv[0] - du[0] * dv[2], du[0] * dv[1] - du[1] * dv[0]]; const nl = Math.hypot(...n) || 1; n = n.map(x => x / nl);
+    if (n[0] * -side < 0) n = n.map(x => -x); return { a, dir, n }; }; // n : vers sous le vent
+  // voile d'avant : paires au vent (rouge) / sous le vent (vert) près du guindant
+  const showHead = head && head.visible && !spi;
+  [6, 11, 16].forEach((j, k) => { if (!showHead) { for (let q = 0; q < 2 * TT_SEG * 2 * 3; q++) A[o + q] = 0; o += 2 * TT_SEG * 2 * 3; return; }
+    const F = frame(head.geometry.attributes.position.array, 2, j), off = 0.03 * Math.max(0.45, cd.k || 1);
+    const ww = F.a.map((x, i) => x - F.n[i] * off), lw = F.a.map((x, i) => x + F.n[i] * off), wn = F.n.map(x => -x);
+    put(ww, F.dir, wn, k * 2.1, 1.25 * fx.luff); put(lw, F.dir, F.n, k * 2.1 + 1, 1.1 * fx.stall); });
+  // grand-voile : brins au bord de fuite (décrochent sous le vent si trop bordée)
+  const PM = v.mainMesh.geometry.attributes.position.array;
+  [5, 9, 13, 17].forEach((j, k) => { const F = frame(PM, SNU - 1, j); put(sailPt(PM, SNU, j), F.dir, F.n, k * 1.7 + 4, 1.3 * fx.stall + 0.25 * fx.luff); });
+  v.tt.geometry.attributes.position.needsUpdate = true; v.tt.visible = true;
 }
 // textures de voiles (motifs originaux) : panneaux, lattes, penons, numéro
 function sailTexture(kind, base, accent, number, res) {
@@ -3836,7 +3874,7 @@ function rel(lat, lon) { return [(lon - player.lon) * 60 * NM * refCos, -(lat - 
    La nouvelle voile commence à se déployer avant que l'ancienne soit rangée (comme un vrai changement « en peeling »).
    Durée réelle 3,5 à 10 s, quelle que soit l'accélération du temps. */
 const HEAD_KEYS = ['foc', 'gen', 'spi'];
-function updateHeads(b, v, cd, SD, tr, side, flutter, seed, rdt) {
+function updateHeads(b, v, cd, SD, tr, side, flutter, seed, rdt, fx) {
   const A = v.sa || (v.sa = { from: b.sail, to: b.sail, q: 1, man: null, stowed: [] }), furl = !!cd.furlers;
   if (b.man && b.man.type === 'sail' && b.man !== A.man) { A.man = b.man; A.from = b.man.fromSail; A.to = b.man.toSail; A.q = 0; A.T = clamp(b.man.dur / Math.max(1, accel), 3.5, 10); }
   if (A.q < 1) A.q = Math.min(1, A.q + rdt / A.T); else A.from = A.to = b.sail;
@@ -3860,7 +3898,7 @@ function updateHeads(b, v, cd, SD, tr, side, flutter, seed, rdt) {
       else { hoist = clamp(dep / 0.45, 0.05, 1); chord = 0.12 + 0.88 * clamp((dep - 0.35) / 0.65, 0, 1); }
       fl = Math.max(flutter, 1.4 * (1 - dep) + 0.3);
     }
-    const c = updateSailGeo(m.geometry, D, ang * (0.4 + 0.6 * dep), side, hoist, fl, realT, seed + 2 + i, chord);
+    const c = updateSailGeo(m.geometry, D, ang * (0.4 + 0.6 * dep), side, hoist, fl, realT, seed + 2 + i, chord, dep > 0.9 ? fx : null);
     if (i === b.sail) clew = c;
   }
   if (!clew) { const D = SD[HEAD_KEYS[b.sail]]; clew = [D.C[0], D.C[1], D.C[2]]; }
@@ -3980,8 +4018,11 @@ function updateBoatVisual(b, rdt) {
   if (cd.imoca) v.hd.rotation.y = realT * (b.man ? 6 : 0); else v.hd.rotation.y = Math.sin(realT * 1.7 + px) * 0.12 * (0.4 + (b.surfF - 1) * 4) + (b.man ? Math.sin(realT * 3) * 0.3 : 0);
   if (near) {
     const seed = b.isPlayer ? 0 : px * 0.01;
-    updateSailGeo(v.mainMesh.geometry, dm, mainAng, side, 1 - 0.16 * (b.reef || 0), flutter * 0.6, realT, seed);
-    const clew = updateHeads(b, v, cd, SD, tr, side, flutter, seed, rdt);
+    // état de réglage lu par les voiles : guindant qui faseye si choqué, voile fermée si trop bordée, chute qui vibre dans la brise
+    const fx = { luff: clamp((ease - 0.03) / 0.14, 0, 1), stall: clamp((-ease - 0.05) / 0.14, 0, 1), leech: smooth(14, 32, b.tws || 0), gust: typeof gn === 'number' ? gn : 0 };
+    updateSailGeo(v.mainMesh.geometry, dm, mainAng, side, 1 - 0.16 * (b.reef || 0), flutter * 0.6, realT, seed, 1, { ...fx, luff: fx.luff * 0.6 });
+    const clew = updateHeads(b, v, cd, SD, tr, side, flutter, seed, rdt, fx);
+    if (b.isPlayer && Math.hypot(px - camera.position.x, pz - camera.position.z) < 160 * Math.max(0.5, cd.k || 1)) updateTelltales(b, v, cd, side, fx); else if (v.tt) v.tt.visible = false;
     // écoutes : grand-voile (bôme → chariot), voile d'avant (point d'écoute → poulie sous le vent)
     const be = rotAxis(cd.boomEnd, cd.boomPivot, [0, 1, 0], -side * mainAng * D2R), L0 = cd.leads[b.sail], lead = [-side * L0[0], L0[1], L0[2]];
     v.sheets.geometry.attributes.position.array.set([be[0], be[1], be[2], -side * cd.trav[0], cd.trav[1], cd.trav[2], clew[0], clew[1], clew[2], lead[0], lead[1], lead[2]]);
