@@ -993,6 +993,20 @@ const WAVES = [ // houle : spectre étroit (110 → 330 m, ±15°) → séries d
   { ang: 1.55, len: 112, amp: 0.22, ph: 3.3, type: 0, S: 0.15 },
 ];
 WAVES.forEach(w => { w.dx = Math.cos(w.ang); w.dz = Math.sin(w.ang); w.k = 2 * Math.PI / w.len; w.om = Math.sqrt(9.81 * w.k); w.Q = w.S / w.k; });
+/* État de la mer ressenti : la hauteur seule ne suffit pas. Une houle de 3 m à 12 s (vagues espacées de 200 m) est confortable ;
+   une mer du vent de 3 m à 6 s (55 m entre crêtes) est dure. On combine mer du vent (période de pic ≈ 0,73·U, Pierson-Moskowitz,
+   un peu plus courte tant qu'elle se forme) et houle (période tirée du spectre de houle), pondérées par leur énergie, puis on module la
+   hauteur de chaque système par sa cambrure H/L : la houle longue compte beaucoup moins que la mer du vent à hauteur égale. */
+const SWELL_T = (() => { let e = 0, t = 0; WAVES.forEach(w => { if (w.type) return; const T = 2 * Math.PI / w.om, a2 = w.amp * w.amp; e += a2; t += a2 * T; }); return t / e; })();
+function seaState() {
+  const U = Math.max(2, (SS.tws || 0) * 0.5144), hW = 1.5 * seaAmp, hS = 3.85 * swellAmp, H = Math.hypot(hW, hS);
+  const Tw = clamp(0.73 * U * (0.8 + 0.2 * smooth(0.5, 3.5, hW)), 2.5, 13), eW = hW * hW, eS = hS * hS, Tm = (eW * Tw + eS * SWELL_T) / Math.max(1e-6, eW + eS);
+  const L = 1.56 * Tm * Tm, steep = H / Math.max(1, L);
+  // chaque système pondéré par sa propre cambrure : mer du vent ×1 vers 0,025 (jusqu'à ×1,35 quand elle est courte et creuse),
+  // houle ≈ ×0,6 à 0,8 (vagues espacées de 150 à 300 m : elle soulève le bateau plus qu'elle ne le secoue)
+  const kW = clamp((hW / (1.56 * Tw * Tw)) / 0.025, 0.7, 1.35), kS = clamp((hS / (1.56 * SWELL_T * SWELL_T)) / 0.03, 0.35, 1);
+  return { H, T: Tm, L, steep, eff: Math.hypot(hW * kW, hS * kS) };
+}
 let realT = 0, GX = 0, GZ = 0, seaAmp = 0.8, swellAmp = 0.8;
 /* Bulletin de mer : la mer visible ne suit pas l'accélération du temps. En course, l'état de mer (vent sur l'eau, direction, houle)
    est relevé toutes les 90 s réelles, comme un bulletin, puis la mer passe en douceur au nouvel état en 25 s ; entre deux bulletins elle reste stable.
@@ -2268,7 +2282,7 @@ function sfxThunder(p) {
   g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.9 * p, t + 0.08 + (1 - p) * 0.4); g.gain.setTargetAtTime(0.5 * p, t + 0.5, 0.4); g.gain.exponentialRampToValueAtTime(0.001, t + 3.5 + p * 1.5);
   src.connect(f); f.connect(g); g.connect(AUD.master); src.start(t, Math.random() * 1.5); src.stop(t + 5.5);
 }
-/* ----- Effets d'ambiance : clapot contre la coque, craquements de structure, cliquetis de gréement, faune (dauphins, oiseaux, baleine).
+/* ----- Effets d'ambiance : clapot contre la coque, cliquetis de gréement, faune (dauphins, oiseaux, baleine).
    Tous synthétisés (bruit filtré, oscillateurs) : aucun fichier à charger. ----- */
 function aOut(g, pan, wet) { const ctx = AUD.ctx; let n = g; AUD.n = (AUD.n || 0) + 1; if (ctx.createStereoPanner && pan) { const p = ctx.createStereoPanner(); p.pan.value = clamp(pan, -1, 1); g.connect(p); n = p; } n.connect(AUD.master); if (AUD.verb && wet) { const w = ctx.createGain(); w.gain.value = wet; n.connect(w); w.connect(AUD.verb); } }
 function aNoise(t, dur, type, f, q, rate = 1) { const ctx = AUD.ctx, src = ctx.createBufferSource(); src.buffer = AUD.noise; src.playbackRate.value = rate; const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; src.connect(fl); src.start(t, Math.random() * 2); src.stop(t + dur + 0.05); return fl; }
@@ -2276,14 +2290,6 @@ function sfxSlap(p, pan) { // clapot sur la coque : choc sourd, bref, un peu de 
   if (!AUD.ctx || !AUD.on) return; const ctx = AUD.ctx, t = ctx.currentTime, d = 0.18 + 0.25 * p, g = ctx.createGain();
   const fl = aNoise(t, d, 'bandpass', 260 + Math.random() * 260, 0.9, 0.7 + Math.random() * 0.3); fl.connect(g);
   g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.32 * p, t + 0.012); g.gain.exponentialRampToValueAtTime(0.001, t + d); aOut(g, pan, 0.18);
-}
-function sfxCreak(p) { // craquement de structure (bordé, cadènes, émerillons) : grincement bref à hauteur glissante
-  if (!AUD.ctx || !AUD.on) return; const ctx = AUD.ctx, t = ctx.currentTime, d = 0.25 + Math.random() * 0.45, f0 = 55 + Math.random() * 70;
-  const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * (0.75 + Math.random() * 0.6), t + d);
-  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 500 + Math.random() * 700; bp.Q.value = 6; const g = ctx.createGain();
-  const am = ctx.createOscillator(), amg = ctx.createGain(); am.frequency.value = 18 + Math.random() * 25; amg.gain.value = 0.5; am.connect(amg); amg.connect(g.gain);
-  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05 * p, t + 0.05); g.gain.setTargetAtTime(0.0001, t + d * 0.6, d * 0.25);
-  o.connect(bp); bp.connect(g); aOut(g, (Math.random() - 0.5) * 0.8, 0.35); o.start(t); am.start(t); o.stop(t + d + 0.3); am.stop(t + d + 0.3);
 }
 function sfxRattle(p) { // cliquetis de manille / drisse contre le mât : 2 à 5 petits tics métalliques
   if (!AUD.ctx || !AUD.on) return; const ctx = AUD.ctx, t0 = ctx.currentTime, n = 2 + Math.floor(Math.random() * 4), pan = (Math.random() - 0.5) * 0.6;
@@ -2335,7 +2341,6 @@ function updateAudio(rdt) {
   if (act && near > 0.3) {
     const sea = clamp(seaAmp + swellAmp * 0.5, 0, 3);
     AUD.slapT = (AUD.slapT ?? 1) - rdt; if (AUD.slapT <= 0) { AUD.slapT = (0.5 + Math.random() * 1.6) / (0.5 + 0.35 * sea + P.spd / 25); sfxSlap(clamp(0.25 + 0.25 * sea + P.spd / 40, 0.2, 1) * near * (1 + 0.25 * night), (Math.random() - 0.5) * 0.9); }
-    AUD.creakT = (AUD.creakT ?? 4) - rdt; if (AUD.creakT <= 0) { AUD.creakT = (3 + Math.random() * 7) / (0.6 + 0.4 * sea); sfxCreak(clamp(0.5 + 0.3 * sea, 0.4, 1.3) * near); }
     AUD.ratT = (AUD.ratT ?? 6) - rdt; if (AUD.ratT <= 0) { AUD.ratT = (2 + Math.random() * 6) / (0.4 + smooth(14, 30, aws) + (flapping ? 1.2 : 0)); if (aws > 12 || flapping) sfxRattle(clamp(aws / 30, 0.3, 1) * near); }
     if (typeof FA !== 'undefined') {
       if (FA.pod) { AUD.dolT = (AUD.dolT ?? 0.5) - rdt; if (AUD.dolT <= 0) { AUD.dolT = 0.25 + Math.random() * 1.4; sfxDolphin(0.8 * near, (Math.random() - 0.5) * 1.4); } }
@@ -3640,9 +3645,9 @@ function updateHUD() {
   }
   __tl += (row(T('Météo', 'Weather'), weatherTxt()));
   if (MODE === 'race') { const sLeft = Math.max(0, FC.nextReal - realRaceT); __tl += (row(T('Prévision', 'Forecast'), DAILY.on ? T(`run n°${FC.n} · suivant à ${fmtRace(FC.nextGame)}`, `run #${FC.n} · next at ${fmtRace(FC.nextGame)}`) : T(`run n°${FC.n} · suivant dans `, `run #${FC.n} · next in `) + `${Math.floor(sLeft / 60)}:${String(Math.floor(sLeft % 60)).padStart(2, '0')}`));
-    const hW = 1.5 * seaAmp, hS = 3.85 * swellAmp, H = Math.hypot(hW, hS), D = [[0.1, 'calme', 'calm'], [0.5, 'belle', 'smooth'], [1.25, 'peu agitée', 'slight'], [2.5, 'agitée', 'moderate'], [4, 'forte', 'rough'], [6, 'très forte', 'very rough'], [9, 'grosse', 'high'], [14, 'très grosse', 'very high'], [99, 'énorme', 'phenomenal']].find(d => H < d[0]);
-    const mL = Math.max(0, SS.nextR - realT), mTr = SS.to && realT - SS.tr0 < SEA_TR;
-    __tl += (row(T('Mer', 'Sea'), `${T(D[1], D[2])} · ${H.toFixed(1)} m · ` + (mTr ? T('évolue…', 'changing…') : T('bulletin dans ', 'update in ') + `${Math.floor(mL / 60)}:${String(Math.floor(mL % 60)).padStart(2, '0')}`))); }
+    const S = seaState(), D = [[0.1, 'calme', 'calm'], [0.5, 'belle', 'smooth'], [1.25, 'peu agitée', 'slight'], [2.5, 'agitée', 'moderate'], [4, 'forte', 'rough'], [6, 'très forte', 'very rough'], [9, 'grosse', 'high'], [14, 'très grosse', 'very high'], [99, 'énorme', 'phenomenal']].find(d => S.eff < d[0]);
+    const mL = Math.max(0, SS.nextR - realT), mTr = SS.to && realT - SS.tr0 < SEA_TR, sp = S.steep > 0.03 ? T(', creusée', ', steep') : S.steep < 0.018 ? T(', longue', ', long') : '';
+    __tl += (row(T('Mer', 'Sea'), `<span title="${T('Hauteur significative · période moyenne (plus elle est courte, plus les vagues sont rapprochées)', 'Significant height · mean period (the shorter, the closer the waves)')}">${T(D[1], D[2])}${sp} · ${S.H.toFixed(1)} m · ${S.T.toFixed(0)} s</span> · ` + (mTr ? T('évolue…', 'changing…') : T('bulletin dans ', 'update in ') + `${Math.floor(mL / 60)}:${String(Math.floor(mL % 60)).padStart(2, '0')}`))); }
   $('tlBody').innerHTML = __tl;
   const adv = routeAdvice(); let rt = '';
   if (ROUTE.busy && !ROUTE.nodes) rt = `<span class="muted">${T('Calcul en cours…', 'Computing…')} ${ROUTE.steps} isochrones</span>`;
