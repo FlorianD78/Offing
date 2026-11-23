@@ -153,6 +153,8 @@ body.mobile .mmside{display:none}body.mobile #overlay.mm{background:rgba(3,12,22
 .tabs{display:flex;gap:4px;margin:14px 0 6px;border-bottom:1px solid rgba(255,255,255,.1)}.tabs button{background:none!important;border:0!important;border-bottom:2px solid transparent!important;border-radius:0;padding:8px 12px;color:#a9c3d6;font-size:14px}.tabs button.on{color:#fff;border-bottom-color:#7fd1ff!important}
 .coast .c img{width:100%;border-radius:8px;display:block;margin-bottom:4px}
 .dgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}.dcard{border-radius:14px;border:1px solid rgba(255,209,102,.35);background:rgba(255,255,255,.04);padding:12px;display:flex;flex-direction:column;gap:8px}.dcard img{width:100%;border-radius:10px;display:block}
+.wkcard{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:10px;align-items:start}.wkcard img{width:100%;border-radius:10px;aspect-ratio:2/1;object-fit:cover}.wkcls{display:flex;flex-direction:column;gap:6px}@media (max-width:700px){.wkcard{grid-template-columns:1fr}}
+.anStats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 10px}.anStats>div{background:rgba(255,255,255,.06);border-radius:10px;padding:8px 10px}.anStats small{display:block;color:#a9c3d6;font-size:11px}.anStats b{display:block;font-size:17px}.anStats i{display:block;color:#7fd1ff;font-style:normal;font-size:11.5px}@media (max-width:640px){.anStats{grid-template-columns:repeat(2,1fr)}}
 .dcls{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.05)}.dcls small{display:block;color:#a9c3d6;font-size:11.5px}.dcls button{padding:7px 12px}.dcls button[data-daily]{background:#1f8fd6;border-color:#55b8f7}
 .clsPick{display:grid!important;grid-template-columns:repeat(4,1fr)}.clsPick button i{display:block;font-style:normal;color:#7fd1ff;font-size:11.5px;margin:1px 0 3px}
 .setrow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08)}.setrow small{display:block;color:#a9c3d6;font-size:12px;max-width:520px}
@@ -540,10 +542,10 @@ function gaussAx(lat, lon, cLat, cLon, sa, sc, brg) {
 const llAt = (lat, lon, brg, dist) => { const b = brg * D2R, la = lat + Math.cos(b) * dist / 60; return [la, lon + Math.sin(b) * dist / (60 * Math.cos(((lat + la) / 2) * D2R))]; };
 let WX_OFF = 0, START_H = 13;
 /* ----- Défi du jour : même météo, mêmes prévisions et même hasard pour tous les joueurs du jour ; simulation à pas fixe, ordres enregistrés ----- */
-const DSTEP = 1, ENGINE_VER = 13; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
-const DAILY = { on: false, day: '', seed: 0, K: 0, acc: 0, log: null, lastCtl: null };
+const DSTEP = 1, ENGINE_VER = 14; // ENGINE_VER : à incrémenter à chaque changement de physique/météo (le serveur refuse les journaux d'une autre version)
+const DAILY = { on: false, day: '', week: null, step: 1, seed: 0, K: 0, acc: 0, log: null, lastCtl: null };
 let IN_STEP = false;
-function parisDay() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+function parisDay(d = new Date()) { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); } catch (e) { return d.toISOString().slice(0, 10); } }
 function hash32(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function hrand(a, b) { let h = Math.imul((a ^ 0x9e3779b9) >>> 0, 0x85ebca6b) ^ Math.imul((b + 0x7f4a7c15) >>> 0, 0xc2b2ae35); h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; h = Math.imul(h, 0x297a2d39); h ^= h >>> 15; return (h >>> 0) / 4294967296; }
 const SOUTH = () => COURSE.ocean === 'south';
@@ -783,6 +785,41 @@ function baseSpeed(a, tws) {
   const [i, fi] = ixOf(PT_TWA, clamp(a, 0, 180)), [j, fj] = ixOf(PT_TWS, clamp(tws, 0, 60)), R = CLS.V0;
   return (R[i][j] * (1 - fj) + R[i][j + 1] * fj) * (1 - fi) + (R[i + 1][j] * (1 - fj) + R[i + 1][j + 1] * fj) * fi;
 }
+/* Ocean Fifty (ex-Multi50) : trimaran 15,24 × 15,24 m, ≈ 4 t, tirant d'air 23,77 m, 177 m² au près / 265 m² au portant, foils de flotteurs.
+   Pas de polaire publiée : estimation calée sur des mesures publiques — Route du Rhum 2022 (O50 ≈ IMOCA + 7 %), convoyage 160 milles
+   à 18 nd de moyenne par 20 nd au reaching (pointes 34 nd), vitesse de pointe ≈ 40 nd. Multicoque : très rapide dans le petit temps
+   et au reaching, cap moins serré au près (optimum ≈ 50°), lève le pied dans la grosse mer (risque de chavirage). V0 = flotteur sous
+   le vent sans foil ; FG = gain du foil de flotteur (≈ 40 % de celui d'un IMOCA : le flotteur porte déjà). */
+const V0_O50 = [
+  /*  0 */ [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
+  /* 30 */ [0.0,  1.22,  2.15,  2.32,  2.34,  2.29,  2.28,  2.33,  2.38,  2.36,  2.23,  2.04,  1.33],
+  /* 40 */ [0.0,  4.17,  7.31,  7.94,  7.98,  7.81,  7.8,  7.95,  8.11,  8.05,  7.63,  6.95,  4.53],
+  /* 45 */ [0.0,  5.74,  10.05,  10.9,  11.02,  10.9,  10.99,  11.22,  11.45,  11.42,  10.83,  9.87,  6.44],
+  /* 52 */ [0.0,  6.87,  12.05,  13.07,  13.36,  13.44,  13.71,  14.02,  14.34,  14.39,  13.64,  12.43,  8.11],
+  /* 60 */ [0.0,  7.16,  12.56,  13.67,  14.22,  14.7,  15.26,  15.65,  16.06,  16.25,  15.41,  14.05,  9.16],
+  /* 75 */ [0.0,  7.01,  12.29,  13.65,  15.06,  16.83,  18.46,  19.42,  20.31,  20.87,  19.87,  18.12,  11.82],
+  /* 90 */ [0.0,  6.75,  11.84,  13.51,  15.49,  17.91,  20.03,  21.34,  22.73,  23.78,  22.84,  20.83,  13.58],
+  /*110 */ [0.0,  6.02,  10.53,  12.49,  14.97,  17.93,  20.59,  22.44,  24.81,  26.87,  26.49,  24.15,  15.75],
+  /*120 */ [0.0,  5.62,  9.83,  11.76,  14.2,  17.03,  19.5,  21.16,  23.54,  25.79,  25.63,  23.37,  15.25],
+  /*135 */ [0.0,  5.02,  8.81,  10.77,  13.13,  15.86,  18.39,  20.32,  23.36,  26.5,  27.25,  24.84,  16.2],
+  /*150 */ [0.0,  4.12,  7.2,  8.99,  10.95,  13.15,  15.34,  17.23,  20.47,  23.99,  25.58,  23.32,  15.2],
+  /*165 */ [0.0,  3.39,  5.93,  7.43,  8.86,  10.39,  12.1,  13.85,  17.04,  20.27,  21.79,  19.86,  12.96],
+  /*180 */ [0.0,  3.0,  5.27,  6.61,  7.71,  8.75,  10.1,  11.76,  14.91,  17.95,  19.44,  17.73,  11.56]];
+const FG_O50 = [
+  /*  0 */ [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
+  /* 30 */ [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
+  /* 40 */ [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
+  /* 45 */ [0.0,  0.0,  0.0,  0.0,  0.005,  0.013,  0.019,  0.02,  0.021,  0.025,  0.025,  0.025,  0.025],
+  /* 52 */ [0.0,  0.0,  0.0,  0.0,  0.011,  0.033,  0.05,  0.052,  0.053,  0.063,  0.062,  0.062,  0.062],
+  /* 60 */ [0.0,  0.0,  0.0,  0.0,  0.023,  0.066,  0.099,  0.102,  0.105,  0.124,  0.123,  0.123,  0.123],
+  /* 75 */ [0.0,  0.0,  0.0,  0.0,  0.051,  0.144,  0.209,  0.21,  0.211,  0.247,  0.244,  0.244,  0.244],
+  /* 90 */ [0.0,  0.0,  0.0,  0.0,  0.063,  0.175,  0.25,  0.248,  0.244,  0.28,  0.274,  0.274,  0.274],
+  /*110 */ [0.0,  0.0,  0.0,  0.0,  0.072,  0.192,  0.266,  0.257,  0.241,  0.265,  0.252,  0.252,  0.252],
+  /*120 */ [0.0,  0.0,  0.0,  0.0,  0.075,  0.201,  0.281,  0.273,  0.254,  0.275,  0.259,  0.259,  0.259],
+  /*135 */ [0.0,  0.0,  0.0,  0.0,  0.063,  0.165,  0.225,  0.214,  0.192,  0.199,  0.18,  0.18,  0.18],
+  /*150 */ [0.0,  0.0,  0.0,  0.0,  0.045,  0.116,  0.157,  0.146,  0.127,  0.127,  0.11,  0.11,  0.11],
+  /*165 */ [0.0,  0.0,  0.0,  0.0,  0.021,  0.055,  0.072,  0.066,  0.055,  0.055,  0.047,  0.047,  0.047],
+  /*180 */ [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0]];
 // Foc = J2/J3 (près, vent soutenu) · Génois = J1/Code 0 (près petit temps, reaching) · Spi = gennaker A3 (largue, portant)
 const SAILS_IMOCA = [
   { id: 'foc', name: 'Foc', c: 48, w: 30, floor: 0.70, ui: '#8fd3ff', wf: t => t >= 14 ? 1 : t <= 8 ? 0.88 : 0.88 + 0.12 * (t - 8) / 6 },
@@ -802,6 +839,8 @@ const CLASSES = {
     cap: v => v <= 16 ? v : 16 + (v - 16) * 0.5, heelMax: 22, cam: 34, k: 0.36, reef: true, overT: 18, broach: true },
   c40: { id: 'c40', name: 'Class40', long: 'Class40 scow', V0: V0_C40, sails: SAILS_MINI, foils: false, foil: { max: 0, v0: 12, v1: 16, c: 105 }, man: { tack: 150, gybe: 210, sail: 420, foil: 0, reef: 200 }, tau: 45, seaT: 21, seaK: 0.017,
     cap: v => v <= 22 ? v : 22 + (v - 22) * 0.5, heelMax: 21, cam: 58, k: 0.62, reef: true, overT: 22, broach: true },
+  o50: { id: 'o50', name: 'Ocean Fifty', long: 'Trimaran Ocean Fifty', V0: V0_O50, FG: FG_O50, sails: SAILS_IMOCA, foils: true, foil: { max: 0.3, v0: 10, v1: 16, c: 110 }, man: { tack: 210, gybe: 240, sail: 480, foil: 150, reef: 240 }, tau: 50, seaT: 22, seaK: 0.016,
+    cap: v => v <= 36 ? v : 36 + (v - 36) * 0.45, heelMax: 11, cam: 78, k: 0.85, reef: true, overT: 24, broach: true, broachT: 23, tri: true },
   proto: { id: 'proto', name: 'Mini proto', long: 'Mini 6.50 proto à foils', V0: V0_PROTO, FG: FG_PROTO, sails: SAILS_MINI, foils: true, foil: { max: 0.34, v0: 8.5, v1: 13, c: 105 },
     man: { tack: 100, gybe: 160, sail: 300, foil: 60, reef: 150 }, tau: 25, seaT: 18, seaK: 0.024, cap: v => v <= 26 ? v : 26 + (v - 26) * 0.5, heelMax: 16, cam: 34, k: 0.36, reef: true, overT: 17, broach: true },
 };
@@ -1066,10 +1105,10 @@ function fftH(c, x, z) {
    dessinée (cockpit, cabine vue par le rouf), alors que l'eau qui passe par-dessus le pont reste visible. */
 const V_MASK_ON = true;
 const MASK_MAT = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
-const MASK_Y = { imoca: 0.8, c40: 0.42, mini: 0.42, proto: 0.42 }; // unités du modèle (Class40 = Mini ×1,875)
+const MASK_Y = { imoca: 0.8, c40: 0.42, mini: 0.42, proto: 0.42, o50: 0.85 }; // unités du modèle (Class40 = Mini ×1,875)
 function waterMask(V, capY) {
   const root = V.root, excl = new Set();
-  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.mainMesh, V.sheets, V.wake].concat(V.heads || []).forEach(o => o && o.traverse && o.traverse(c => excl.add(c)));
+  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.mainMesh, V.sheets, V.wake, V.tri].concat(V.heads || []).forEach(o => o && o.traverse && o.traverse(c => excl.add(c)));
   if (V.mask) { root.remove(V.mask); V.mask.geometry.dispose(); V.mask = null; }
   const qp = root.position.clone(), qq = root.quaternion.clone(); root.position.set(0, 0, 0); root.quaternion.identity(); root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m = new THREE.Matrix4(), v3 = new THREE.Vector3(), B = new Map(), dz = 0.3;
@@ -1085,7 +1124,7 @@ function waterMask(V, capY) {
 function hullFootprint(V) {
   if (V.fp) return V.fp;
   const root = V.root, excl = new Set();
-  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane].forEach(o => o && o.traverse(c => excl.add(c)));
+  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.tri].forEach(o => o && o.traverse(c => excl.add(c)));
   const qp = root.position.clone(), qq = root.quaternion.clone(); root.position.set(0, 0, 0); root.quaternion.identity(); root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m = new THREE.Matrix4(), v3 = new THREE.Vector3(), sc = root.scale.x, P = [];
   root.traverseVisible(o => { if (!o.isMesh || excl.has(o) || o.isSprite) return; const pos = o.geometry && o.geometry.attributes.position; if (!pos) return; m.multiplyMatrices(inv, o.matrixWorld);
@@ -1681,13 +1720,13 @@ const b64buf = t => { const bin = atob(t), u = new Uint8Array(bin.length); for (
    de chaque classe (étrave large, franc-bord, bau), sans outriggers ni foils ; mât, gréement, voiles et bout-dehors restent ceux de la classe.
    Chargés à la première construction d'un bateau de la classe ; en attendant, le modèle procédural reste affiché. */
 const SMALL_MODEL = { mini: { hi: null, lo: null }, c40: { hi: null, lo: null } }, SMALL_VIS = [], SMALL_REQ = {};
-function loadSmallModels(kind) {
+function loadSmallModels(kind) { if (!SMALL_MODEL[kind]) return;
   if (SMALL_REQ[kind] || typeof fetch !== 'function') return SMALL_REQ[kind]; const get = lvl => fetch(`models/${kind}-${lvl}.json`).then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(j => { const M = parseModelBin(b64buf(j.b64)); M.mats = j.mats || {}; SMALL_MODEL[kind][lvl] = M; SMALL_VIS.forEach(applySmallModel); }).catch(() => {});
   return SMALL_REQ[kind] = get('lo').then(() => get('hi'));
 }
 function applySmallModel(V) {
-  const S = SMALL_MODEL[V.kind], M = (V.isPlayer && GFX.level !== 'low' ? S.hi : S.lo) || S.hi || S.lo; if (!M || V.stl === M) return;
+  const S = SMALL_MODEL[V.kind]; if (!S) return; const M = (V.isPlayer && GFX.level !== 'low' ? S.hi : S.lo) || S.hi || S.lo; if (!M || V.stl === M) return;
   if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
   V.param.forEach(o => o.visible = false); const C = imocaMats(M), list = [], matOf = k => k === 'hull' ? V.mats.hullMat : k === 'acc' ? V.mats.accMat : C[k] || C.vcol;
   V.keel.position.set(...M.meta.keelPivot);
@@ -1834,6 +1873,102 @@ function makeMini(hull, accent, name, isPlayer, proto, c40) {
   const V = { root, boomPivot, mainMesh, heads, sheets, bowWave, keel, mast, hd: til, foilS, foilP, wake: makeWake(), navMats, vane, awa: 0, cd: proto ? CD_PROTO : c40 ? CD_C40 : CD_MINI,
     kind: c40 ? 'c40' : 'mini', param, mats: { hullMat, accMat }, isPlayer };
   SMALL_VIS.push(V); loadSmallModels(V.kind); applySmallModel(V); return V;
+}
+
+/* ----- Ocean Fifty : trimaran 15,24 × 15,24 m — coque centrale étroite, flotteurs de 14 m à étraves hautes, deux bras arqués,
+   trampolines, mât-aile rotatif de 22,4 m (tirant d'air 23,8 m), dérive centrale, safrans en T, foils en C dans les flotteurs.
+   Proportions relevées sur les plans de classe et les photos (Arkema, Primonial/Viabilis, Edenred, Solidaires en Peloton). ----- */
+const HK_O50 = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.92, 1.08, 1.2, 1.2, 1.06, 0.78, 0.5, 0.12], bC: [0.84, 0.98, 1.08, 1.06, 0.9, 0.64, 0.38, 0.08],
+  yD: [1.12, 1.15, 1.2, 1.27, 1.38, 1.52, 1.64, 1.76], yC: [0.08, -0.06, -0.16, -0.16, -0.04, 0.24, 0.55, 1.0], yB: [-0.1, -0.32, -0.5, -0.52, -0.38, -0.04, 0.32, 0.9] };
+const HK_O50F = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.34, 0.48, 0.58, 0.6, 0.54, 0.42, 0.28, 0.06], bC: [0.3, 0.44, 0.53, 0.55, 0.48, 0.35, 0.2, 0.04],
+  yD: [0.98, 1.02, 1.08, 1.15, 1.28, 1.46, 1.62, 1.82], yC: [0.32, 0.1, -0.04, -0.06, 0.04, 0.3, 0.62, 1.12], yB: [0.24, -0.06, -0.2, -0.24, -0.12, 0.18, 0.52, 1.02] };
+HULLDEF.o50 = { HK: HK_O50, L: 15.24, cock: { z0: 1.7, z1: 2.2, dep: 0.5, xi: 0.74, xr: 0.64, cam: 0.07 } };
+HULLDEF.o50f = { HK: HK_O50F, L: 14.0, cock: { z0: 99, z1: 100, dep: 0, xi: 0.2, xr: 0.3, cam: 0.05 } };
+const O50_X = 6.85, O50_ZF = -2.4, O50_ZA = 3.6, O50_MZ = -2.35, O50_BY = u => 1.38 + 0.56 * (1 - Math.pow(u, 1.7)); // flotteurs, bras avant / arrière, pied de mât
+const SAIL_DEFS_O50 = {
+  main: { T: [0, 2.45, -2.2], H: [0, 23.45, -2.3], C: [0, 2.55, 5.0], HA: [0, 22.95, 1.2], roach: 0.12, camber: 0.08, twist: 8, min: 1, max: 28, kind: 'main' },
+  foc:  { T: [0, 1.85, -7.45], H: [0, 18.6, -2.6], C: [0, 2.2, -0.3], camber: 0.09, twist: 8, min: 8, max: 34, kind: 'jib' },
+  gen:  { T: [0, 1.85, -9.5], H: [0, 22.9, -2.55], C: [0, 2.5, 0.8], camber: 0.12, twist: 10, min: 8, max: 40, kind: 'jib' },
+  spi:  { T: [0, 1.85, -9.65], H: [0, 23.25, -2.5], C: [0, 4.4, 4.6], camber: 0.22, twist: 12, min: 20, max: 80, kind: 'spi' },
+};
+const CD_O50 = { sails: SAIL_DEFS_O50, boomPivot: [0, 2.35, -2.2], boomEnd: [0, 2.35, 5.0], trav: [2.7, 2.0, O50_ZA], leads: [[1.7, 1.75, -0.4], [3.6, 1.95, 1.2], [O50_X - 0.3, 1.5, 4.8]],
+  foils: true, cant: false, mastRot: 1.2, k: 0.85, bw: 0.65, heel: 0.42, surf: 0.25, furlers: true, tri: true };
+let O50_KIT = null;
+function o50Kit() {
+  if (O50_KIT) return O50_KIT;
+  useHull('o50'); const HM = mkHullGeos(); useHull('o50f'); const HF = mkHullGeos(); useHull('imoca');
+  const arc = z => { const p = []; for (let i = 0; i <= 12; i++) { const x = -6.55 + 13.1 * i / 12, u = Math.abs(x) / 6.55; p.push([x, O50_BY(u), z]); } return p; };
+  const netTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = 'rgba(28,32,36,0.5)'; g.fillRect(0, 0, 128, 128); g.strokeStyle = 'rgba(16,18,21,0.95)'; g.lineWidth = 5;
+    for (let i = 0; i <= 128; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 128); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(128, i); g.stroke(); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 12); t.anisotropy = 4; return t; })();
+  const net = (() => { const pos = [], uv = [], idx = [], NX = 10, NZ = 8, x0 = 1.05, x1 = O50_X - 0.5, z0 = O50_ZF + 0.3, z1 = O50_ZA - 0.3;
+    for (let k of [1, -1]) { const b = pos.length / 3; for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NX; i++) { const u = i / NX, w = j / NZ, x = x0 + (x1 - x0) * u;
+      pos.push(k * x, O50_BY(x / 6.55) - 0.14 - 0.14 * Math.sin(Math.PI * u) * Math.sin(Math.PI * w), z0 + (z1 - z0) * w); uv.push(u, w); }
+      for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) { const a = b + j * (NX + 1) + i, c = a + NX + 1; idx.push(a, c, a + 1, a + 1, c, c + 1); } }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g; })();
+  const coach = (() => { const sh = new THREE.Shape(); sh.moveTo(1.9, 1.2); sh.lineTo(1.9, 1.72); sh.quadraticCurveTo(0.2, 1.82, -1.2, 1.74); sh.quadraticCurveTo(-1.85, 1.6, -2.05, 1.32); sh.lineTo(-2.05, 1.2); sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 1.36, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 2, curveSegments: 8 }); g.rotateY(-Math.PI / 2); g.translate(0.68, 0, 0); return g; })();
+  const win = (() => { const pos = [], q = (a, b, c, d) => pos.push(...a, ...b, ...c, ...b, ...d, ...c); [1, -1].forEach(k => { const x = k * 0.745; q([x, 1.38, -1.5], [x, 1.38, 0.6], [x, 1.6, -1.5], [x, 1.62, 0.6]); });
+    q([-0.6, 1.3, -1.98], [0.6, 1.3, -1.98], [-0.55, 1.6, -1.55], [0.55, 1.6, -1.55]); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g; })();
+  const rig = (() => { const pos = [], L = (a, b) => pos.push(...a, ...b), top = [0, 23.35, O50_MZ - 0.05], mid = [0, 15.2, O50_MZ], bs = [0, 1.85, -9.6];
+    [1, -1].forEach(k => { const cp = [k * O50_X, 1.45, O50_ZF + 0.5], dia = [k * 1.25, 12.0, O50_MZ + 0.1]; L(top, cp); L(mid, cp); L([0, 3.0, O50_MZ], dia); L(dia, top); L(top, [k * O50_X, 1.25, 5.9]); L(bs, [k * O50_X, 1.55, -6.6]); L([0, 0.95, O50_ZF], [k * O50_X * 0.55, O50_BY(0.55), O50_ZF]); });
+    L([0, 22.6, O50_MZ - 0.1], [0, 1.85, -7.5]); L([0, 23.3, O50_MZ - 0.1], bs); L(bs, [0, 0.75, -7.35]); L([0, O50_BY(0), O50_ZF], [0, 0.95, O50_ZF]);
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g; })();
+  const rail = (() => { const pos = [], L = (a, b) => pos.push(...a, ...b); [1, -1].forEach(k => { for (let z = -6.2; z < 5.5; z += 1.6) { const x = k * 1.0; L([x, 1.3, z], [x, 1.85, z]); L([x, 1.85, z], [x, 1.85, Math.min(5.5, z + 1.6)]); } }); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g; })();
+  return (O50_KIT = { HM, HF, net, netTex, coach, win, rig, rail,
+    BEAM_F: bladeGeo(arc(O50_ZF), 0.52, 0.52, 0.34, 36, 10), BEAM_A: bladeGeo(arc(O50_ZA), 0.46, 0.46, 0.3, 36, 10),
+    MAST: new THREE.CylinderGeometry(0.1, 0.16, 22.2, 10), BOOM: new THREE.CylinderGeometry(0.06, 0.09, 7.3, 8), SPRIT: new THREE.CylinderGeometry(0.05, 0.08, 2.3, 8), STRIKER: new THREE.CylinderGeometry(0.04, 0.05, 1.0, 6),
+    BOARD: bladeGeo([[0, 0.5, 0], [0, -1.2, 0.03], [0, -2.6, 0.08], [0, -3.15, 0.1]], 0.62, 0.42, 0.075, 16, 10),
+    FOIL: bladeGeo([[0, 0.7, 0], [-0.04, -0.35, 0.02], [-0.22, -1.25, 0.05], [-0.62, -1.95, 0.08], [-1.25, -2.3, 0.1], [-1.75, -2.38, 0.11]], 0.56, 0.3, 0.075, 34, 10),
+    TILLER: new THREE.BoxGeometry(0.05, 0.05, 1.4), WINCH: new THREE.CylinderGeometry(0.11, 0.15, 0.18, 12) });
+}
+function makeTri(hull, accent, name, isPlayer) {
+  const K = o50Kit(), root = new THREE.Group(); root.rotation.order = 'YXZ';
+  const res = isPlayer ? 512 : 256, num = String(isPlayer ? 50 : 10 + (hull % 40));
+  const accMat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.35, side: THREE.DoubleSide }), hullMat = new THREE.MeshStandardMaterial({ color: hull, roughness: 0.28, metalness: 0.22, side: THREE.DoubleSide });
+  const liv = m => new THREE.MeshStandardMaterial({ map: hullTexture(hull, accent, num, m, isPlayer ? 1024 : 512), roughness: 0.25, metalness: 0.18, side: THREE.DoubleSide });
+  const livS = liv(false), livP = liv(true), param = [];
+  const add = (geo, mat, x = 0, y = 0, z = 0, par = root) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); par.add(m); param.push(m); return m; };
+  const H = K.HM; add(H.deck, MAT.deck); add(H.topS, livS); add(H.topP, livP); add(H.strS, accMat); add(H.strP, accMat); add(H.bottom, MAT.bottom); add(H.ends, hullMat);
+  add(K.coach, MAT.roof); add(K.win, MAT.glass);
+  // flotteurs, bras et trampolines : groupe à part (exclu de l'empreinte de flottaison et du masque d'eau de la coque centrale)
+  const tri = new THREE.Group(); root.add(tri);
+  [1, -1].forEach(k => { const F = K.HF; add(F.deck, MAT.deck, k * O50_X, 0, 0.3, tri); add(F.topS, k > 0 ? livS : hullMat, k * O50_X, 0, 0.3, tri); add(F.topP, k > 0 ? hullMat : livP, k * O50_X, 0, 0.3, tri);
+    add(F.strS, accMat, k * O50_X, 0, 0.3, tri); add(F.strP, accMat, k * O50_X, 0, 0.3, tri); add(F.bottom, MAT.bottom, k * O50_X, 0, 0.3, tri); add(F.ends, hullMat, k * O50_X, 0, 0.3, tri);
+    const r = new THREE.Group(); r.position.set(k * O50_X, 0.45, 6.75); r.scale.set(0.7 * k, 0.62, 0.7); r.add(new THREE.Mesh(RUDDER_GEO, MAT.bottom)); r.add(new THREE.Mesh(ELEV_GEO, MAT.bottom)); tri.add(r); param.push(r); });
+  add(K.BEAM_F, hullMat, 0, 0, 0, tri); add(K.BEAM_A, hullMat, 0, 0, 0, tri);
+  const netMat = new THREE.MeshStandardMaterial({ map: K.netTex, color: 0xb8c0c8, transparent: true, depthWrite: false, alphaTest: 0.05, roughness: 0.9, side: THREE.DoubleSide }); add(K.net, netMat, 0, 0, 0, tri);
+  add(K.STRIKER, MAT.dark, 0, 1.42, O50_ZF, tri);
+  { const r = new THREE.LineSegments(K.rail, MAT.rail); root.add(r); }
+  // cockpit : winches, barre
+  [[0.62, 1.05, 2.9], [-0.62, 1.05, 2.9], [0.62, 1.05, 4.6], [-0.62, 1.05, 4.6], [0.45, 1.82, -0.2], [-0.45, 1.82, -0.2]].forEach(p => add(K.WINCH, MAT.winch, p[0], p[1], p[2]));
+  const til = new THREE.Mesh(K.TILLER, MAT.dark); til.position.set(0, 1.05, 6.6); root.add(til);
+  { const r = new THREE.Group(); r.position.set(0, 0.15, 7.45); r.scale.set(0.85, 0.85, 0.85); r.add(new THREE.Mesh(RUDDER_GEO, MAT.bottom)); r.add(new THREE.Mesh(ELEV_GEO, MAT.bottom)); root.add(r); param.push(r); }
+  const keel = new THREE.Group(); keel.position.set(0, -0.35, -0.9); root.add(keel); { const d = new THREE.Mesh(K.BOARD, accMat); keel.add(d); param.push(d); }
+  const mast = new THREE.Mesh(K.MAST, MAT.dark); mast.position.set(0, 1.3 + 11.1, O50_MZ); mast.scale.set(1, 1, 2.3); root.add(mast);
+  root.add(new THREE.LineSegments(K.rig, MAT.rig));
+  const sprit = new THREE.Mesh(K.SPRIT, accMat); sprit.position.set(0, 1.85, -8.55); sprit.rotation.x = Math.PI / 2; root.add(sprit);
+  const boomPivot = new THREE.Group(); boomPivot.position.set(0, 2.35, -2.2); root.add(boomPivot);
+  const boom = new THREE.Mesh(K.BOOM, MAT.dark); boom.rotation.x = Math.PI / 2; boom.position.z = 3.65; boomPivot.add(boom);
+  const sm = (kind, base) => { const tx = sailTexture(kind, base, accent, num, res); return new THREE.MeshStandardMaterial({ map: tx, emissiveMap: tx, emissive: 0xffffff, emissiveIntensity: 0, roughness: kind === 'main' ? 0.5 : 0.62, metalness: kind === 'main' ? 0.1 : 0.02, side: THREE.DoubleSide }); };
+  const mkSail = mat => { const m = new THREE.Mesh(makeSailGeo(), mat); m.frustumCulled = false; root.add(m); return m; };
+  const mainMesh = mkSail(sm('main', 0x353a40));
+  const heads = [mkSail(sm('jib', 0x454b53)), mkSail(sm('jib', 0x2d3238)), mkSail(sm('spi', 0))]; heads.forEach(h => h.visible = false);
+  const sheetGeo = new THREE.BufferGeometry(); sheetGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
+  const sheets = new THREE.LineSegments(sheetGeo, MAT.sheet); sheets.frustumCulled = false; root.add(sheets);
+  const bowWave = makeBowWave(); root.add(bowWave);
+  const [foilS, foilP] = [1, -1].map(k => { const g = new THREE.Group(); g.scale.x = k; const f = new THREE.Mesh(K.FOIL, MAT.foil); g.add(f); param.push(f); root.add(g); return g; });
+  const label = makeLabel(name, hexCss(isPlayer ? accent : hull), isPlayer ? 160 : 256); label.position.set(0, 29, 0); root.add(label);
+  const navMats = [];
+  const nav = (c, x, y, z, sz) => { const m = new THREE.SpriteMaterial({ map: GLOW_TEX, color: c, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 }); navMats.push(m); const sp = new THREE.Sprite(m); sp.position.set(x, y, z); sp.scale.set(sz, sz, 1); root.add(sp); };
+  nav(0xff3030, -0.15, 23.7, O50_MZ - 0.1, 2.1); nav(0x30ff70, 0.15, 23.7, O50_MZ - 0.1, 2.1); nav(0xffffff, 0, 23.7, O50_MZ + 0.15, 2.0);
+  nav(0xff3030, -O50_X - 0.35, 1.7, -5.8, 1.2); nav(0x30ff70, O50_X + 0.35, 1.7, -5.8, 1.2); nav(0xfff4dd, 0, 1.4, 7.6, 1.2);
+  const vane = new THREE.Group(); vane.position.set(0, 23.9, O50_MZ); vane.scale.setScalar(0.8); root.add(vane);
+  vane.add(new THREE.Mesh(VANE_GEO, MAT.dark)); const vFin = new THREE.Mesh(VANE_FIN, accMat); vFin.position.set(0, 0.18, 0.72); vane.add(vFin);
+  if (isPlayer) root.traverse(o => { if (o.isMesh && o.material && o.material.isMeshStandardMaterial) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(root);
+  return { root, boomPivot, mainMesh, heads, sheets, bowWave, keel, mast, hd: til, foilS, foilP, foilPos: [O50_X - 0.22, 0.1, -1.25, 0, 1.9], tri, wake: makeWake(), navMats, vane, awa: 0, cd: CD_O50,
+    kind: 'o50', param, mats: { hullMat, accMat, livS, livP }, isPlayer };
 }
 
 /* ----- Îles 3D ----- */
@@ -2123,6 +2258,36 @@ COURSES.indien = { id: 'indien', ocean: 'south', sea: 1.45, swellMin: 1.5, name:
   marks: [{ name: 'Arrivée · Fremantle', en: 'Finish · Fremantle', lat: -32.05, lon: 115.55, r: 3, finish: true }],
   accels: [60, 120, 300, 420, 600], defAccel: 300, accelsMini: [120, 300, 600, 900], defAccelMini: 600, box: [-50, -26, 12, 122] };
 COASTAL.forEach(c => { c.coastal = true; COURSES[c.id] = c; });
+/* ===== Course de la semaine (mode multi) : un parcours du large par semaine (lundi 0 h → dimanche 24 h, heure de Paris),
+   même météo toute la semaine pour tous, jouable avec toutes les classes (un classement par classe). Parcours d'une seule étape,
+   300 à 1 300 nm : 20 à 50 min de jeu. Rejeu serveur au pas de 5 s pour vérifier les chronos de plusieurs jours de course. ===== */
+const WSTEP = 5;
+COURSES.gascogne = { id: 'gascogne', week: true, name: 'Tour du golfe de Gascogne', en: 'Bay of Biscay loop', title: 'TOUR DU GOLFE DE GASCOGNE', zone: 'Golfe de Gascogne', zoneEn: 'Bay of Biscay', start: { lat: 47.42, lon: -3.42 }, firstWp: [45.6, -5.6],
+  marks: [{ name: 'Bouée Cap Ortegal', en: 'Cape Ortegal buoy', lat: 44.08, lon: -7.9, r: 2 }, { name: 'Plateau de Rochebonne', en: 'Rochebonne bank', lat: 46.2, lon: -2.62, r: 1.5 }, { name: 'Arrivée · Belle-Île', en: 'Finish · Belle-Île', lat: 47.42, lon: -3.42, r: 1.2, finish: true }],
+  accels: [30, 60, 120, 240], defAccel: 120, accelsMini: [60, 120, 240, 480], defAccelMini: 240, box: [43.3, 48.2, -9.0, -1.5] };
+COURSES.madere = { id: 'madere', week: true, name: 'Lorient → Madère', en: 'Lorient → Madeira', title: 'LORIENT → MADÈRE', zone: 'Atlantique Nord-Est', zoneEn: 'North-East Atlantic', start: { lat: 47.55, lon: -3.75 }, firstWp: [46.0, -6.5],
+  marks: [{ name: 'Arrivée · Funchal', en: 'Finish · Funchal', lat: 32.55, lon: -16.9, r: 1.5, finish: true }], accels: [60, 120, 300, 600], defAccel: 300, accelsMini: [120, 300, 600, 900], defAccelMini: 600, box: [31.5, 48.5, -19, -1.5] };
+COURSES.horta = { id: 'horta', week: true, name: 'Les Sables → Horta', en: 'Les Sables → Horta', title: 'LES SABLES → HORTA (AÇORES)', zone: 'Atlantique Nord', zoneEn: 'North Atlantic', start: { lat: 46.42, lon: -1.95 }, firstWp: [45.6, -6.0],
+  marks: [{ name: 'Arrivée · Horta (Faial)', en: 'Finish · Horta (Faial)', lat: 38.52, lon: -28.56, r: 2, finish: true }], accels: [60, 120, 300, 600], defAccel: 300, accelsMini: [120, 300, 600, 900], defAccelMini: 600, box: [36.5, 48.5, -31.5, 0.5] };
+COURSES.canaries = { id: 'canaries', week: true, name: 'Cascais → Las Palmas', en: 'Cascais → Las Palmas', title: 'CASCAIS → LAS PALMAS (CANARIES)', zone: 'Portugal · Canaries', zoneEn: 'Portugal · Canaries', start: { lat: 38.55, lon: -9.8 }, firstWp: [36.5, -11.0],
+  marks: [{ name: 'Arrivée · Las Palmas', en: 'Finish · Las Palmas', lat: 28.25, lon: -15.22, r: 1.5, finish: true }], accels: [60, 120, 240, 480], defAccel: 240, accelsMini: [120, 240, 480, 900], defAccelMini: 480, box: [27.0, 39.8, -19.5, -6.5] };
+COURSES.capvert = { id: 'capvert', week: true, name: 'Las Palmas → Mindelo', en: 'Las Palmas → Mindelo', title: 'LAS PALMAS → MINDELO (CAP-VERT)', zone: 'Alizés', zoneEn: 'Trade winds', start: { lat: 28.25, lon: -15.22 }, firstWp: [26.5, -17.0],
+  marks: [{ name: 'Arrivée · Mindelo', en: 'Finish · Mindelo', lat: 16.95, lon: -24.75, r: 1.5, finish: true }], accels: [60, 120, 300, 600], defAccel: 300, accelsMini: [120, 300, 600, 900], defAccelMini: 600, box: [15.5, 29.5, -27, -13] };
+COURSES.antilles = { id: 'antilles', week: true, name: 'Caraïbes 450 : Antigua → Martinique → Antigua', en: 'Caribbean 450: Antigua → Martinique → Antigua', title: 'CARAÏBES 450', zone: 'Antilles (alizés)', zoneEn: 'West Indies (trade winds)', start: { lat: 16.88, lon: -61.86 }, firstWp: [17.85, -61.6],
+  marks: [{ name: 'Barbuda (nord)', en: 'Barbuda (north)', lat: 17.86, lon: -61.8, r: 1.2 }, { name: 'Basse-Terre (ouest)', en: 'Basse-Terre (west)', lat: 16.15, lon: -62.02, r: 1.2 }, { name: 'Martinique (sud)', en: 'Martinique (south)', lat: 14.22, lon: -60.9, r: 1.5 },
+    { name: 'Arrivée · English Harbour', en: 'Finish · English Harbour', lat: 16.9, lon: -61.72, r: 1.2, finish: true }], accels: [30, 60, 120, 240], defAccel: 120, accelsMini: [60, 120, 240, 480], defAccelMini: 240, box: [13.8, 18.3, -62.8, -60.3] };
+const WEEKLY_POOL = ['fastnet', 'gascogne', 'madere', 'horta', 'canaries', 'capvert', 'antilles'];
+WEEKLY_POOL.forEach(id => { const c = COURSES[id]; c.week = true; let d = 0, p = c.start; c.marks.forEach(m => { d += gcDist(p.lat, p.lon, m.lat, m.lon); p = m; }); c.nm = Math.round(d / 10) * 10; });
+// semaine = date (Paris) du lundi ; tirage par la date, jamais deux fois de suite le même parcours
+function weekKey(d = new Date()) { const day = parisDay(d), t = new Date(day + 'T12:00:00Z'), wd = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - wd); return t.toISOString().slice(0, 10); }
+// rotation : chaque parcours une fois tous les 7 semaines, ordre mélangé à chaque cycle (graine = n° du cycle), jamais deux fois de suite
+function weekPerm(cy) { const P = WEEKLY_POOL.slice(); for (let i = P.length - 1; i > 0; i--) { const j = hash32('wperm|' + cy + '|' + i) % (i + 1); [P[i], P[j]] = [P[j], P[i]]; } return P; }
+function weeklyPick(wk) {
+  const n = Math.round((Date.parse(wk + 'T12:00:00Z') - Date.parse('2026-01-05T12:00:00Z')) / 604800000), L = WEEKLY_POOL.length, cy = Math.floor(n / L), k = ((n % L) + L) % L;
+  const P = weekPerm(cy); if (P[0] === weekPerm(cy - 1)[L - 1]) [P[0], P[1]] = [P[1], P[0]]; return P[k];
+}
+const weekEnd = wk => { const t = new Date(wk + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + 6); return t; };
+
 // régions (pour varier le tirage du défi du jour)
 COASTAL.forEach(c => { if (!c.region) c.region = c.id === 'galante' ? 'carib' : c.id === 'iroise' ? 'atl' : 'manche'; });
 const REGION_NAMES = { atl: ['Atlantique', 'Atlantic'], manche: ['Manche', 'Channel'], med: ['Méditerranée', 'Mediterranean'], egee: ['Mer Égée', 'Aegean'], maca: ['Macaronésie', 'Macaronesia'], carib: ['Caraïbes', 'Caribbean'] };
@@ -2147,7 +2312,7 @@ const boats = BOAT_DEFS.map(d => ({
   name: d.name, isPlayer: !!d.player, skill: d.skill || 1, hyst: d.hyst || 0, every: d.every || 12, strat: d.strat, color: hexCss(d.player ? d.acc : d.hull),
   def: d, visSet: {},
 }));
-const makeBoatOf = (cls, d) => cls === 'imoca' ? makeBoat(d.hull, d.acc, d.name, !!d.player) : makeMini(d.hull, d.acc, d.name, !!d.player, cls === 'proto', cls === 'c40');
+const makeBoatOf = (cls, d) => cls === 'imoca' ? makeBoat(d.hull, d.acc, d.name, !!d.player) : cls === 'o50' ? makeTri(d.hull, d.acc, d.name, !!d.player) : makeMini(d.hull, d.acc, d.name, !!d.player, cls === 'proto', cls === 'c40');
 boats.forEach(b => { b.vis = b.visSet.imoca = makeBoatOf('imoca', b.def); });
 const player = boats[0];
 const TRAIN_ACCELS = [1, 5, 10, 30];
@@ -2278,7 +2443,7 @@ function buildMarkVis() {
   if (MODE === 'race') markVis = curMarks().map(m => makeMarkVis(mN(m), m.finish ? 0x3dff9a : 0xffb000));
 }
 // durée estimée (h de course) d'un parcours côtier selon la classe
-const coastalEst = c => c.nm * 1.3 / (CLS.id === 'imoca' ? 16 : CLS.id === 'c40' ? 11.5 : CLS.id === 'proto' ? 9.5 : 8.5);
+const coastalEst = c => c.nm * 1.3 / (CLS.id === 'imoca' ? 16 : CLS.id === 'o50' ? 17.5 : CLS.id === 'c40' ? 11.5 : CLS.id === 'proto' ? 9.5 : 8.5);
 const COAST_ACCELS = [10, 20, 30, 60, 120, 240];
 const coastalAccel = c => { const tgt = coastalEst(c) * 3600 / (11 * 60); return COAST_ACCELS.reduce((a, b) => Math.abs(Math.log(b / tgt)) < Math.abs(Math.log(a / tgt)) ? b : a); };
 function setupMode(mode, courseId, restoring) {
@@ -2290,9 +2455,9 @@ function setupMode(mode, courseId, restoring) {
   POLYS.forEach(p => { if (p.mesh) { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh = null; } });
   ISLANDS = mkIslands(mode === 'race' ? RACE_ISLANDS : TRAIN_ISLANDS);
   buildLandGrid(); buildMarkVis();
-  if (!restoring) { if (DAILY.on && COURSE.coastal && mode === 'race') { const sd = DAILY.seed; WX_OFF = (sd % 90) * 86400 + ((sd >>> 8) % 24) * 3600; START_H = 9.5 + ((sd >>> 16) % 500) / 100 - COURSE.start.lon / 15; }
+  if (!restoring) { if (DAILY.on && (COURSE.coastal || DAILY.week) && mode === 'race') { const sd = DAILY.seed; WX_OFF = (sd % 90) * 86400 + ((sd >>> 8) % 24) * 3600; START_H = 9.5 + ((sd >>> 16) % 500) / 100 - COURSE.start.lon / 15; }
     else { WX_OFF = COURSE.coastal && mode === 'race' ? Math.floor(Math.random() * 90) * 86400 + Math.floor(Math.random() * 24) * 3600 : 0; START_H = COURSE.coastal && mode === 'race' ? 9.5 + Math.random() * 5 - COURSE.start.lon / 15 : 13; } }
-  if (mode === 'race') { active = boats.slice(); const mi = CLS.id !== 'imoca';
+  if (mode === 'race') { active = boats.slice(); const mi = CLS.id !== 'imoca' && CLS.id !== 'o50';
     if (COURSE.coastal) { ACCELS = COAST_ACCELS; accel = coastalAccel(COURSE); }
     else { ACCELS = mi ? COURSE.accelsMini : COURSE.accels; accel = mi ? COURSE.defAccelMini : COURSE.defAccel; } boats.forEach((b, i) => resetBoat(b, COURSE.start.lat + (i % 2) * 0.01, COURSE.start.lon - 0.05 + i * 0.02, 235)); }
   else { active = [player]; ACCELS = TRAIN_ACCELS; accel = 10; TRAIN_BUOYS.forEach(b => b.done = false); const s = tLL(2, -6); resetBoat(player, s[0], s[1], 0); }
@@ -2373,7 +2538,7 @@ function botDecide(b, w, dt) {
 }
 const ASSIST = 0.985;
 // probabilité horaire : nulle sous 17 nd, monte vite au-delà de 20 nd, pire en abattant trop peu (spi « chaud ») ou en bordant trop
-function broachRisk(a, tws, trim) { if (tws < 17) return 0; const hot = smooth(150, 110, a), over = Math.max(0, topt(a) - trim) * 3; return Math.pow((tws - 17) / 6, 2) * (0.35 + 1.4 * hot + over); }
+function broachRisk(a, tws, trim) { const T0 = CLS.broachT || 17; if (tws < T0) return 0; const hot = smooth(150, 110, a), over = Math.max(0, topt(a) - trim) * 3; return Math.pow((tws - T0) / 6, 2) * (0.35 + 1.4 * hot + over); }
 function setClass(id) {
   CLS = CLASSES[id] || CLASSES.imoca; SAILS = CLS.sails; PT.clear();
   MAN.tack.dur = CLS.man.tack; MAN.gybe.dur = CLS.man.gybe; MAN.sail.dur = CLS.man.sail; MAN.foil.dur = CLS.man.foil || 1;
@@ -2402,8 +2567,8 @@ function dailyStep() {
       else if (adv) { const tw = norm180(w.twd - adv.hdg), cur = norm180(w.twd - P.hdg), nh = Math.round(pilotSafe(P, (Math.sign(tw) !== Math.sign(cur) && Math.abs(tw) > 4) ? norm360(w.twd - Math.sign(cur || 1) * Math.abs(tw)) : adv.hdg, w.twd)); if (P.mode !== 'cap' || Math.abs(norm180(nh - P.hdg)) >= 1) { P.mode = 'cap'; P.hdg = nh; } } }
     if (DAILY.log) { const c = ctlOf(P), js = JSON.stringify(c); if (js !== DAILY.lastCtl) { DAILY.log.ev.push([DAILY.K, 'c', c]); DAILY.lastCtl = js; } }
   }
-  IN_STEP = true; try { for (const b of active) stepBoat(b, DSTEP); } finally { IN_STEP = false; }
-  gameT += DSTEP; DAILY.K++;
+  const st = DAILY.step || DSTEP; IN_STEP = true; try { for (const b of active) stepBoat(b, st); } finally { IN_STEP = false; }
+  gameT += st; DAILY.K++;
   DAILY.lastCtl = JSON.stringify(ctlOf(P)); // état après le pas : seules les modifications faites entre deux pas (joueur, pilote) seront enregistrées
 }
 const snapBoat = b => JSON.parse(JSON.stringify(Object.fromEntries(BFIELDS.map(k => [k, b[k]]))));
@@ -2415,12 +2580,13 @@ function replayDaily(log) {
   const sv = { gameT, K: DAILY.K, on: DAILY.on }, ev = log.ev; let i = 0;
   gameT = 0; DAILY.K = 0; DAILY.on = true; IN_STEP = true;
   try {
-    while (!R.finished && gameT < 4 * 86400) {
+    const st = DAILY.step || DSTEP, tMax = (DAILY.week ? 16 : 4) * 86400;
+    while (!R.finished && gameT < tMax) {
       while (i < ev.length && ev[i][0] <= DAILY.K) { const e = ev[i++]; if (e[1] === 'c') applyCtl(R, e[2]); else if (e[1] === 'm') requestMan(R, JSON.parse(JSON.stringify(e[2]))); else if (e[1] === 'x') cancelLastMan(R); }
-      stepBoat(R, DSTEP); gameT += DSTEP; DAILY.K++;
+      stepBoat(R, st); gameT += st; DAILY.K++;
     }
   } finally { gameT = sv.gameT; DAILY.K = sv.K; DAILY.on = sv.on; IN_STEP = false; }
-  if (R.finished) R.gRec.push([Math.round(R.finishT), +R.lat.toFixed(5), +R.lon.toFixed(5), Math.round(R.hdg), +R.spd.toFixed(1), R.sail, R.mi, 0, R.reef || 0]);
+  if (R.finished) R.gRec.push([Math.round(R.finishT), +R.lat.toFixed(5), +R.lon.toFixed(5), Math.round(R.hdg), +R.spd.toFixed(1), R.sail, R.mi, 0, R.reef || 0, +(R.log || 0).toFixed(1)]);
   return { T: R.finished ? R.finishT : null, trace: R.gRec, pens: R.pens || 0 };
 }
 /* ===== Matossage et vol (IMOCA, Proto à foils) =====
@@ -2433,7 +2599,7 @@ function replayDaily(log) {
    - Plantage : vitesse ÷ 2, le bateau se vautre 1 à 2 min avant de pouvoir redécoller ; les plantages répétés
      rendent le décollage plus exigeant. Tirages déterministes pour le défi du jour.
    - Mode auto (prudent) : un peu en arrière et au vent de l'idéal → le moins de plantages, pas la meilleure vitesse. */
-const BAL = { imoca: { tol: 1, vs: 31, rate: 100, wk: 1 }, proto: { tol: 1.3, vs: 23, rate: 70, wk: 0.78 } }; // rate : durée d'un décollage complet (s de course)
+const BAL = { imoca: { tol: 1, vs: 31, rate: 100, wk: 1 }, o50: { tol: 1.2, vs: 34, rate: 80, wk: 0.85 }, proto: { tol: 1.3, vs: 23, rate: 70, wk: 0.78 } }; // rate : durée d'un décollage complet (s de course)
 /* Vent minimal pour voler (IMOCA) : ≈ 12 nd au travers, 13,5-14 au portant, 16-18 au près ; ×0,78 pour le Proto.
    Décollage (≈ 1 min 40) : 0-10 s le bateau accélère, 10-30 s les foils portent fort, 30-60 s la coque se soulève, 1-2 min vol stable. */
 const FLY_TWS = [[40, 18], [55, 17], [70, 14.5], [85, 12], [115, 12], [135, 13.5], [180, 14]];
@@ -2526,7 +2692,7 @@ function stepBoat(b, dt) {
     // Mini : sous spi dans la brise, risque de départ au lof (le bateau se couche, le spi faseye, grosse perte de vitesse)
     if (CLS.broach && b.sail === 2 && !b.man && b.hoist > 0.9) {
       const r = broachRisk(a, w.tws, b.trim) * (1 - 0.35 * (b.reef || 0));
-      if (r > 0 && (DAILY.on && pl ? hrand(DAILY.seed ^ 0x51ed, DAILY.K) : Math.random()) < 1 - Math.exp(-r * dt / 3600)) { applyPenalty(b, 'Départ au lof sous spi', 0.35, 420); b.broachT = 1; if (b.isPlayer && running) { toast('💥 Départ au lof ! Le Mini se couche sous spi — choque ou affale', 3500); sfxSplash(1.2); camKick = 0.6; } }
+      if (r > 0 && (DAILY.on && pl ? hrand(DAILY.seed ^ 0x51ed, DAILY.K) : Math.random()) < 1 - Math.exp(-r * dt / 3600)) { const tri = CLS.tri; applyPenalty(b, tri ? 'Quasi-chavirage sous gennaker' : 'Départ au lof sous spi', tri ? 0.3 : 0.35, tri ? 600 : 420); b.broachT = 1; if (b.isPlayer && running) { toast(tri ? T('💥 Le flotteur sous le vent enfourne, le trimaran se cabre — choque, prends un ris ou affale le gennaker', '💥 The lee float buries and the trimaran rears up — ease, reef or drop the gennaker') : T('💥 Départ au lof ! Le bateau se couche sous spi — choque ou affale', '💥 Broach! The boat lies down under spinnaker — ease or drop'), 3500); sfxSplash(1.2); camKick = 0.6; } }
     }
     if (b.penT > 0) { target *= b.penF; b.penT -= dt; }
     b.spd += (target - b.spd) * (1 - Math.exp(-dt / CLS.tau));
@@ -2545,7 +2711,7 @@ function stepBoat(b, dt) {
     }
   }
   if (MODE === 'train' && b.isPlayer) TRAIN_BUOYS.forEach(bu => { if (!bu.done && gcDist(b.lat, b.lon, bu.lat, bu.lon) < 0.27) { bu.done = true; sfxChime(); const n = TRAIN_BUOYS.filter(x => x.done).length; toast(`Bouée ${bu.name} validée (${n}/${TRAIN_BUOYS.length})${n === TRAIN_BUOYS.length ? ' — tour complet en ' + fmtClock(gameT) + ' !' : ''}`, 3000); } });
-  if ((b.isPlayer || b.replay) && MODE === 'race' && !b.finished && !b.atStop) { const rt = raceTime(b); if (rt - b.gRecT >= (COURSE.coastal ? 60 : COURSE.id === 'fastnet' ? 600 : 1800)) { b.gRec.push([Math.round(rt), +b.lat.toFixed(5), +b.lon.toFixed(5), Math.round(b.hdg), +b.spd.toFixed(1), b.sail, b.mi, (b.foilP > 0.5 ? 2 : 0) + (b.foilS > 0.5 ? 1 : 0), b.reef || 0]); b.gRecT = rt; } }
+  if (!b.isGhost && MODE === 'race' && !b.finished && !b.atStop) { const rt = raceTime(b); if (rt - b.gRecT >= (COURSE.coastal ? 60 : COURSE.id === 'fastnet' || (COURSE.week && COURSE.nm < 800) ? 600 : 1800)) { b.gRec.push([Math.round(rt), +b.lat.toFixed(5), +b.lon.toFixed(5), Math.round(b.hdg), +b.spd.toFixed(1), b.sail, b.mi, (b.foilP > 0.5 ? 2 : 0) + (b.foilS > 0.5 ? 1 : 0), b.reef || 0, +(b.log || 0).toFixed(1)]); b.gRecT = rt; } }
   b.trackT += dt;
   if (b.trackT > (MODE === 'race' ? (COURSE.id === 'fastnet' ? 1200 : 3600) : 60)) { b.trackT = 0; b.track.push([b.lat, b.lon]); }
 }
@@ -3395,6 +3561,7 @@ const CLS_INFO = {
   imoca: { n: ['IMOCA 60 à foils', 'Foiling IMOCA 60'], spec: ['18,3 m · foils', '18.3 m · foils'], d: ['14 nd au près, 25-30 nd au reaching foils baissés. Manœuvres longues.', '14 kn upwind, 25-30 kn reaching on foils. Long manoeuvres.'] },
   c40: { n: ['Class40', 'Class40'], spec: ['12,2 m · scow, sans foils', '12.2 m · scow, no foils'], d: ['8 nd au près, planning à 16-20 nd au portant. Ris, manœuvres moyennes.', '8 kn upwind, planing at 16-20 kn downwind. Reefs, medium manoeuvres.'] },
   mini: { n: ['Mini 6.50 série', 'Mini 6.50 series'], spec: ['6,5 m · sans foils', '6.5 m · no foils'], d: ['6 nd au près, surfs à 12-18 nd. Manœuvres rapides, ris, gare au départ au lof.', '6 kn upwind, surfs at 12-18 kn. Quick manoeuvres, reefs, beware of broaches.'] },
+  o50: { n: ['Ocean Fifty', 'Ocean Fifty'], spec: ['15,2 m · trimaran, foils de flotteurs', '15.2 m · trimaran, float foils'], d: ['12-15 nd au près, 25-34 nd au reaching. Le plus rapide dans le petit temps ; gare au chavirage sous gennaker dans la brise.', '12-15 kn upwind, 25-34 kn reaching. Fastest in light air; beware of capsizing under gennaker in a breeze.'] },
   proto: { n: ['Mini 6.50 proto', 'Mini 6.50 proto'], spec: ['6,5 m · foils, quille pendulaire', '6.5 m · foils, canting keel'], d: ['+8 % partout, jusqu\'à 18-20 nd au reaching. Ris et foils.', '+8 % everywhere, up to 18-20 kn reaching. Reefs and foils.'] },
 };
 const clsName = id => T(...CLS_INFO[id].n);
@@ -3421,7 +3588,7 @@ function courseThumb(c, W = 300, H = 170, extra) {
   if (extra) return cv; return (THUMBS[key] = cv.toDataURL());
 }
 /* ----- Défi du jour : 2 parcours (régions différentes) × 2 classes, tirés au sort par la date ----- */
-const DAILY_CLASSES = ['imoca', 'c40', 'mini', 'proto'];
+const DAILY_CLASSES = ['imoca', 'o50', 'c40', 'proto']; // Mini série retirée du jeu (gardée pour relire les anciennes sauvegardes)
 function dailyPick(day) {
   const h = hash32('pool|' + day), ids = COASTAL.map(c => c.id), a = ids[h % ids.length]; let b = a;
   for (let k = 1; k < 64 && (b === a || COURSES[b].region === COURSES[a].region); k++) b = ids[hash32('pool2|' + day + '|' + k) % ids.length];
@@ -3449,9 +3616,9 @@ function showMenu(view = 'home') {
     ${!tutoDone() && !running ? `<div class="tutoInv"><span>🎓 <b>${T('Première fois ?', 'First time?')}</b> ${T('Tutoriel guidé de 4 minutes : barrer, régler, virer, router.', '4-minute guided tutorial: steer, trim, tack, route.')}</span><button id="tutoGo">${T('Lancer', 'Start')}</button><button id="tutoNo" class="sec">${T('Non merci', 'No thanks')}</button></div>` : ''}
     <nav class="mmnav">
       ${running ? `<button id="resume"><b>▶ ${T('Reprendre la course', 'Resume race')}</b><small>${MODE === 'race' ? cN(COURSE) : T('Navigation libre', 'Free sailing')} · ${CLS.name}</small></button>` : sv ? `<button id="goLoad"><b>💾 ${T('Continuer', 'Continue')}</b><small>${svCourse} · ${sv.mode === 'race' ? fmtRace(sv.gameT) : fmtClock(sv.gameT)}</small></button>` : ''}
-      <button id="goMulti" data-default><b>🌐 ${T('Défi du jour', 'Daily challenge')}</b><small>${dc} — ${dl}</small></button>
+      <button id="goMulti" data-default><b>🌐 ${T('Multi : défi du jour & course de la semaine', 'Multiplayer: daily challenge & race of the week')}</b><small>${dc} — ${dl} · 🌊 ${cN(COURSES[weeklyPick(weekKey())])}</small></button>
       <button id="goSolo"><b>🧭 Solo</b><small>${T(`Transat, Mini Transat, Fastnet, ${COASTAL.length} côtiers, entraînement`, `Transat, Mini Transat, Fastnet, ${COASTAL.length} coastal courses, training`)}</small></button>
-      <button id="goBoards"><b>🏆 ${T('Classements', 'Leaderboards')}</b><small>${NET.ok ? T('Les 4 classements du jour en ligne', 'Today\'s 4 online leaderboards') : T('Tes essais et fantômes du jour', 'Your attempts and ghosts today')}</small></button>
+      <button id="goBoards"><b>🏆 ${T('Classements', 'Leaderboards')}</b><small>${NET.ok ? T('Classements du jour et de la semaine en ligne', 'Daily and weekly online leaderboards') : T('Tes essais et fantômes du jour', 'Your attempts and ghosts today')}</small></button>
       <button id="goSet"><b>⚙ ${T('Réglages', 'Settings')}</b><small>${T('Langue, graphismes, son, profil en ligne', 'Language, graphics, sound, online profile')}</small></button>
       <button id="goHelp"><b>📖 ${T('Aide & commandes', 'Help & controls')}</b><small>${T('Manœuvres, voiles, foils, routeur', 'Manoeuvres, sails, foils, router')}</small></button>
     </nav>
@@ -3459,8 +3626,10 @@ function showMenu(view = 'home') {
     <aside class="mmside"><h3>🌐 ${T('Défi du jour', 'Daily challenge')} · ${dayTxt}</h3>
       <div class="dprev">${pick.courses.map(id => `<div><img src="${courseThumb(COURSES[id])}" alt=""><b>${cN(COURSES[id])}</b><span>${cZ(COURSES[id])}</span></div>`).join('')}</div>
       <div class="chips">${pick.classes.map(id => `<span class="chip">${clsName(id)}</span>`).join('')}</div>
-      <button id="goMulti2">${T('Relever les défis', 'Take the challenges')} →</button></aside>`; }
+      <button id="goMulti2">${T('Relever les défis', 'Take the challenges')} →</button>
+      <h3 style="margin-top:14px">🌊 ${T('Course de la semaine', 'Race of the week')}</h3>${(() => { const c = COURSES[weeklyPick(weekKey())]; return `<div class="dprev"><div><img src="${courseThumb(c)}" alt=""><b>${cN(c)}</b><span>${c.nm} nm · ${T('toutes classes', 'all classes')}</span></div></div>`; })()}</aside>`; }
   else if (view === 'multi') html += `${BACK}
+    ${weeklyBlock()}
     <h3>🌐 ${T('Défi du jour', 'Daily challenge')} — ${dayTxt}</h3>
     <p>${T('Deux parcours et deux classes par jour, tirés au sort. Même météo, mêmes prévisions et même hasard pour tous jusqu\'à minuit. Ton premier essai sur chaque défi rapporte les points de place ; ensuite, seul un nouveau record du jour rapporte un bonus. Pas encore de fantôme ? Tu cours contre les bots.', 'Two courses and two classes per day, drawn at random. Same weather, same forecasts and same luck for everyone until midnight. Your first attempt on each challenge earns placing points; after that only a new daily record earns a bonus. No ghosts yet? You race the bots.')}</p>
     ${netBlock()}
@@ -3503,8 +3672,8 @@ function showMenu(view = 'home') {
   $('card').querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { SOLO_TAB = b.dataset.tab; showMenu('solo'); });
   $('card').querySelectorAll('[data-reg]').forEach(b => b.onclick = () => { REG_F = b.dataset.reg; showMenu('solo'); });
   $('card').querySelectorAll('.clsPick [data-cls]').forEach(b => b.onclick = () => { const id = b.dataset.cls; if (CLS.id === id) return; const wasRunning = running; running = false; setClass(id); if (!DAILY.on) setupMode(MODE, COURSE.id); if (wasRunning) toast(T(`Classe ${CLS.name} : choisis une course pour repartir`, `${CLS.name}: pick a course to start again`), 2500); showMenu(view); });
-  $('card').querySelectorAll('[data-daily]').forEach(bt => bt.onclick = () => { const cl = bt.dataset.dcls; if (cl && CLS.id !== cl) setClass(cl); startDaily(bt.dataset.daily); });
-  $('card').querySelectorAll('[data-board]').forEach(bt => bt.onclick = () => showBoard(bt.dataset.board, bt.dataset.dcls));
+  $('card').querySelectorAll('[data-daily]').forEach(bt => bt.onclick = () => { const cl = bt.dataset.dcls; if (cl && CLS.id !== cl) setClass(cl); startDaily(bt.dataset.daily, bt.dataset.week === '1'); });
+  $('card').querySelectorAll('[data-board]').forEach(bt => bt.onclick = () => showBoard(bt.dataset.board, bt.dataset.dcls, bt.dataset.week === '1'));
   bindNetBlock(); bindRecovery();
   $('card').querySelectorAll('[data-coast]').forEach(bt => bt.onclick = () => { const c = COURSES[bt.dataset.coast]; solo(); initAudio(); launch(ldInfo(c), () => setupMode('race', c.id), T(`Départ : ${cN(c)} ! ${c.marks.length - 1} marque${c.marks.length > 2 ? 's' : ''} à virer, ≈ ${c.nm} nm.`, `Start: ${cN(c)}! ${c.marks.length - 1} mark${c.marks.length > 2 ? 's' : ''} to round, ≈ ${c.nm} nm.`)); });
   on('goMiniT', () => { solo(); initAudio(); launch(ldInfo(COURSES.minitransat), () => setupMode('race', 'minitransat'), T('Départ de la Mini Transat ! Étape 1 : Les Sables → La Palma (≈ 1 350 nm).', 'Mini Transat start! Leg 1: Les Sables → La Palma (≈ 1,350 nm).')); });
@@ -3533,7 +3702,7 @@ const LD_TIPS = [
   ['En Mini et en Class40, prends un ris avant le départ au lof sous spi.', 'In a Mini or Class40, reef before broaching under spinnaker.'],
   ['Défi du jour : même météo pour tout le monde, seul ton routage fait la différence.', 'Daily challenge: same weather for everyone, only your routing makes the difference.'],
 ];
-function ldInfo(c, daily) { return { t: (daily ? T('Défi du jour · ', 'Daily challenge · ') : '') + cN(c), s: CLS.name + (c.coastal ? ` · ${cZ(c)} · ${c.nm} nm` : ''), img: c.box ? courseThumb(c, 640, 360) : null }; }
+function ldInfo(c, daily) { return { t: (daily === 'week' ? T('Course de la semaine · ', 'Race of the week · ') : daily ? T('Défi du jour · ', 'Daily challenge · ') : '') + cN(c), s: CLS.name + (c.coastal || c.week ? ` · ${cZ(c)} · ${c.nm} nm` : ''), img: c.box ? courseThumb(c, 640, 360) : null }; }
 async function launch(info, prep, msg) {
   if (LAUNCHING) return; LAUNCHING = true; MENU_CINE = false;
   const tip = LD_TIPS[Math.floor(Math.random() * LD_TIPS.length)], step = (t, p) => { $('ldStep').textContent = t; $('ldBar').style.width = Math.round(p * 100) + '%'; };
@@ -3545,7 +3714,7 @@ async function launch(info, prep, msg) {
     const r = await prep(); if (m === undefined) m = r;
     step(T('Modèles 3D…', '3D models…'), 0.2); await nextFrame();
     if (CLS.id === 'imoca') await Promise.race([MODELS_P, ldSleep(6000)]);
-    if (CLS.id !== 'imoca') { const k = CLS.id === 'c40' ? 'c40' : 'mini'; await Promise.race([loadSmallModels(k) || Promise.resolve(), ldSleep(6000)]); }
+    if (CLS.id !== 'imoca' && CLS.id !== 'o50') { const k = CLS.id === 'c40' ? 'c40' : 'mini'; await Promise.race([loadSmallModels(k) || Promise.resolve(), ldSleep(6000)]); }
     IMOCA_VIS.forEach(applyImocaModel); SMALL_VIS.forEach(applySmallModel); if (player.vis) player.vis.fp = null;
     step(T('Météo et prévisions…', 'Weather and forecasts…'), 0.3); await nextFrame(); try { drawMap(); } catch (e) {}
     const t0 = performance.now();
@@ -3575,12 +3744,13 @@ function showHelp(fromMenu) {
   if (LANG === 'en') { $('card').innerHTML = HELP_EN() + `<div class="go"><button id="hClose" data-default>${fromMenu ? '← Menu' : '▶ Resume'}</button></div>`; $('overlay').classList.remove('hide'); $('hClose').onclick = () => { if (fromMenu) return showMenu(typeof fromMenu === 'string' ? fromMenu : 'solo'); $('overlay').classList.add('hide'); paused = false; }; return; }
   $('card').innerHTML = `<h1>Aide</h1>
     <h3>Manœuvres</h3><p>Le skipper fait <b>une manœuvre à la fois</b>, les suivantes attendent dans une file (3 au plus). Durées en temps de course : <b>virement</b> 5 min (jusqu'à −55 %), <b>empannage</b> 6 min, <b>changement de voile</b> 10 min (−38 %), <b>foils</b> 4 min (−8 %). Pendant un virement ou un empannage la barre est bloquée. Passer le vent sans manœuvre demandée = manœuvre « non préparée », qui coûte quand même.</p>
-    <h3>Matossage et vol (IMOCA, Proto à foils)</h3><p>Le carré <b>MATOS.</b> place le poids à bord : haut = avant, bas = arrière, gauche = bâbord, droite = tribord (touches <kbd>Z</kbd> <kbd>S</kbd> <kbd>W</kbd> <kbd>E</kbd>, <kbd>U</kbd> = auto). Le poids reste du même bord après un virement : pense à le basculer. Pour <b>décoller</b> il faut le foil sous le vent baissé, assez de vent (IMOCA ≈ 12 nd au travers, 14 au portant, 17 au près) et le bon poids. Le décollage prend 1 à 2 min : le bateau accélère, les foils portent, la coque se soulève puis le vol se stabilise. trop sur l'avant le bateau ne décolle pas, trop sur l'arrière il décolle puis l'arrière décroche. <b>En vol</b>, trop sous le vent le foil décroche et le bateau plante ; trop au vent il gîte moins et le foil porte moins. Les jauges <b>Assiette</b> et <b>Gîte</b> montrent l'angle que donne ton réglage (aiguille) et l'angle optimal (zone verte) : garde l'aiguille dans le vert. Comme à bord, tu ne déplaces pas le matossage à chaque vague (le skipper encaisse les à-coups) : la zone verte bouge avec les trains de houle (sur quelques heures), la vitesse et l'allure — à recaler après une manœuvre, une bascule ou quand la mer se forme. Au-delà de ≈ 31 nd (IMOCA) le foil peut décrocher en survitesse. Un plantage fait chuter la vitesse de 60 % et il faut 2,5 à 5 min avant de redécoller. Le mode <b>Auto</b> est prudent : le moins de plantages, mais le rendement des foils est limité à 75 %. Le meilleur rendement se trouve un peu sur l'avant et sous le vent de la zone verte, au prix de plus de plantages.</p>
+    <h3>Matossage et vol (IMOCA, Ocean Fifty, Proto à foils)</h3><p>Le carré <b>MATOS.</b> place le poids à bord : haut = avant, bas = arrière, gauche = bâbord, droite = tribord (touches <kbd>Z</kbd> <kbd>S</kbd> <kbd>W</kbd> <kbd>E</kbd>, <kbd>U</kbd> = auto). Le poids reste du même bord après un virement : pense à le basculer. Pour <b>décoller</b> il faut le foil sous le vent baissé, assez de vent (IMOCA ≈ 12 nd au travers, 14 au portant, 17 au près) et le bon poids. Le décollage prend 1 à 2 min : le bateau accélère, les foils portent, la coque se soulève puis le vol se stabilise. trop sur l'avant le bateau ne décolle pas, trop sur l'arrière il décolle puis l'arrière décroche. <b>En vol</b>, trop sous le vent le foil décroche et le bateau plante ; trop au vent il gîte moins et le foil porte moins. Les jauges <b>Assiette</b> et <b>Gîte</b> montrent l'angle que donne ton réglage (aiguille) et l'angle optimal (zone verte) : garde l'aiguille dans le vert. Comme à bord, tu ne déplaces pas le matossage à chaque vague (le skipper encaisse les à-coups) : la zone verte bouge avec les trains de houle (sur quelques heures), la vitesse et l'allure — à recaler après une manœuvre, une bascule ou quand la mer se forme. Au-delà de ≈ 31 nd (IMOCA) le foil peut décrocher en survitesse. Un plantage fait chuter la vitesse de 60 % et il faut 2,5 à 5 min avant de redécoller. Le mode <b>Auto</b> est prudent : le moins de plantages, mais le rendement des foils est limité à 75 %. Le meilleur rendement se trouve un peu sur l'avant et sous le vent de la zone verte, au prix de plus de plantages.</p>
     <h3>Systèmes météo (au large)</h3><p><b>A</b> anticyclone des Açores : vent faible au centre, alizés sur son flanc sud. <b>D</b> dépressions d'ouest, chacune avec un <b>front froid</b> (ligne bleue ▲ : grains, forte bascule du vent au passage) et un <b>front chaud</b> (rouge ●). Entre deux dépressions, une <b>dorsale</b> (tirets bleus) : vent mou, à traverser vite ou à contourner. Parfois une <b>goutte froide</b> (D violet) isolée près des Açores, et des <b>ondes tropicales</b> (tirets orange) qui traversent les alizés avec grains et bascules. Le <b>pot-au-noir</b> reste vers 5° N.</p>
     <h3>Prévisions météo</h3><p>Les cartes et le routeur utilisent une <b>prévision</b>, publiée toutes les 6 à 9 min de jeu réel (compteur dans le panneau). Elle est fiable à courte échéance puis s'écarte de la réalité : dépressions décalées, en avance ou en retard, vent ±12 % à 4-5 jours. À chaque nouveau run, le routage est recalculé : c'est le moment de revoir ta stratégie.</p>
-    <h3>Ris (Minis)</h3><p>Au-delà de ~18 nd au près (~23 nd au portant) le Mini est surtoilé et perd de la vitesse : prends 1 ris, puis 2 au-dessus de ~24 / 30 nd. Chaque ris coûte de la puissance dans le petit temps, réduit la gîte et le risque de départ au lof. Manœuvre : 2 min 30.</p>
+    <h3>Ris (Minis, Class40, Ocean Fifty)</h3><p>Au-delà de ~18 nd au près (~23 nd au portant) le Mini est surtoilé et perd de la vitesse : prends 1 ris, puis 2 au-dessus de ~24 / 30 nd. Chaque ris coûte de la puissance dans le petit temps, réduit la gîte et le risque de départ au lof. Manœuvre : 2 min 30.</p>
+    <h3>Course de la semaine (multi)</h3><p>Un parcours du large de 450 à 1 300 nm par semaine (Fastnet, golfe de Gascogne, Madère, Açores, Canaries, Cap-Vert, Caraïbes), même météo pour tous du lundi au dimanche soir. Toutes les classes, un classement par classe ; les chronos sont vérifiés par rejeu sur le serveur et servent de fantômes aux autres joueurs.</p>
     <h3>Mini Transat</h3><p>Deux étapes. À l'escale de La Palma, la flotte termine son étape puis repart ensemble. Classement final au temps cumulé.</p>
-    <h3>Trois classes, trois façons de naviguer</h3><p><b>Mini proto</b> : comme le Mini série, plus rapide (+8 %) et avec des foils qui portent dès ~9-13 nd de vitesse (jusqu'à +34 % au reaching), une quille pendulaire et des manœuvres de foils rapides (1 min).</p><p><b>IMOCA</b> : bateau lourd et puissant, il réagit lentement (≈ 1 min 30 pour prendre sa vitesse) ; tout se joue sur les <b>foils</b> au reaching et sur des manœuvres longues (5-10 min). <b>Mini 6.50</b> : bateau léger, il accélère en 30 s et manœuvre vite (virement 1 min 30, empannage 2 min 30, voile 5 min). Pas de foils : au portant il <b>surfe</b> dans les vagues (jusqu'à +45 % par instants) et souffre au près dans la mer formée (dès 18 nd). Sous <b>spi</b> au-delà de ~18 nd, risque de <b>départ au lof</b> (vitesse −65 % pendant 7 min) : abats, choque ou passe au Génois (code 5).</p>
+    <h3>Quatre classes, quatre façons de naviguer</h3><p><b>IMOCA</b> : bateau lourd et puissant, il réagit lentement (≈ 1 min 30 pour prendre sa vitesse) ; tout se joue sur les <b>foils</b> au reaching et sur des manœuvres longues (5-10 min).</p><p><b>Ocean Fifty</b> : trimaran de 15 m pour 4 t, le plus rapide dans le petit temps et au reaching (25-34 nd), moins bon au près serré (optimum ≈ 50°). Foils de flotteur, ris, manœuvres de 3-4 min. Sous <b>gennaker</b> au-delà de ~23 nd, le flotteur sous le vent peut enfourner (quasi-chavirage, vitesse −70 % pendant 10 min) : choque, prends un ris ou passe au Génois (code 0).</p><p><b>Class40</b> : scow de 12 m sans foils, planant au portant ; ris et départs au lof sous spi dans la brise.</p><p><b>Mini proto</b> : 6,50 m léger, il accélère en 30 s et manœuvre vite (virement 1 min 40). Ses foils portent dès ~9-13 nd de vitesse (jusqu'à +34 % au reaching), quille pendulaire. Au portant il <b>surfe</b> dans les vagues ; sous <b>spi</b> au-delà de ~17 nd, risque de <b>départ au lof</b> : abats, choque ou passe au Génois (code 5).</p>
     <h3>Foils, voiles, écoute</h3><p>Baisse le foil <b>sous le vent</b> (vent sur tribord → foil bâbord) : jusqu'à ~24 % de vitesse au reaching dès 12–16 nd. Un foil au vent freine. <b>Foc</b> : près dans la brise · <b>Génois</b> : près dans le petit temps jusqu'au travers · <b>Spi</b> : du largue au vent arrière. Plus tu abats, plus tu choques.</p>
     <h3>Routeur</h3><p>Calcul par <b>isochrones</b> vers la prochaine marque ou un point choisi, d'après les polaires de l'IMOCA et les prévisions, en évitant les terres et en comptant les virements. <b>Le routeur ne manœuvre jamais à ta place</b> : il annonce la prochaine manœuvre (virement ou empannage, dans combien de temps), alerte un peu avant puis au moment de la faire, et conseille les foils (lequel baisser, quand changer) et la voile. Le pilote routeur tient le cap conseillé mais garde son bord tant que tu n'as pas viré. Les adversaires se routent eux aussi, chacun à sa cadence (6 à 24 h) : leurs routes apparaissent en pointillés sur la carte agrandie.</p>
     <h3>Mer et sons</h3><p>La houle et la mer du vent grossissent avec le vent : creux, crêtes plus raides, moutons puis stries d'écume au-delà de 25 nd. L'étrave tape dans les vagues (gerbes et bruit), les foils projettent des embruns quand le bateau vole. Les sons sont synthétisés : vent apparent, eau sur la coque, faseyement, winchs pendant les manœuvres.</p>
@@ -3643,7 +3813,7 @@ const lvlName = n => T(n, LEVELS_EN[n] || n), awardLbl = x => x;
 function loadProfile() { try { const p = JSON.parse(localStorage.getItem('gl3d_profile')); if (p && typeof p.pts === 'number') return p; } catch (e) {} return { pts: 0, races: 0, wins: 0, podiums: 0, hist: [] }; }
 function saveProfile(p) { try { localStorage.setItem('gl3d_profile', JSON.stringify(p)); } catch (e) {} }
 function levelOf(pts) { let i = 0; while (i < LEVELS.length - 1 && pts >= LEVELS[i + 1][0]) i++; const min = LEVELS[i][0], nx = LEVELS[i + 1]; return { i, name: LEVELS[i][1], min, next: nx ? nx[0] : null, nextName: nx ? nx[1] : null, prog: nx ? (pts - min) / (nx[0] - min) : 1 }; }
-const courseBase = () => COURSE.coastal ? Math.round(60 + COURSE.nm) : ({ fastnet: 250, transat: 400, minitransat: 500, indien: 550, sas: 420 })[COURSE.id] || 150;
+const courseBase = () => COURSE.coastal ? Math.round(60 + COURSE.nm) : DAILY.on && DAILY.week ? Math.round(120 + COURSE.nm * 0.25) : ({ fastnet: 250, transat: 400, minitransat: 500, indien: 550, sas: 420 })[COURSE.id] || 150;
 function awardPoints(rank, prevBest) {
   const N = active.length, base = courseBase(), f = N > 1 ? (N - rank) / (N - 1) : 1, items = [[T(`${ord(rank)} sur ${N}`, `${ord(rank)} of ${N}`), Math.round(base * (0.25 + 0.75 * f))]];
   if (rank === 1) items.push([T('Victoire', 'Win'), Math.round(base * 0.25)]); else if (rank <= 3) items.push(['Podium', Math.round(base * 0.1)]);
@@ -3674,6 +3844,14 @@ async function netInit() {
   if (MENU_VIEW === 'multi' && !$('overlay').classList.contains('hide') && !running) showMenu('multi');
 }
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+function weeklyBlock() {
+  const wk = weekKey(), id = weeklyPick(wk), c = COURSES[id], end = weekEnd(wk), left = Math.max(0, Math.ceil((end.getTime() + 12 * 3600e3 - Date.now()) / 86400e3));
+  const est = cl => { const v = { imoca: 16, o50: 18, c40: 11, proto: 8.5 }[cl] || 12; return c.nm / v; };
+  return `<div class="mode" style="margin:0 0 14px;border-color:rgba(0,200,255,.45)"><h3 style="margin:0 0 6px">🌊 ${T('Course de la semaine', 'Race of the week')} — ${cN(c)}</h3>
+    <p style="margin:0 0 8px">${cZ(c)} · ${c.nm} nm · ${T(`même météo pour tous jusqu'à dimanche minuit (encore ${left} j)`, `same weather for everyone until Sunday midnight (${left} d left)`)}. ${T('Toutes les classes, un classement par classe. Ton premier essai de la semaine rapporte les points de place.', 'All classes, one leaderboard per class. Your first attempt of the week earns placing points.')}</p>
+    <div class="wkcard"><img src="${courseThumb(c, 420, 210)}" alt=""><div class="wkcls">
+    ${DAILY_CLASSES.map(cl => { const d = dailyLoad(`gl3d_week_${wk}_${id}_${cl}`); return `<div class="dcls"><div><b>${clsName(cl)}</b><small>${d.runs.length ? `🏁 ${fmtDur(d.runs[0].T)} · ${plural(d.n, 'essai', 'attempt')}${d.pts ? ' · ✓ pts' : ''}` : T(`≈ ${Math.round(est(cl))} h de course`, `≈ ${Math.round(est(cl))} h race`)}</small></div><button data-daily="${id}" data-dcls="${cl}" data-week="1">${d.runs.length ? T('Nouvel essai', 'Try again') : T('Prendre le départ', 'Start')}</button>${NET.ok ? `<button data-board="${id}" data-dcls="${cl}" data-week="1" class="sec" title="${T('Classement de la semaine', 'Weekly leaderboard')}">🏆</button>` : '<span></span>'}</div>`; }).join('')}</div></div></div>`;
+}
 function netBlock() {
   const box = (h, c = 'rgba(127,163,189,.35)') => `<div class="mode" style="margin:0 0 12px;border-color:${c}">${h}</div>`;
   if (NET.base === null || (NET.checked && !NET.ok)) return box(`<p style="margin:0">📴 <b>${T('Hors ligne', 'Offline')}</b>${NET.why === 'version' ? T(' (nouvelle version du jeu : recharge la page)', ' (new game version: reload the page)') : ''} : ${T('défis et fantômes enregistrés dans ce navigateur. Le classement en ligne fonctionne sur la version hébergée du jeu.', 'challenges and ghosts are stored in this browser. The online leaderboard works on the hosted version of the game.')}</p>`);
@@ -3689,9 +3867,9 @@ function bindNetBlock() {
   if ($('netCancel')) $('netCancel').onclick = () => { NET.edit = false; showMenu('multi'); };
   if ($('netRen')) $('netRen').onclick = e => { e.preventDefault(); NET.edit = true; showMenu('multi'); };
 }
-function netPending(add) { let L = []; try { L = JSON.parse(localStorage.getItem('gl3d_pending')) || []; } catch (e) {} if (add) { L = L.filter(x => !(x.day === add.day && x.course === add.course && x.cls === add.cls && x.T <= add.T)); L.push(add); } try { localStorage.setItem('gl3d_pending', JSON.stringify(L.filter(x => x.day === parisDay()).slice(-8))); } catch (e) {} return L; }
+function netPending(add) { let L = []; try { L = JSON.parse(localStorage.getItem('gl3d_pending')) || []; } catch (e) {} if (add) { L = L.filter(x => !(x.day === add.day && x.course === add.course && x.cls === add.cls && x.T <= add.T)); L.push(add); } try { localStorage.setItem('gl3d_pending', JSON.stringify(L.filter(x => x.day === parisDay() || x.day === weekKey()).slice(-8))); } catch (e) {} return L; }
 async function netSubmit(log, quiet) {
-  if (!NET.me || !NET.ok) { if (NET.base !== null && log.day === parisDay()) netPending({ day: log.day, course: log.course, cls: log.cls, T: player.daily ? player.daily.T : 0, log }); if (!quiet) { player.net = { state: NET.me ? 'off' : 'noname' }; netResRefresh(); } return; }
+  if (!NET.me || !NET.ok) { if (NET.base !== null && (log.day === parisDay() || log.day === weekKey())) netPending({ day: log.day, course: log.course, cls: log.cls, T: player.daily ? player.daily.T : 0, log }); if (!quiet) { player.net = { state: NET.me ? 'off' : 'noname' }; netResRefresh(); } return; }
   if (!quiet) { player.net = { state: 'sending' }; netResRefresh(); }
   try { const r = await withTimeout(api('submit', { id: NET.me.id, token: NET.me.token, log }), 60000); if (!quiet) { player.net = { state: 'ok', ...r }; netResRefresh(); } return true; }
   catch (e) { if (!quiet) { player.net = { state: 'err', msg: e.message, log }; netResRefresh(); } if (!/version|journal|parcours|non terminée|trop d/.test(e.message)) netPending({ day: log.day, course: log.course, cls: log.cls, T: 0, log }); return false; }
@@ -3700,21 +3878,21 @@ async function netFlushPending() { if (!NET.me) return; const L = netPending(); 
 function netResHtml() {
   const N = player.net; if (!N) return '';
   if (N.state === 'sending') return `<p>⏳ ${T('Envoi au classement en ligne : le serveur rejoue ta course pour vérifier le chrono…', 'Sending to the online leaderboard: the server replays your race to verify the time…')}</p>`;
-  if (N.state === 'noname') return `<p style="color:#ffd166">🌐 ${T('Choisis un pseudo dans « Défis du jour » pour être classé : ce chrono sera envoyé automatiquement (aujourd\'hui seulement).', 'Pick a nickname in “Daily challenges” to be ranked: this time will be sent automatically (today only).')}</p>`;
-  if (N.state === 'off') return `<p style="color:#a9c3d6">📴 ${T('Hors ligne : chrono gardé localement, envoyé à la prochaine connexion aujourd\'hui.', 'Offline: time kept locally, sent on the next connection today.')}</p>`;
+  if (N.state === 'noname') return `<p style="color:#ffd166">🌐 ${DAILY.week ? T('Choisis un pseudo dans le mode multi pour être classé : ce chrono sera envoyé automatiquement (cette semaine seulement).', 'Pick a nickname in Multiplayer to be ranked: this time will be sent automatically (this week only).') : T('Choisis un pseudo dans le mode multi pour être classé : ce chrono sera envoyé automatiquement (aujourd\'hui seulement).', 'Pick a nickname in Multiplayer to be ranked: this time will be sent automatically (today only).')}</p>`;
+  if (N.state === 'off') return `<p style="color:#a9c3d6">📴 ${DAILY.week ? T('Hors ligne : chrono gardé localement, envoyé à la prochaine connexion cette semaine.', 'Offline: time kept locally, sent on the next connection this week.') : T('Hors ligne : chrono gardé localement, envoyé à la prochaine connexion aujourd\'hui.', 'Offline: time kept locally, sent on the next connection today.')}</p>`;
   if (N.state === 'err') return `<p style="color:#ff8fab">⚠️ ${T('Envoi impossible', 'Sending failed')} : ${esc(N.msg)} <button id="netRetry" class="sec">${T('Réessayer', 'Retry')}</button></p>`;
-  return `<h3>🌐 ${T('Classement du jour', 'Daily leaderboard')} : ${ord(N.rank)} / ${N.total}</h3><p>${T('Chrono vérifié par le serveur', 'Time verified by the server')} : <b>${fmtDur(N.T)}</b>${N.improved ? T(' · 🎉 nouveau meilleur temps en ligne', ' · 🎉 new online best') : T(` · ton meilleur en ligne reste ${fmtDur(N.best)}`, ` · your online best remains ${fmtDur(N.best)}`)} · ${plural(N.attempts, 'envoi', 'submission')} ${T('aujourd\'hui', 'today')}.</p>${boardTable(N.top, N.best)}`;
+  return `<h3>🌐 ${DAILY.week ? T('Classement de la semaine', 'Weekly leaderboard') : T('Classement du jour', 'Daily leaderboard')} : ${ord(N.rank)} / ${N.total}</h3><p>${T('Chrono vérifié par le serveur', 'Time verified by the server')} : <b>${fmtDur(N.T)}</b>${N.improved ? T(' · 🎉 nouveau meilleur temps en ligne', ' · 🎉 new online best') : T(` · ton meilleur en ligne reste ${fmtDur(N.best)}`, ` · your online best remains ${fmtDur(N.best)}`)} · ${plural(N.attempts, 'envoi', 'submission')} ${DAILY.week ? T('cette semaine', 'this week') : T('aujourd\'hui', 'today')}.</p>${boardTable(N.top, N.best)}`;
 }
 function boardTable(top, myBest) { if (!top || !top.length) return `<p style="color:#a9c3d6">${T('Personne n\'a encore terminé ce défi aujourd\'hui.', 'Nobody has finished this challenge yet today.')}</p>`;
   return `<table>${top.map(r => `<tr class="${NET.me && r.me ? 'me' : ''}"><td>${r.rank}</td><td>${esc(r.name)}</td><td style="color:#7fa3bd">${plural(r.attempts, 'essai', 'attempt')}</td><td style="text-align:right">${fmtDur(r.T)}${r.rank > 1 ? ` <span style="color:#7fa3bd">+${fmtDur(r.T - top[0].T)}</span>` : ''}</td></tr>`).join('')}</table>`; }
 function bindNetRes() { if ($('netRetry')) $('netRetry').onclick = () => netSubmit(player.net.log); }
 function netResRefresh() { const el = $('netRes'); if (el) { el.innerHTML = netResHtml(); bindNetRes(); } }
-async function showBoard(id, cls) {
+async function showBoard(id, cls, weekly) {
   MENU_VIEW = 'board'; const c = COURSES[id], cl = cls || CLS.id;
-  $('card').innerHTML = `<h1>Off<span>ing</span></h1><div class="go" style="justify-content:flex-start;margin:0 0 6px"><button id="back" class="sec">← ${T('Défis du jour', 'Daily challenges')}</button></div><h3>🏆 ${cN(c)} · ${clsName(cl)} · ${parisDay()}</h3><div id="lbBody">${T('Chargement…', 'Loading…')}</div>`;
+  $('card').innerHTML = `<h1>Off<span>ing</span></h1><div class="go" style="justify-content:flex-start;margin:0 0 6px"><button id="back" class="sec">← ${T('Mode multi', 'Multiplayer')}</button></div><h3>🏆 ${cN(c)} · ${clsName(cl)} · ${weekly ? T('semaine du ', 'week of ') + weekKey() : parisDay()}</h3><div id="lbBody">${T('Chargement…', 'Loading…')}</div>`;
   $('back').onclick = () => showMenu('multi');
-  try { const r = await withTimeout(api(`leaderboard?course=${id}&cls=${cl}${NET.me ? '&player=' + NET.me.id : ''}`), 8000); if (MENU_VIEW !== 'board') return;
-    $('lbBody').innerHTML = `<p>${T(`${r.total} skipper${r.total > 1 ? 's' : ''} classé${r.total > 1 ? 's' : ''} aujourd'hui`, `${r.total} skipper${r.total > 1 ? 's' : ''} ranked today`)}${r.me ? ` · ${T('toi', 'you')} : <b>${ord(r.me.rank)}</b> ${T('en', 'in')} ${fmtDur(r.me.T)}` : ''}.</p>${boardTable(r.top)}`; }
+  try { const r = await withTimeout(api(`leaderboard?course=${id}&cls=${cl}${weekly ? '&week=1' : ''}${NET.me ? '&player=' + NET.me.id : ''}`), 8000); if (MENU_VIEW !== 'board') return;
+    $('lbBody').innerHTML = `<p>${weekly ? T(`${r.total} skipper${r.total > 1 ? 's' : ''} classé${r.total > 1 ? 's' : ''} cette semaine`, `${r.total} skipper${r.total > 1 ? 's' : ''} ranked this week`) : T(`${r.total} skipper${r.total > 1 ? 's' : ''} classé${r.total > 1 ? 's' : ''} aujourd'hui`, `${r.total} skipper${r.total > 1 ? 's' : ''} ranked today`)}${r.me ? ` · ${T('toi', 'you')} : <b>${ord(r.me.rank)}</b> ${T('en', 'in')} ${fmtDur(r.me.T)}` : ''}.</p>${boardTable(r.top)}`; }
   catch (e) { if ($('lbBody')) $('lbBody').innerHTML = `<p style="color:#ff8fab">${T('Classement indisponible', 'Leaderboard unavailable')} : ${esc(e.message)}</p>`; }
 }
 /* ----- Profil en ligne : code de récupération (même profil sur un autre appareil) ----- */
@@ -3760,26 +3938,27 @@ function applyStaticLang() {
   try { walk(document.body); } catch (e) {}
 }
 
-const dailyKey = () => `gl3d_daily_${DAILY.day}_${COURSE.id}_${CLS.id}`;
+const dailyPfx = () => DAILY.week ? 'gl3d_week_' : 'gl3d_daily_', dailyKey = () => `${dailyPfx()}${DAILY.day}_${COURSE.id}_${CLS.id}`;
 function dailyLoad(key) { try { const d = JSON.parse(localStorage.getItem(key || dailyKey())); if (d && d.runs) return d; } catch (e) {} return { n: 0, runs: [], pts: false }; }
 function dailySave(d) { try { localStorage.setItem(dailyKey(), JSON.stringify(d)); } catch (e) { d.runs.forEach((r, i) => { if (i > 4) r.trace = r.trace.filter((p, j) => j % 3 === 0); }); try { localStorage.setItem(dailyKey(), JSON.stringify(d)); } catch (e2) {} } }
-function dailyCleanup() { try { const keep = 'gl3d_daily_' + DAILY.day; for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith('gl3d_daily_') && !k.startsWith(keep)) localStorage.removeItem(k); } } catch (e) {} }
-function startDaily(id) { return launch(ldInfo(COURSES[id], true), () => startDailyPrep(id)); }
-async function startDailyPrep(id) {
-  DAILY.on = true; DAILY.day = parisDay(); DAILY.seed = hash32(DAILY.day + '|' + id); DAILY.net = null; dailyCleanup();
+function dailyCleanup() { try { const pf = dailyPfx(), keep = pf + DAILY.day; for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith(pf) && !k.startsWith(keep)) localStorage.removeItem(k); } } catch (e) {} }
+function startDaily(id, weekly) { return launch(ldInfo(COURSES[id], weekly ? 'week' : true), () => startDailyPrep(id, weekly)); }
+async function startDailyPrep(id, weekly) {
+  DAILY.on = true; DAILY.week = weekly ? weekKey() : null; DAILY.step = weekly ? WSTEP : DSTEP; DAILY.day = DAILY.week || parisDay(); DAILY.seed = weekly ? hash32('W|' + DAILY.week + '|' + id) : hash32(DAILY.day + '|' + id); DAILY.net = null; dailyCleanup();
   initAudio();
   if (NET.ok) { const m = $('card').querySelector(`[data-daily="${id}"]`); if (m) { m.disabled = true; m.textContent = 'Chargement des fantômes…'; }
-    try { DAILY.net = await withTimeout(api(`ghosts?course=${id}&cls=${CLS.id}${NET.me ? '&player=' + NET.me.id : ''}`), 6000); } catch (e) { toast(T('Fantômes en ligne indisponibles : ', 'Online ghosts unavailable: ') + e.message, 3000); } }
+    try { DAILY.net = await withTimeout(api(`ghosts?course=${id}&cls=${CLS.id}${weekly ? '&week=1' : ''}${NET.me ? '&player=' + NET.me.id : ''}`), 6000); } catch (e) { toast(T('Fantômes en ligne indisponibles : ', 'Online ghosts unavailable: ') + e.message, 3000); } }
   setupMode('race', id);
   const withGhosts = GHOST.list.length > 0;
   if (withGhosts) { active = [player]; boats.forEach(b => { if (!b.isPlayer) Object.values(b.visSet).forEach(v => { v.root.visible = false; v.wake.visible = false; }); }); }
   DAILY.K = 0; DAILY.acc = 0; DAILY.lastCtl = null;
-  DAILY.log = { v: 1, eng: ENGINE_VER, day: DAILY.day, course: id, cls: CLS.id, seed: DAILY.seed, dstep: DSTEP, init: snapBoat(player), ev: [] };
+  DAILY.log = { v: 1, eng: ENGINE_VER, day: DAILY.day, ...(weekly ? { week: DAILY.week } : {}), course: id, cls: CLS.id, seed: DAILY.seed, dstep: DAILY.step, init: snapBoat(player), ev: [] };
   const d = dailyLoad(), ng = DAILY.net && DAILY.net.ghosts && DAILY.net.ghosts.length;
+  if (weekly) return T(`Course de la semaine · ${cN(COURSES[id])} · ${CLS.name} — essai n°${d.n + 1}. Même météo pour tous jusqu'à dimanche minuit. ${withGhosts ? 'Fantômes : les chronos de la semaine.' : 'Pas encore de fantôme : la flotte de bots te sert d\'adversaire.'}`, `Race of the week · ${cN(COURSES[id])} · ${CLS.name} — attempt #${d.n + 1}. Same weather for everyone until Sunday midnight. ${withGhosts ? 'Ghosts: this week\'s times.' : 'No ghosts yet: you race the bot fleet.'}`);
   return (T(`Défi du jour · ${cN(COURSES[id])} · ${CLS.name} — essai n°${d.n + 1}. Même météo pour tous aujourd'hui. ${withGhosts ? (ng ? (DAILY.net.mine ? 'Fantômes : les 10 joueurs les plus proches de ton meilleur temps.' : 'Fantômes : le top 10 du jour.') : 'Tes essais du jour sont tes adversaires.') : 'Pas encore de fantôme : la flotte de bots te sert d\'adversaire.'}`,
     `Daily challenge · ${cN(COURSES[id])} · ${CLS.name} — attempt #${d.n + 1}. Same weather for everyone today. ${withGhosts ? (ng ? (DAILY.net.mine ? 'Ghosts: the 10 players closest to your best time.' : 'Ghosts: today\'s top 10.') : 'Your own attempts are your rivals.') : 'No ghosts yet: you race the bot fleet.'}`));
 }
-function solo() { DAILY.on = false; DAILY.log = null; DAILY.net = null; }
+function solo() { DAILY.on = false; DAILY.week = null; DAILY.step = DSTEP; DAILY.log = null; DAILY.net = null; }
 /* ===================== TUTORIEL (facultatif, ≈ 4 min) =====================
    Proposé aux nouveaux joueurs sur l'accueil (Lancer / Non merci), relançable depuis l'aide et l'onglet Entraînement.
    Se joue dans l'archipel d'entraînement, vent fixe de 14 nd : allure, près, virement, spi, écoute, routeur, carte, temps.
@@ -3840,12 +4019,12 @@ function dailyFinish(rank, N) {
   const run = { n: d.n + 1, T, at: Date.now(), trace: V.trace.length > 1 ? V.trace : player.gRec, ev: DAILY.log };
   d.n++; d.runs.push(run); d.runs.sort((a, b) => a.T - b.T); d.runs = d.runs.slice(0, 10); d.runs.forEach((r, i) => { if (i > 0) delete r.ev; });
   const base = courseBase(), items = [];
-  if (!d.pts) { const f = N > 1 ? (N - rank) / (N - 1) : 1; items.push([TL(`${ord(rank)} sur ${N} (1ᵉʳ essai du jour)`, `${ord(rank)} of ${N} (first attempt today)`), Math.round(base * (0.25 + 0.75 * f))]); if (rank === 1) items.push([TL('Victoire', 'Win'), Math.round(base * 0.25)]); if (!player.pens) items.push([TL('Course propre (aucune pénalité)', 'Clean race (no penalty)'), Math.round(base * 0.1)]); d.pts = true; }
-  else if (prev !== null && T < prev) items.push([TL('Record du jour amélioré', 'Daily record improved'), Math.round(base * 0.2)]);
+  if (!d.pts) { const f = N > 1 ? (N - rank) / (N - 1) : 1; items.push([DAILY.week ? TL(`${ord(rank)} sur ${N} (1ᵉʳ essai de la semaine)`, `${ord(rank)} of ${N} (first attempt this week)`) : TL(`${ord(rank)} sur ${N} (1ᵉʳ essai du jour)`, `${ord(rank)} of ${N} (first attempt today)`), Math.round(base * (0.25 + 0.75 * f))]); if (rank === 1) items.push([TL('Victoire', 'Win'), Math.round(base * 0.25)]); if (!player.pens) items.push([TL('Course propre (aucune pénalité)', 'Clean race (no penalty)'), Math.round(base * 0.1)]); d.pts = true; }
+  else if (prev !== null && T < prev) items.push([DAILY.week ? TL('Record de la semaine amélioré', 'Weekly record improved') : TL('Record du jour amélioré', 'Daily record improved'), Math.round(base * 0.2)]);
   dailySave(d);
   const total = items.reduce((a, x) => a + x[1], 0), P = loadProfile(), before = levelOf(P.pts);
   if (total) { P.pts += total; P.races++; if (rank === 1) P.wins++; if (rank <= 3) P.podiums++; }
-  P.hist.unshift({ d: Date.now(), c: COURSE.id, n: 'Défi · ' + COURSE.name, cls: CLS.id, r: rank, N, t: T, p: total }); P.hist = P.hist.slice(0, 30); saveProfile(P);
+  P.hist.unshift({ d: Date.now(), c: COURSE.id, n: (DAILY.week ? 'Semaine · ' : 'Défi · ') + COURSE.name, cls: CLS.id, r: rank, N, t: T, p: total }); P.hist = P.hist.slice(0, 30); saveProfile(P);
   player.award = { items, total, P, up: levelOf(P.pts).i > before.i ? levelOf(P.pts).name : null, none: !total };
   player.daily = { T, diff, n: run.n, runs: d.runs.map(r => ({ n: r.n, T: r.T, at: r.at })), prev };
   if (DAILY.log && NET.base !== null) netSubmit(DAILY.log);
@@ -3862,16 +4041,17 @@ function onPlayerFinish() {
 }
 function renderDailyResults() {
   const D = player.daily, A = player.award, best = D.runs[0];
-  $('card').innerHTML = `<h1>${T('Défi du jour', 'Daily challenge')} — <span>${cN(COURSE)}</span></h1>
+  const W = !!DAILY.week, TD = (f, e, fw, ew) => W ? T(fw, ew) : T(f, e);
+  $('card').innerHTML = `<h1>${TD('Défi du jour', 'Daily challenge', 'Course de la semaine', 'Race of the week')} — <span>${cN(COURSE)}</span></h1>
     <p>${T('Essai', 'Attempt')} n°${D.n} · ${CLS.name} · ${T('temps vérifié', 'verified time')} : <b>${fmtDur(D.T)}</b>${D.diff === null ? ` · <span style="color:#ffd166">${T('rejeu impossible, chrono local', 'replay failed, local time')}</span>` : Math.abs(D.diff) < 1 ? ` · <span style="color:#5dff9e">✔ ${T('chrono confirmé par le rejeu', 'time confirmed by replay')}</span>` : ` · <span style="color:#ffd166">${T(`rejeu : écart de ${Math.round(D.diff)} s, c'est le chrono rejoué qui compte`, `replay: ${Math.round(D.diff)} s gap, the replayed time counts`)}</span>`}.
-    ${D.prev !== null ? (D.T < D.prev ? T(`🎉 Nouveau meilleur temps du jour (−${fmtDur(D.prev - D.T)}).`, `🎉 New daily best (−${fmtDur(D.prev - D.T)}).`) : T(`Ton meilleur du jour reste ${fmtDur(D.prev)}.`, `Your daily best remains ${fmtDur(D.prev)}.`)) : T('Premier temps du jour sur ce défi.', 'First time of the day on this challenge.')}</p>
-    ${A && !A.none ? awardHtml(A) : `<p style="color:#a9c3d6">${T('Points du jour déjà gagnés sur ce défi : seul un nouveau record du jour rapporte un bonus.', 'Daily points already earned on this challenge: only a new daily record earns a bonus.')}</p>`}
+    ${D.prev !== null ? (D.T < D.prev ? TD(`🎉 Nouveau meilleur temps du jour (−${fmtDur(D.prev - D.T)}).`, `🎉 New daily best (−${fmtDur(D.prev - D.T)}).`, `🎉 Nouveau meilleur temps de la semaine (−${fmtDur(D.prev - D.T)}).`, `🎉 New weekly best (−${fmtDur(D.prev - D.T)}).`) : TD(`Ton meilleur du jour reste ${fmtDur(D.prev)}.`, `Your daily best remains ${fmtDur(D.prev)}.`, `Ton meilleur de la semaine reste ${fmtDur(D.prev)}.`, `Your weekly best remains ${fmtDur(D.prev)}.`)) : TD('Premier temps du jour sur ce défi.', 'First time of the day on this challenge.', 'Premier temps de la semaine sur cette course.', 'First time this week on this race.')}</p>
+    ${A && !A.none ? awardHtml(A) : `<p style="color:#a9c3d6">${TD('Points du jour déjà gagnés sur ce défi : seul un nouveau record du jour rapporte un bonus.', 'Daily points already earned on this challenge: only a new daily record earns a bonus.', 'Points de la semaine déjà gagnés : seul un nouveau record de la semaine rapporte un bonus.', 'Weekly points already earned: only a new weekly record earns a bonus.')}</p>`}
     ${careerBadge()}
     <div id="netRes">${netResHtml()}</div>
-    <h3>${T('Tes meilleurs essais du jour', 'Your best attempts today')}</h3>
-    <table>${D.runs.map((r, i) => `<tr class="${r.n === D.n ? 'me' : ''}"><td>${i + 1}</td><td>👻 ${T('Essai', 'Attempt')} ${r.n}</td><td style="color:#7fa3bd">${new Date(r.at).toLocaleTimeString(LOC(), { hour: '2-digit', minute: '2-digit' })}</td><td style="text-align:right">${fmtDur(r.T)}${i ? ` <span style="color:#7fa3bd">+${fmtDur(r.T - best.T)}</span>` : ''}</td></tr>`).join('')}</table>
-    <div class="go"><button id="again" data-default>↻ ${T('Nouvel essai', 'Try again')}</button><button id="anaBtn" class="sec">📈 ${T('Analyse de course', 'Race analysis')}</button><button id="toMulti" class="sec">${T('Défis du jour', 'Daily challenges')}</button><button id="toMenu" class="sec">Menu</button></div>`;
-  $('again').onclick = () => startDaily(COURSE.id); bindNetRes(); $('anaBtn').onclick = () => showAnalysis();
+    <h3>${TD('Tes meilleurs essais du jour', 'Your best attempts today', 'Tes meilleurs essais de la semaine', 'Your best attempts this week')}</h3>
+    <table>${D.runs.map((r, i) => `<tr class="${r.n === D.n ? 'me' : ''}"><td>${i + 1}</td><td>👻 ${T('Essai', 'Attempt')} ${r.n}</td><td style="color:#7fa3bd">${W ? new Date(r.at).toLocaleDateString(LOC(), { weekday: 'short' }) + ' ' : ''}${new Date(r.at).toLocaleTimeString(LOC(), { hour: '2-digit', minute: '2-digit' })}</td><td style="text-align:right">${fmtDur(r.T)}${i ? ` <span style="color:#7fa3bd">+${fmtDur(r.T - best.T)}</span>` : ''}</td></tr>`).join('')}</table>
+    <div class="go"><button id="again" data-default>↻ ${T('Nouvel essai', 'Try again')}</button><button id="anaBtn" class="sec">📈 ${T('Analyse de course', 'Race analysis')}</button><button id="toMulti" class="sec">${T('Mode multi', 'Multiplayer')}</button><button id="toMenu" class="sec">Menu</button></div>`;
+  $('again').onclick = () => startDaily(COURSE.id, W); bindNetRes(); $('anaBtn').onclick = () => showAnalysis();
   $('toMulti').onclick = () => { finishedShown = false; running = false; showMenu('multi'); };
   $('toMenu').onclick = () => { finishedShown = false; running = false; showMenu(); };
 }
@@ -3892,44 +4072,83 @@ function renderResults() {
 /* ----- Analyse de course : ta trace face à une référence (n°1 en ligne, meilleur essai ou record), écart et temps intermédiaires ----- */
 async function showAnalysis() {
   finishedShown = 'analysis';
-  const me = player.gRec.slice(); if (player.finished) me.push([Math.round(player.finishT), player.lat, player.lon, player.hdg, player.spd, player.sail, curMarks().length]);
-  let ref = null, refName = '';
-  if (DAILY.on && NET.ok) { try { const r = await withTimeout(api(`ghosts?course=${COURSE.id}&cls=${CLS.id}&mode=top`), 6000); const g = r.ghosts && r.ghosts[0]; if (g && g.trace && g.trace.length > 2) { ref = g.trace; refName = `🏆 ${g.name} (${fmtDur(g.T)})`; } } catch (e) {} }
-  if (!ref && DAILY.on) { const runs = dailyLoad().runs, b = runs.find(x => x.trace && Math.abs(x.T - (player.daily ? player.daily.T : 0)) > 1) || null; if (b) { ref = b.trace; refName = T(`👻 Ton meilleur essai (${fmtDur(b.T)})`, `👻 Your best attempt (${fmtDur(b.T)})`); } }
-  if (!ref && !DAILY.on) { try { const g = JSON.parse(localStorage.getItem(ghostKey())); if (g && g.pts && Math.abs(g.T - player.finishT) > 1) { ref = g.pts; refName = T(`👻 Ton record (${fmtDur(g.T)})`, `👻 Your record (${fmtDur(g.T)})`); } } catch (e) {} }
+  const fin = b => [Math.round(b.finishT), b.lat, b.lon, b.hdg, b.spd, b.sail, curMarks().length, 0, 0, +(b.log || 0).toFixed(1)];
+  const me = player.gRec.slice(); if (player.finished) me.push(fin(player));
+  const myT = player.finished ? (player.daily ? player.daily.T : player.finishT) : (me.length ? me[me.length - 1][0] : 0);
+  /* référence : le 1er de la course, ou le 2e si tu as gagné (fantômes des autres joueurs, sinon bots) ; à défaut ton meilleur essai / record */
+  let ref = null, refName = '', refT = null, refRank = 0, comp = [];
+  if (DAILY.on && NET.ok) { try { const r = await withTimeout(api(`ghosts?course=${COURSE.id}&cls=${CLS.id}&mode=top${DAILY.week ? '&week=1' : ''}`), 6000);
+    comp = (r.ghosts || []).filter(g => g.trace && g.trace.length > 2 && !(NET.me && g.name === NET.me.name)).map(g => ({ name: g.name, T: g.T, pts: g.trace })); } catch (e) {} }
+  if (!comp.length && DAILY.on) comp = GHOST.list.filter(g => !/^(Toi|Essai)/.test(g.label)).map(g => ({ name: g.label.replace(/^\d+\. /, ''), T: g.T, pts: g.pts }));
+  if (!comp.length) comp = active.filter(b => b !== player && !b.isGhost && b.gRec && b.gRec.length > 1).map(b => ({ name: b.name, T: b.finished ? b.finishT : null, pts: b.finished ? b.gRec.concat([fin(b)]) : b.gRec.slice(), b }));
+  if (comp.length) {
+    const key = c => c.T !== null ? c.T : 1e12 + (c.b ? dtf(c.b) : 0); comp.sort((a, b) => key(a) - key(b));
+    const best = comp[0], won = player.finished && (best.T === null || myT <= best.T);
+    ref = best.pts; refT = best.T; refRank = won ? 2 : 1;
+    refName = `${won ? '🥈' : '🥇'} ${won ? T('2e', '2nd') : T('1er', '1st')} : ${esc(best.name)}${best.T !== null ? ` (${fmtDur(best.T)})` : T(' (en course)', ' (racing)')}`;
+  }
+  if (!ref && DAILY.on) { const runs = dailyLoad().runs, b = runs.find(x => x.trace && Math.abs(x.T - (player.daily ? player.daily.T : 0)) > 1) || null; if (b) { ref = b.trace; refT = b.T; refName = T(`👻 Ton meilleur essai (${fmtDur(b.T)})`, `👻 Your best attempt (${fmtDur(b.T)})`); } }
+  if (!ref && !DAILY.on) { try { const g = JSON.parse(localStorage.getItem(ghostKey())); if (g && g.pts && Math.abs(g.T - player.finishT) > 1) { ref = g.pts; refT = g.T; refName = T(`👻 Ton record (${fmtDur(g.T)})`, `👻 Your record (${fmtDur(g.T)})`); } } catch (e) {} }
   const A = { me, ref, t: me.length ? me[me.length - 1][0] : 0 };
   const T1 = Math.max(A.t, ref ? ref[ref.length - 1][0] : 0);
   const at = (P, t) => ghostAt({ pts: P }, t), dt = p => dtf({ lat: p[1], lon: p[2], mi: Math.min(p[6] || 0, curMarks().length - 1), finished: (p[6] || 0) >= curMarks().length });
   const splits = P => { const out = []; let last = 0; P.forEach(p => { const mi = p[6] || 0; while (last < mi && last < curMarks().length) { out[last] = p[0]; last++; } }); return out; };
   const sMe = splits(me), sRef = ref ? splits(ref) : [];
-  const dist = P => { let d = 0; for (let i = 1; i < P.length; i++) d += gcDist(P[i - 1][1], P[i - 1][2], P[i][1], P[i][2]); return d; };
+  // distance cumulée : loch enregistré (index 9) si présent, sinon somme des segments de la trace
+  const cumOf = P => { const c = [0]; for (let i = 1; i < P.length; i++) c.push(P[i][9] !== undefined && P[0][9] !== undefined ? P[i][9] - P[0][9] : c[i - 1] + gcDist(P[i - 1][1], P[i - 1][2], P[i][1], P[i][2])); return c; };
+  const cMe = cumOf(me), cRef = ref ? cumOf(ref) : null;
+  const cumAt = (P, C, t) => { if (!P.length) return 0; if (t <= P[0][0]) return 0; if (t >= P[P.length - 1][0]) return C[C.length - 1]; let lo = 0, hi = P.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (P[m][0] <= t) lo = m; else hi = m; } const f = (t - P[lo][0]) / Math.max(1, P[hi][0] - P[lo][0]); return C[lo] + (C[hi] - C[lo]) * f; };
+  const tEnd = P => P.length ? P[P.length - 1][0] : 0, dist = (P, C) => C[C.length - 1] || 0;
+  const W = T1 > 36 * 3600 ? 86400 : T1 > 3 * 3600 ? 3600 : 900, wLbl = W === 86400 ? T('24 h', '24 h') : W === 3600 ? T('heure', 'hour') : T('15 min', '15 min');
+  const bestRun = (P, C) => { const e = tEnd(P); if (e < W) return null; let b = 0; for (const p of P) { if (p[0] + W > e) break; b = Math.max(b, cumAt(P, C, p[0] + W) - cumAt(P, C, p[0])); } return b; };
+  const perW = (P, C) => { const e = tEnd(P), out = []; for (let t = 0; t < e - 60; t += W) out.push(cumAt(P, C, Math.min(e, t + W)) - cumAt(P, C, t)); return out; };
   const vmax = P => Math.max(...P.map(p => p[4] || 0));
+  const myDist = Math.max(dist(me, cMe), player.log || 0), refDist = ref ? dist(ref, cRef) : 0;
+  const avg = (d, t) => t > 0 ? d / (t / 3600) : 0, refEnd = ref ? (refT || tEnd(ref)) : 0;
+  const bMe = bestRun(me, cMe), bRef = ref ? bestRun(ref, cRef) : null, wMe = perW(me, cMe), wRef = ref ? perW(ref, cRef) : [];
+  const nm = v => v === null || v === undefined ? '–' : `${v.toFixed(v >= 100 ? 0 : 1)} nm`, kn = v => `${v.toFixed(1)} ${T('nd', 'kn')}`;
+  const gapLbl = refRank === 2 ? T('Avance sur le 2e', 'Lead over 2nd') : refRank === 1 ? T('Écart au 1er', 'Gap to leader') : T('Écart à la référence', 'Gap to reference');
+  const finGap = player.finished && refT ? myT - refT : null;
   $('card').innerHTML = `<h1>📈 ${T('Analyse', 'Analysis')} — <span>${cN(COURSE)}</span></h1>
-    <p><span style="color:#ff5d73">●</span> ${T('Toi', 'You')}${ref ? ` · <span style="color:#7fd1ff">●</span> ${refName}` : ` · <span style="color:#a9c3d6">${T('pas encore de référence : termine un autre essai pour comparer', 'no reference yet: finish another attempt to compare')}</span>`}</p>
-    <canvas id="anMap" style="width:100%;height:330px;border-radius:12px"></canvas>
+    <p><span style="color:#ff5d73">●</span> ${T('Toi', 'You')}${ref ? ` · <span style="color:#7fd1ff">●</span> ${refName}` : ` · <span style="color:#a9c3d6">${T('pas encore de référence : termine un autre essai pour comparer', 'no reference yet: finish another attempt to compare')}</span>`}${finGap !== null ? ` · <b style="color:${finGap <= 0 ? '#5dff9e' : '#ff8fab'}">${finGap <= 0 ? '−' : '+'}${fmtDur(Math.abs(finGap))}</b>` : ''}</p>
+    <div class="anStats">
+      <div><small>${T('Vitesse moyenne', 'Average speed')}</small><b>${kn(avg(myDist, myT))}</b>${ref && refEnd ? `<i>${T('réf.', 'ref.')} ${kn(avg(refDist, refEnd))}</i>` : ''}</div>
+      <div><small>${T('Distance parcourue', 'Distance sailed')}</small><b>${nm(myDist)}</b>${ref ? `<i>${T('réf.', 'ref.')} ${nm(refDist)}</i>` : ''}</div>
+      <div><small>${T(`Meilleure ${wLbl}`, `Best ${wLbl}`)}</small><b>${nm(bMe)}</b>${ref && bRef !== null ? `<i>${T('réf.', 'ref.')} ${nm(bRef)}</i>` : ''}</div>
+      <div><small>${T('Vitesse max', 'Top speed')}</small><b>${kn(vmax(me))}</b>${ref ? `<i>${T('réf.', 'ref.')} ${kn(vmax(ref))}</i>` : ''}</div>
+    </div>
+    <canvas id="anMap" style="width:100%;height:300px;border-radius:12px"></canvas>
     <div style="display:flex;gap:10px;align-items:center;margin:8px 0"><button id="anPlay" class="sec">▶</button><input type="range" id="anT" min="0" max="${T1}" value="${T1}" style="flex:1"><b id="anTL" style="min-width:150px;text-align:right"></b></div>
-    <canvas id="anGap" style="width:100%;height:120px;border-radius:12px"></canvas>
+    <canvas id="anGap" style="width:100%;height:130px;border-radius:12px"></canvas>
+    <canvas id="anDay" style="width:100%;height:120px;border-radius:12px;margin-top:8px"></canvas>
     <table><tr><th style="text-align:left">${T('Marque', 'Mark')}</th><th>${T('Toi', 'You')}</th>${ref ? `<th>${T('Réf.', 'Ref.')}</th><th>${T('Écart', 'Gap')}</th>` : ''}</tr>
-    ${curMarks().map((m, i) => `<tr><td>${mN(m)}</td><td style="text-align:center">${sMe[i] !== undefined ? fmtDur(sMe[i]) : '–'}</td>${ref ? `<td style="text-align:center">${sRef[i] !== undefined ? fmtDur(sRef[i]) : '–'}</td><td style="text-align:center;color:${sMe[i] !== undefined && sRef[i] !== undefined ? (sMe[i] <= sRef[i] ? '#5dff9e' : '#ff8fab') : '#a9c3d6'}">${sMe[i] !== undefined && sRef[i] !== undefined ? (sMe[i] <= sRef[i] ? '−' : '+') + fmtDur(Math.abs(sMe[i] - sRef[i])) : '–'}</td>` : ''}</tr>`).join('')}
-    <tr><td>${T('Distance parcourue', 'Distance sailed')}</td><td style="text-align:center">${dist(me).toFixed(1)} nm</td>${ref ? `<td style="text-align:center">${dist(ref).toFixed(1)} nm</td><td></td>` : ''}</tr>
-    <tr><td>${T('Vitesse max', 'Top speed')}</td><td style="text-align:center">${vmax(me).toFixed(1)} ${T('nd', 'kn')}</td>${ref ? `<td style="text-align:center">${vmax(ref).toFixed(1)} ${T('nd', 'kn')}</td><td></td>` : ''}</tr></table>
+    ${curMarks().map((m, i) => `<tr><td>${mN(m)}</td><td style="text-align:center">${sMe[i] !== undefined ? fmtDur(sMe[i]) : '–'}</td>${ref ? `<td style="text-align:center">${sRef[i] !== undefined ? fmtDur(sRef[i]) : '–'}</td><td style="text-align:center;color:${sMe[i] !== undefined && sRef[i] !== undefined ? (sMe[i] <= sRef[i] ? '#5dff9e' : '#ff8fab') : '#a9c3d6'}">${sMe[i] !== undefined && sRef[i] !== undefined ? (sMe[i] <= sRef[i] ? '−' : '+') + fmtDur(Math.abs(sMe[i] - sRef[i])) : '–'}</td>` : ''}</tr>`).join('')}</table>
     <div class="go"><button id="anBack" data-default>← ${T('Résultats', 'Results')}</button></div>`;
-  const mapCv = $('anMap'), gapCv = $('anGap'), dpr = Math.min(2, window.devicePixelRatio || 1);
-  [mapCv, gapCv].forEach(c => { const r = c.getBoundingClientRect(); c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); });
+  const mapCv = $('anMap'), gapCv = $('anGap'), dayCv = $('anDay'), dpr = Math.min(2, window.devicePixelRatio || 1);
+  [mapCv, gapCv, dayCv].forEach(c => { const r = c.getBoundingClientRect(); c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); });
   const box = COURSE.coastal ? COURSE.box : (() => { const all = me.concat(ref || []); let a = 90, b = -90, c = 180, d = -180; all.forEach(p => { a = Math.min(a, p[1]); b = Math.max(b, p[1]); c = Math.min(c, p[2]); d = Math.max(d, p[2]); }); const m = 0.3; return [a - m, b + m, c - m, d + m]; })();
   const base = courseThumb({ ...COURSE, box, id: COURSE.id + '_an' }, mapCv.width, mapCv.height, () => {});
   const gaps = []; if (ref) for (let t = 0; t <= T1; t += Math.max(60, T1 / 300)) gaps.push([t, dt(at(ref, t)) - dt(at(me, t))]);
   const gmax = Math.max(0.5, ...gaps.map(g => Math.abs(g[1])));
+  // distance par période (24 h au large, heure ou 15 min en côtier) : barres toi / référence
+  { const G = dayCv.getContext('2d'), w = dayCv.width, h = dayCv.height, n = Math.max(wMe.length, wRef.length), mx = Math.max(1, ...wMe, ...wRef), pad = 18 * dpr, bw = (w - 12 * dpr) / Math.max(1, n);
+    G.fillStyle = '#0b2235'; G.fillRect(0, 0, w, h); G.fillStyle = '#a9c3d6'; G.font = `${11 * dpr}px system-ui`; G.fillText(T(`Distance par ${wLbl} de course (nm)`, `Distance per ${wLbl} of racing (nm)`), 6 * dpr, 13 * dpr);
+    for (let i = 0; i < n; i++) { const x0 = 6 * dpr + i * bw, hb = v => (v / mx) * (h - pad - 16 * dpr);
+      [[wMe[i], '#ff5d73', 0], [wRef[i], '#7fd1ff', 1]].forEach(([v, col, k]) => { if (v === undefined) return; const bwi = ref ? bw * 0.38 : bw * 0.7, x = x0 + bw * 0.1 + k * bw * 0.4, y = h - pad - hb(v); G.fillStyle = col; G.fillRect(x, y, bwi, hb(v)); if (bw > 34 * dpr) { G.fillStyle = '#e8f4ff'; G.font = `${9.5 * dpr}px system-ui`; G.fillText(v.toFixed(0), x, y - 3 * dpr); } });
+      if (n <= 24 || i % Math.ceil(n / 24) === 0) { G.fillStyle = '#7fa3bd'; G.font = `${9.5 * dpr}px system-ui`; G.fillText(W === 86400 ? T(`J${i + 1}`, `D${i + 1}`) : W === 3600 ? `${i + 1} h` : `${(i + 1) * 15}'`, x0 + bw * 0.1, h - 5 * dpr); } } }
   const draw = t => {
-    const g = mapCv.getContext('2d'), W = mapCv.width, H = mapCv.height; g.drawImage(base, 0, 0);
-    const [la0, la1, lo0, lo1] = box, cl = Math.cos((la0 + la1) / 2 * D2R), s = Math.min(W / ((lo1 - lo0) * cl), H / (la1 - la0)), cLa = (la0 + la1) / 2, cLo = (lo0 + lo1) / 2, X = lo => W / 2 + (lo - cLo) * cl * s, Y = la => H / 2 - (la - cLa) * s;
+    const g = mapCv.getContext('2d'), W2 = mapCv.width, H = mapCv.height; g.drawImage(base, 0, 0);
+    const [la0, la1, lo0, lo1] = box, cl = Math.cos((la0 + la1) / 2 * D2R), s = Math.min(W2 / ((lo1 - lo0) * cl), H / (la1 - la0)), cLa = (la0 + la1) / 2, cLo = (lo0 + lo1) / 2, X = lo => W2 / 2 + (lo - cLo) * cl * s, Y = la => H / 2 - (la - cLa) * s;
     const line = (P, col) => { g.strokeStyle = col; g.lineWidth = 2 * dpr; g.beginPath(); let k = 0; for (const p of P) { if (p[0] > t) break; k++ ? g.lineTo(X(p[2]), Y(p[1])) : g.moveTo(X(p[2]), Y(p[1])); } g.stroke(); const q = at(P, t); g.fillStyle = col; g.beginPath(); g.arc(X(q[2]), Y(q[1]), 5 * dpr, 0, 7); g.fill(); };
     if (ref) line(ref, '#7fd1ff'); line(me, '#ff5d73');
     const G = gapCv.getContext('2d'), w = gapCv.width, h = gapCv.height; G.fillStyle = '#0b2235'; G.fillRect(0, 0, w, h); if (ref) { G.strokeStyle = 'rgba(255,255,255,.25)'; G.beginPath(); G.moveTo(0, h / 2); G.lineTo(w, h / 2); G.stroke(); }
-    G.fillStyle = '#a9c3d6'; G.font = `${11 * dpr}px system-ui`; G.fillText(ref ? T('↑ devant la référence (nm)', '↑ ahead of reference (nm)') : T('Vitesse (nd)', 'Speed (kn)'), 6 * dpr, 14 * dpr);
-    if (ref) { G.strokeStyle = '#ffd166'; G.lineWidth = 2 * dpr; G.beginPath(); gaps.forEach(([tt, v], i) => { const x = tt / T1 * w, y = h / 2 - v / gmax * (h / 2 - 8 * dpr); i ? G.lineTo(x, y) : G.moveTo(x, y); }); G.stroke(); G.fillText(`±${gmax.toFixed(1)}`, w - 50 * dpr, 14 * dpr); }
+    G.fillStyle = '#a9c3d6'; G.font = `${11 * dpr}px system-ui`; G.fillText(ref ? `${gapLbl} (nm) · ${T('↑ devant', '↑ ahead')}` : T('Vitesse (nd)', 'Speed (kn)'), 6 * dpr, 14 * dpr);
+    if (ref) { // zone verte quand tu es devant, rouge derrière
+      const Y0 = h / 2, yv = v => Y0 - v / gmax * (h / 2 - 8 * dpr); ['#5dff9e', '#ff8fab'].forEach((col, k) => { G.fillStyle = col + '40'; G.beginPath(); G.moveTo(0, Y0); gaps.forEach(([tt, v]) => G.lineTo(tt / T1 * w, k ? Math.max(Y0, yv(v)) : Math.min(Y0, yv(v)))); G.lineTo(w, Y0); G.fill(); });
+      G.strokeStyle = '#ffd166'; G.lineWidth = 2 * dpr; G.beginPath(); gaps.forEach(([tt, v], i) => { const x = tt / T1 * w, y = yv(v); i ? G.lineTo(x, y) : G.moveTo(x, y); }); G.stroke(); G.fillStyle = '#a9c3d6'; G.fillText(`±${gmax.toFixed(1)}`, w - 50 * dpr, 14 * dpr);
+      if (W === 86400) for (let d = 86400; d < T1; d += 86400) { const x = d / T1 * w; G.strokeStyle = 'rgba(255,255,255,.12)'; G.beginPath(); G.moveTo(x, 18 * dpr); G.lineTo(x, h); G.stroke(); } }
     else { const vm = Math.max(1, vmax(me)); G.strokeStyle = '#ff5d73'; G.lineWidth = 2 * dpr; G.beginPath(); me.forEach((p, i) => { const x = p[0] / T1 * w, y = h - 6 * dpr - (p[4] || 0) / vm * (h - 22 * dpr); i ? G.lineTo(x, y) : G.moveTo(x, y); }); G.stroke(); }
-    G.strokeStyle = '#fff'; G.beginPath(); G.moveTo(t / T1 * w, 0); G.lineTo(t / T1 * w, h); G.stroke();
+    G.strokeStyle = '#fff'; G.lineWidth = 1 * dpr; G.beginPath(); G.moveTo(t / T1 * w, 0); G.lineTo(t / T1 * w, h); G.stroke();
     const gp = ref ? dt(at(ref, t)) - dt(at(me, t)) : null; $('anTL').textContent = fmtDur(t) + (gp !== null ? ` · ${gp >= 0 ? '+' : '−'}${Math.abs(gp).toFixed(1)} nm` : '');
   };
   draw(T1); let playing = null;
@@ -4025,7 +4244,7 @@ function updateBoatVisual(b, rdt) {
   if (!b.isPlayer) { [px, pz] = rel(b.lat, b.lon); const far = Math.hypot(px, pz) > 20000 || (!active.includes(b) && !b.isGhost); v.root.visible = !far; v.wake.visible = !far && !b.isGhost; if (far) return; }
   const h = b.dispHdg * D2R, fx = Math.sin(h), fz = -Math.cos(h), rx = Math.cos(h), rz = Math.sin(h);
   // mer « vue par la coque » : houle + grandes vagues seulement, moyennée sur 3×3 points de la carène (le clapot ne fait pas bouger plusieurs tonnes)
-  const fp = v.fp || (v.root.visible ? hullFootprint(v) : null), l = (fp ? fp.L : 18 * v.cd.k) * 0.38, w = (fp ? Math.max(...fp.hb) : 2.6 * v.cd.k) * 0.75;
+  const fp = v.fp || (v.root.visible ? hullFootprint(v) : null), l = (fp ? fp.L : 18 * v.cd.k) * 0.38, w = v.cd.tri ? O50_X * 0.8 : (fp ? Math.max(...fp.hb) : 2.6 * v.cd.k) * 0.75;
   let hb = 0, hs = 0, hr = 0, hl = 0, hm = 0, yb = 0, ys = 0;
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const q = seaLow(px + fx * l * i + rx * w * j, pz + fz * l * i + rz * w * j); hm += q / 9; if (i > 0) hb += q / 3; if (i < 0) hs += q / 3; if (j > 0) hr += q / 3; if (j < 0) hl += q / 3;
     if (i > 0) yb += j * q; if (i < 0) ys += j * q; } // pente transversale à l'étrave et au tableau : moment de lacet
@@ -4051,7 +4270,7 @@ function updateBoatVisual(b, rdt) {
   if (b.crashFx > 0) { pitchT -= 0.13 * Math.sin(Math.PI * Math.min(1, (1 - b.crashFx) * 1.6)); b.crashFx = Math.max(0, b.crashFx - rdt * 0.5); }
   b.pitchV = (b.pitchV || 0) + (pitchT - (b.pitchV || 0)) * Math.min(1, rdt * 1.6);
   // départ au lof : le bateau se couche puis se redresse
-  if (b.broachT > 0) { b.broachT = Math.max(0, b.broachT - rdt * 0.35); heelT += side * 38 * Math.sin(Math.PI * Math.min(1, (1 - b.broachT) * 2.2)) * (b.broachT > 0 ? 1 : 0); }
+  if (b.broachT > 0) { b.broachT = Math.max(0, b.broachT - rdt * 0.35); heelT += side * (cd.tri ? 13 : 38) * Math.sin(Math.PI * Math.min(1, (1 - b.broachT) * 2.2)) * (b.broachT > 0 ? 1 : 0); }
   // surf (Mini) : au portant dans la brise, le bateau accélère en descendant la face des vagues
   let surfT = 1; if (cd.surf && a > 95 && a < 172 && b.sail > 0) { const amp = smooth(11, 20, b.tws || 0) * 0.45 * cd.surf * Math.exp(-(((a - 140) / 32) ** 2)); surfT = 1 + amp * clamp((hs - hb) / (0.8 + seaAmp * 0.6) + 0.15, -0.5, 1.2); }
   b.surfF = (b.surfF || 1) + (surfT - (b.surfF || 1)) * Math.min(1, rdt * 1.5);
@@ -4065,7 +4284,7 @@ function updateBoatVisual(b, rdt) {
   //  lacet : la mer pousse l'étrave et le tableau de travers (surtout au grand largue), le pilote rattrape (ζ ≈ 0,6).
   const M = b.mz || (b.mz = { y: hm, vy: 0, p: 0, vp: 0, r: 0, vr: 0, yw: 0, vyw: 0, shu: 0 }), Tn = 1.6 * Math.sqrt((fp ? fp.L : 18) / 9), om = 2 * Math.PI / Tn;
   const dw = smooth(130, 170, a), sea = smooth(12, 30, b.tws || 0), up = b.sail > 0 ? 1 : 0.4;
-  const omR = om / (cd.imoca ? 1.9 : 1.6), zR = (0.22 + 0.25 * up) * (1 - 0.35 * dw), omY = om / 2.2;
+  const omR = om / (cd.imoca ? 1.9 : cd.tri ? 1.15 : 1.6), zR = (0.22 + 0.25 * up) * (1 - 0.35 * dw), omY = om / 2.2;
   const tP = Math.atan2(hb - hs, 2 * l) * (cd.imoca ? 1 : 0.85), tR = Math.atan2(hr - hl, 2 * w) * 0.65 * (1 + 0.6 * dw * sea), tY = clamp(Math.atan2(yb - ys, 4 * w) * (1 + 1.5 * smooth(110, 165, a)) + (b.surfF - 1) * side * 0.25, -0.07, 0.07);
   for (let k = 0, n = Math.ceil(rdt / 0.02), dt = rdt / Math.max(1, n); k < n; k++) {
     M.vy += (om * om * (hm - M.y) - 2 * 0.32 * om * M.vy) * dt; M.y += M.vy * dt;
@@ -4073,7 +4292,7 @@ function updateBoatVisual(b, rdt) {
     M.vr += (omR * omR * (tR - M.r) - 2 * zR * omR * M.vr) * dt; M.r += M.vr * dt;
     M.vyw += (omY * omY * (tY - M.yw) - 2 * 0.6 * omY * M.vyw) * dt; M.yw += M.vyw * dt; }
   // assiette avec la vitesse : l'étrave se lève à l'approche de la vitesse de carène (≈ 2° en Mini, 1° en IMOCA), puis le bateau se met à plat en planant
-  const vh = 2.43 * Math.sqrt((fp ? fp.L : 18) * 0.92), sq = (b.dspd || 0) / vh, trimS = (cd.imoca ? 0.018 : 0.035) * (smooth(0.55, 1.1, sq) - 0.5 * smooth(1.3, 2.0, sq)) * (1 - hullUp);
+  const vh = 2.43 * Math.sqrt((fp ? fp.L : 18) * 0.92), sq = (b.dspd || 0) / vh, trimS = (cd.imoca || cd.tri ? 0.016 : 0.035) * (smooth(0.55, 1.1, sq) - 0.5 * smooth(1.3, 2.0, sq)) * (1 - hullUp);
   // en vol : légère respiration de la hauteur et de l'assiette (réglage du foil et du safran)
   const flyW = b.lift > 0.3 ? Math.sin(realT * 2.4 + sd0) * (0.04 * b.lift) : 0, flyP = b.lift > 0.3 ? Math.sin(realT * 2.4 + sd0 + 1.2) * 0.004 * Math.min(1, b.lift) : 0;
   // vibration du coup de bélier (déclenchée par boatSpray), 9 Hz, amortie en 0,4 s
@@ -4543,7 +4762,7 @@ function frame(now) {
   handleInput(rdt);
   if (running && !paused) {
     if (!player.finished) realRaceT += rdt;
-    if (DAILY.on && MODE === 'race') { DAILY.acc += rdt * accel; let n = 0; while (DAILY.acc >= DSTEP && n++ < 600) { dailyStep(); DAILY.acc -= DSTEP; } }
+    if (DAILY.on && MODE === 'race') { DAILY.acc += rdt * accel; const st = DAILY.step || DSTEP; let n = 0; while (DAILY.acc >= st && n++ < 600) { dailyStep(); DAILY.acc -= st; } }
     else { let g = rdt * accel; const maxS = MODE === 'race' ? 60 : 2;
     while (g > 1e-6) { const s = Math.min(g, maxS); for (const b of active) stepBoat(b, s); gameT += s; g -= s; } }
     if (ROUTE.follow && !ROUTE.busy && ROUTE.dest && gameT - ROUTE.lastAuto > (MODE === 'race' ? (COURSE.coastal ? 0.5 : COURSE.id === 'fastnet' ? 3 : 6) * 3600 : 600)) startRouting(ROUTE.dest);
@@ -4576,20 +4795,21 @@ function frame(now) {
   if (JOBS.length) { const idle = !running || paused || MENU_CINE, used = performance.now() - now; runJobs(idle ? 12 : clamp(11 - used, 2.5, 8), idle ? 12 : 3); }
   requestAnimationFrame(frame);
 }
-resize(); { let c0 = 'imoca'; try { c0 = localStorage.getItem('gl3d_cls') || 'imoca'; } catch (e) {} setClass(c0); } setupMode('race', 'transat');
+resize(); { let c0 = 'imoca'; try { c0 = localStorage.getItem('gl3d_cls') || 'imoca'; } catch (e) {} if (c0 === 'mini' || !CLASSES[c0]) c0 = 'proto'; setClass(c0); } setupMode('race', 'transat');
 { let pref = null; try { pref = localStorage.getItem('gl3d_mobile'); } catch (e) {} const auto = matchMedia('(pointer: coarse)').matches && Math.min(innerWidth, innerHeight) < 620; if (pref === '1' || (pref === null && auto)) setMobile(true, true); }
 MODELS_P = loadImocaModels() || Promise.resolve(); applyGfx(SETTINGS.gfx); applyStaticLang(); sailLabels(); document.documentElement.lang = LANG; showMenu(); netInit(); computeProjection(); updateHUD(); drawMap(); drawPolar();
 requestAnimationFrame(frame);
 // Rejeu côté serveur (fonction Vercel) : même moteur, état de départ officiel recalculé, ordres du joueur
 window.__ENGINE = {
   version: ENGINE_VER,
-  coastal: () => COASTAL.map(c => c.id), classes: () => DAILY_CLASSES.slice(), dailyPick: day => dailyPick(day),
+  coastal: () => COASTAL.map(c => c.id), classes: () => DAILY_CLASSES.slice(), dailyPick: day => dailyPick(day), weeklyPick: wk => weeklyPick(wk), weekKey: d => weekKey(d), weekPool: () => WEEKLY_POOL.slice(),
+  // day = jour du défi, ou lundi de la semaine pour la course de la semaine (log.week) — c'est l'appelant qui l'a validé
   serverReplay(log, day) {
-    const c = COURSES[log && log.course]; if (!c || !c.coastal) throw new Error('parcours invalide');
+    const wk = !!(log && log.week), c = COURSES[log && log.course]; if (!c || !(wk ? weeklyPick(day) === log.course : c.coastal)) throw new Error('parcours invalide');
     if (!CLASSES[log.cls]) throw new Error('classe invalide');
     if (!Array.isArray(log.ev)) throw new Error('journal invalide');
     if (log.eng !== ENGINE_VER) throw new Error('version');
-    setClass(log.cls); DAILY.on = true; DAILY.day = day; DAILY.seed = hash32(day + '|' + log.course);
+    setClass(log.cls); DAILY.on = true; DAILY.day = day; DAILY.week = wk ? day : null; DAILY.step = wk ? WSTEP : DSTEP; DAILY.seed = wk ? hash32('W|' + day + '|' + log.course) : hash32(day + '|' + log.course);
     setupMode('race', log.course);
     const res = replayDaily({ ...log, init: snapBoat(player) });
     return { T: res.T, trace: res.trace, pens: res.pens };

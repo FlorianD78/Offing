@@ -8,6 +8,16 @@ function parisDay(d = new Date()) {
   if (process.env.NODE_ENV === 'test' && process.env.TEST_DAY) return process.env.TEST_DAY;
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }
+// Semaine de la course hebdo = date (Paris) du lundi
+function weekKey(d = new Date()) {
+  if (process.env.NODE_ENV === 'test' && process.env.TEST_WEEK) return process.env.TEST_WEEK;
+  const t = new Date(parisDay(d) + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10);
+}
+// Semaine acceptée : la semaine en cours, ou la précédente pendant les 6 premières heures du lundi (course commencée dimanche soir)
+function acceptedWeeks(now = new Date()) {
+  const cur = weekKey(now), early = weekKey(new Date(now.getTime() - 6 * 3600_000));
+  return early === cur ? [cur] : [cur, early];
+}
 // Jour accepté : aujourd'hui, ou hier pendant les 45 premières minutes (course commencée avant minuit)
 function acceptedDays(now = new Date()) {
   const today = parisDay(now), early = parisDay(new Date(now.getTime() - 45 * 60_000));
@@ -50,4 +60,4 @@ function thinTrace(trace, every = 120) {
   return out;
 }
 
-module.exports = { LIMITS, parisDay, acceptedDays, sha256, newToken, safeEq, NAME_RE, UUID_RE, clientIpHash, HttpError, handler, thinTrace };
+module.exports = { LIMITS, parisDay, acceptedDays, weekKey, acceptedWeeks, sha256, newToken, safeEq, NAME_RE, UUID_RE, clientIpHash, HttpError, handler, thinTrace };

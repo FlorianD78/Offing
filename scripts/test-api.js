@@ -3,8 +3,8 @@
 process.env.NODE_ENV = 'test';
 const assert = require('assert');
 const path = require('path');
-const fx = require('./fixtures/daily-ref.json');
-process.env.TEST_DAY = fx.log.day;
+const fx = require('./fixtures/daily-ref.json'), fw = require('./fixtures/weekly-ref.json');
+process.env.TEST_DAY = fx.log.day; process.env.TEST_WEEK = fw.log.week;
 process.env.CRON_SECRET = 'test-secret';
 
 const { setDb } = require('../api/_lib/db');
@@ -55,8 +55,18 @@ async function call(file, { method = 'GET', body, query = {}, headers = {} } = {
   r = await call('leaderboard.js', { query: { course: 'nope', cls: 'imoca' } }); assert.equal(r.status, 400);
   // fantôme du n°1 (analyse de course) et hors tirage du jour
   r = await call('ghosts.js', { query: { course: fx.log.course, cls: fx.log.cls, player: A.id, mode: 'top' } }); assert.equal(r.json.ghosts.length, 2);
-  const other = ['imoca', 'c40', 'mini', 'proto'].find(c => !require('../api/_lib/engine').loadEngine().dailyPick(fx.log.day).classes.includes(c));
+  const E = require('../api/_lib/engine').loadEngine(), other = E.classes().find(c => !E.dailyPick(fx.log.day).classes.includes(c));
   r = await call('submit.js', { method: 'POST', body: { id: A.id, token: A.token, log: { ...fx.log, cls: other } } }); assert.equal(r.status, 400);
+  // course de la semaine : classement à part (même table, jour = lundi), toutes les classes, autre semaine refusée
+  t = Date.now(); r = await call('submit.js', { method: 'POST', body: { id: B.id, token: B.token, log: fw.log } });
+  assert.equal(r.status, 200, JSON.stringify(r.json)); assert.equal(r.json.T, fw.expectT); assert.equal(r.json.rank, 1); assert.equal(r.json.total, 1);
+  console.log(`✅ semaine : ${r.json.T} s vérifiés en ${Date.now() - t} ms (${fw.log.course}/${fw.log.cls})`);
+  r = await call('submit.js', { method: 'POST', body: { id: B.id, token: B.token, log: { ...fw.log, week: '2020-01-06', day: '2020-01-06' } } }); assert.equal(r.status, 400);
+  r = await call('submit.js', { method: 'POST', body: { id: B.id, token: B.token, log: { ...fw.log, course: 'fastnet' === fw.log.course ? 'horta' : 'fastnet' } } }); assert.equal(r.status, 400);
+  r = await call('submit.js', { method: 'POST', body: { id: B.id, token: B.token, log: { ...fw.log, day: fx.log.day } } }); assert.equal(r.status, 400, 'jour ≠ semaine');
+  r = await call('leaderboard.js', { query: { course: fw.log.course, cls: fw.log.cls, week: '1', player: B.id } }); assert.equal(r.json.top.length, 1); assert.equal(r.json.me.rank, 1); assert.equal(r.json.day, fw.log.week);
+  r = await call('leaderboard.js', { query: { course: fw.log.course, cls: fw.log.cls } }); assert.equal(r.status, 400, 'parcours hebdo absent du défi du jour');
+  r = await call('ghosts.js', { query: { course: fw.log.course, cls: fw.log.cls, week: '1', player: A.id } }); assert.equal(r.json.ghosts.length, 1); assert.ok(r.json.ghosts[0].trace.length > 5);
   // code de récupération
   r = await call('me.js', { method: 'POST', body: { id: A.id, token: A.token } }); assert.equal(r.json.name, 'Flo');
   r = await call('me.js', { method: 'POST', body: { id: A.id, token: 'f'.repeat(64) } }); assert.equal(r.status, 401);

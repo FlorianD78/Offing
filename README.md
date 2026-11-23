@@ -2,7 +2,9 @@
 
 *Same wind. Your race.*
 
-Jeu de course au large en 3D dans le navigateur. Le Défi du jour a un classement en ligne : le chrono est vérifié par rejeu côté serveur.
+Jeu de course au large en 3D dans le navigateur. Le Défi du jour et la Course de la semaine ont un classement en ligne : le chrono est vérifié par rejeu côté serveur.
+
+Course de la semaine : un parcours du large (450 à 1 300 nm) par semaine ISO (lundi, heure de Paris), même météo toute la semaine, toutes les classes. Même table `bests` que le défi du jour, avec `day` = date du lundi ; journal `log.week`, rejeu au pas de 5 s (≈ 2 s pour 60 h de course).
 
 - **Front** : `public/index.html`, un seul fichier (Three.js r128 via CDN), servi en statique par Vercel.
 - **API** : fonctions Node dans `api/`. Elles chargent le moteur du jeu (le même `index.html`) dans une sandbox `vm` et rejouent le journal d'ordres du joueur.
@@ -71,7 +73,7 @@ npm run local     # http://localhost:3000 (base en mémoire, ou ta base si SUPAB
 Le chrono n'est valable que si le client et le serveur ont le même moteur. Après toute modification qui change la trajectoire d'un bateau (polaires, météo, manœuvres, pas de temps) :
 
 1. Incrémente `ENGINE_VER` dans `public/index.html`. Le serveur refuse alors les journaux de l'ancienne version et les clients ouverts sont invités à recharger la page.
-2. Régénère `scripts/fixtures/daily-ref.json` (un journal du nouveau moteur avec son `expectT`). Tant que ce n'est pas fait, `check-engine` ignore le test.
+2. Régénère `scripts/fixtures/daily-ref.json` et `scripts/fixtures/weekly-ref.json` (un journal du nouveau moteur avec son `expectT`). Tant que ce n'est pas fait, `check-engine` ignore le test.
 
 Évite de déployer un tel changement en pleine journée : les chronos déjà enregistrés ce jour-là viennent de l'ancien moteur.
 
@@ -96,8 +98,8 @@ Le chrono n'est valable que si le client et le serveur ont le même moteur. Apr�
 |---|---|---|
 | GET | `/api/health` | état, jour du défi, version du moteur, tirage du jour |
 | POST | `/api/register` | `{name}` crée un profil et renvoie `{id, token}` ; `{id, token, name}` renomme |
-| GET | `/api/ghosts?course&cls&player[&mode=top]` | fantômes du jour (traces allégées à 1 point toutes les 2 min) ; `mode=top` : le top 10, pour l'analyse de course |
+| GET | `/api/ghosts?course&cls&player[&mode=top][&week=1]` | fantômes du jour (traces allégées à 1 point toutes les 2 min) ou de la semaine (`week=1`, 1 point / 10 min) ; `mode=top` : le top 10, pour l'analyse de course |
 | POST | `/api/me` | `{id, token}` : restaure un profil avec le code de récupération |
 | POST | `/api/submit` | `{id, token, log}` : rejeu, enregistrement, rang |
-| GET | `/api/leaderboard?course&cls&player` | top 50 du jour et ta place |
+| GET | `/api/leaderboard?course&cls&player[&week=1]` | top 50 du jour (ou de la semaine) et ta place |
 | GET | `/api/cron` | ménage quotidien (appelé par Vercel avec `CRON_SECRET`) |
