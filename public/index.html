@@ -927,15 +927,18 @@ const NOISE_TEX = (() => {
   return { tex, d }; 
 })();
 const MOON = new THREE.Vector3(0.3, 0.5, 0.8).normalize(), SUNCOL = new THREE.Color(1, 0.93, 0.8);
-const SKYU = { uSun: { value: SUN }, uMoon: { value: MOON }, uSunCol: { value: SUNCOL }, uHorizon: { value: HORIZON }, uZenith: { value: ZENITH }, uDay: { value: 1 }, uCloud: { value: 0.3 }, uFlash: { value: 0 }, uCloudOff: { value: new THREE.Vector2() }, uEnv: { value: 0 } };
+const SKYU = { uSun: { value: SUN }, uMoon: { value: MOON }, uSunCol: { value: SUNCOL }, uHorizon: { value: HORIZON }, uZenith: { value: ZENITH }, uDay: { value: 1 }, uCloud: { value: 0.3 }, uFlash: { value: 0 }, uCloudOff: { value: new THREE.Vector2() }, uEnv: { value: 0 }, uMoonUp: { value: 0 }, uSkyT: { value: 0 } };
 const UL = { value: 1 };
 const ENV = { cycle: true, cloud: 0.25, rain: 0, flash: 0, night: 0, sunUp: 1, dayF: 1, local: 14, fd0: 0.000095, nextThunder: [] };
 try { ENV.cycle = localStorage.getItem('gl3d_dn') !== '0'; } catch (e) {}
 const SKY_FN = NOISE_GLSL + `
-uniform vec3 uSun; uniform vec3 uMoon; uniform vec3 uSunCol; uniform vec3 uHorizon; uniform vec3 uZenith; uniform float uDay; uniform float uCloud; uniform float uFlash;
+uniform vec3 uSun; uniform vec3 uMoon; uniform vec3 uSunCol; uniform vec3 uHorizon; uniform vec3 uZenith; uniform float uDay; uniform float uCloud; uniform float uFlash; uniform float uMoonUp; uniform float uSkyT;
 vec3 sky(vec3 r){ float e = clamp(r.y,0.0,1.0); vec3 c = mix(uHorizon,uZenith,pow(e,0.55)); float s = max(dot(r,uSun),0.0), cl = 1.0 - uCloud*0.85;
   c += uSunCol*(pow(s,900.0)*6.0*cl + pow(s,10.0)*0.22*(0.4+0.6*cl)) * smoothstep(-0.05, 0.05, uSun.y);
-  float m = max(dot(r,uMoon),0.0); c += vec3(0.75,0.8,0.9)*(pow(m,2500.0)*3.0 + pow(m,40.0)*0.06)*(1.0-uDay)*cl;
+  float m = max(dot(r,uMoon),0.0), disk = smoothstep(0.99985, 0.99993, m);
+  vec3 mt = normalize(cross(uMoon, vec3(0.0, 1.0, 0.0)) + 1e-4), mb = cross(mt, uMoon); vec2 mp = vec2(dot(r - uMoon, mt), dot(r - uMoon, mb)) * 900.0;
+  float maria = 0.72 + 0.28 * smoothstep(0.35, 0.75, sin(mp.x * 0.9 + 1.3) * sin(mp.y * 1.1 - 0.4) * 0.5 + 0.5 + 0.25 * sin(mp.x * 2.3 + mp.y * 1.7));
+  c += vec3(0.82,0.86,0.95) * (disk * 2.6 * maria + pow(m,900.0)*0.6 + pow(m,60.0)*0.09 + pow(m,8.0)*0.035) * (1.0-uDay) * cl * smoothstep(-0.04, 0.04, uMoon.y);
   return c + vec3(0.55,0.6,0.75)*uFlash; }`;
 const sky = new THREE.Mesh(new THREE.SphereGeometry(50000, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false, uniforms: SKYU,
@@ -943,12 +946,19 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(50000, 48, 24), new THREE.Sh
   fragmentShader: TM(SKY_FN + `uniform vec2 uCloudOff; uniform float uEnv; varying vec3 vDir;
     void main(){ vec3 d = normalize(vDir); if (d.y < 0.0) { gl_FragColor = vec4(mix(uHorizon * 0.9, uHorizon * vec3(0.2, 0.32, 0.42), uEnv * smoothstep(0.0, -0.3, d.y)), 1.0); return; }
       vec3 c = sky(d);
-      if (uDay < 0.6) { vec2 sp = vec2(atan(d.z, d.x) * 380.0, d.y * 600.0); vec2 sf = fract(sp) - 0.5; float sh = hash12(floor(sp)); float st = step(0.993, sh) * smoothstep(0.32, 0.0, length(sf)) * (0.4 + 0.6 * fract(sh * 97.0)) * smoothstep(0.02, 0.3, d.y) * (1.0 - uDay / 0.6) * (1.0 - uCloud); c += vec3(0.85, 0.88, 1.0) * st; }
+      if (uDay < 0.6) { float nf = (1.0 - uDay / 0.6) * (1.0 - uCloud) * smoothstep(0.0, 0.22, d.y) * (1.0 - 0.55 * uMoonUp * pow(max(dot(d, uMoon), 0.0), 3.0));
+        vec2 sp = vec2(atan(d.z, d.x) * 380.0, d.y * 600.0); vec2 sf = fract(sp) - 0.5; float sh = hash12(floor(sp));
+        float tw = 0.75 + 0.25 * sin(uSkyT * (3.0 + 6.0 * fract(sh * 31.0)) + sh * 40.0) * (1.0 - smoothstep(0.1, 0.5, d.y) * 0.7);
+        float st = step(0.9915, sh) * smoothstep(0.36, 0.0, length(sf)) * (0.7 + 1.5 * pow(fract(sh * 97.0), 3.0)) * tw;
+        vec3 scol = mix(vec3(0.8, 0.87, 1.0), vec3(1.0, 0.86, 0.7), step(0.7, fract(sh * 53.0)));
+        vec2 sp2 = sp * 2.3; float sh2 = hash12(floor(sp2) + 17.0); float st2 = step(0.985, sh2) * smoothstep(0.3, 0.0, length(fract(sp2) - 0.5)) * 0.45;
+        vec3 gal = normalize(vec3(0.35, 0.55, -0.76)); float mw = exp(-pow(dot(d, gal) / 0.16, 2.0)) * (0.55 + 0.45 * fbm(vec2(atan(d.z, d.x), d.y) * 6.0));
+        c += (scol * st + vec3(0.8, 0.85, 1.0) * st2 * (0.6 + 1.2 * mw) + vec3(0.12, 0.13, 0.17) * mw * 0.35) * nf; }
       vec2 uv = d.xz / (d.y + 0.07) * 0.32 + uCloudOff;
       float n = fbm(uv * 1.3) * 0.7 + fbm(uv * 3.6 + 11.0) * 0.3;
       float cov = smoothstep(1.0 - uCloud - 0.1, 1.0 - uCloud + 0.3, n) * smoothstep(0.0, 0.16, d.y);
       float thick = smoothstep(0.45, 1.0, n), low = smoothstep(0.3, -0.02, uSun.y) * step(-0.08, uSun.y);
-      vec3 lit = mix(vec3(0.05, 0.06, 0.09), mix(vec3(0.97, 0.97, 0.99), vec3(1.0, 0.68, 0.48), low), uDay);
+      vec3 lit = mix(vec3(0.05, 0.06, 0.09) + vec3(0.1, 0.11, 0.14) * uMoonUp * (0.5 + 0.9 * pow(max(dot(d, uMoon), 0.0), 6.0)), mix(vec3(0.97, 0.97, 0.99), vec3(1.0, 0.68, 0.48), low), uDay);
       vec3 cc = mix(lit, lit * 0.42, thick * (0.4 + 0.6 * uCloud)) + uSunCol * pow(max(dot(d, uSun), 0.0), 7.0) * 0.4 * uDay * (1.0 - thick);
       c = mix(c, cc + vec3(0.7, 0.72, 0.85) * uFlash, cov * 0.96);
       if (uEnv > 0.5) c = min(c, vec3(1.0)) * 0.85; // passe de reflet : pas de disque solaire HDR (le soleil a déjà sa lumière directe)
@@ -1316,7 +1326,9 @@ const oceanMat = new THREE.ShaderMaterial({
       float gl = step(0.993 - 0.005 * df, hash12(floor(wp * 2.2) + floor(uTime * 7.0))) * smoothstep(0.15, 2.5, Dsun * Fh) * df * (1.0 - smoothstep(0.08, 0.3, fp));
       col += uSunCol * gl * 1.8 * sunUp * clr;
       // reflet de lune la nuit
-      col += vec3(0.8, 0.85, 0.95) * pow(max(dot(r, uMoon), 0.0), 260.0) * 0.9 * (1.0 - uDay) * clr * step(0.0, uMoon.y);
+      { float mr = max(dot(r, uMoon), 0.0), mup = (1.0 - uDay) * clr * smoothstep(-0.02, 0.06, uMoon.y);
+        float mg = step(0.994, hash12(floor(wp * 2.2) + floor(uTime * 5.0) + 7.0)) * smoothstep(0.55, 0.9, pow(mr, 40.0));
+        col += vec3(0.8, 0.85, 0.95) * (pow(mr, 260.0) * 1.1 + pow(mr, 45.0) * 0.22 + mg * 1.4) * mup; }
       col += vec3(0.75, 0.8, 0.95) * uFlash * (0.15 + 0.6 * fres);
       col = mix(col, col + vec3(0.18) * light, ring);
       // écume : une couverture (moutons, stries, sillage) appliquée sur un motif de bulles égalisé : dense au cœur, en dentelle sur les bords ;
@@ -2230,12 +2242,16 @@ function initAudio() {
   try {
     const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
     const ctx = new C(); AUD.ctx = ctx;
-    const master = ctx.createGain(); master.gain.value = AUD.on ? 0.9 : 0; master.connect(ctx.destination); AUD.master = master;
+    const master = ctx.createGain(); master.gain.value = AUD.on ? 0.9 : 0; AUD.master = master;
+    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 3.5; comp.attack.value = 0.008; comp.release.value = 0.3; master.connect(comp); comp.connect(ctx.destination);
+    // réverbération : réponse impulsionnelle synthétique (2,4 s, stéréo décorrélée) — donne l'espace du large aux chocs, craquements et cris
+    try { const L = Math.floor(ctx.sampleRate * 2.4), ir = ctx.createBuffer(2, L, ctx.sampleRate); for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < L; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / L, 3.2) * (i < 200 ? i / 200 : 1); }
+      const cv = ctx.createConvolver(); cv.buffer = ir; const vg = ctx.createGain(); vg.gain.value = 0.5; cv.connect(vg); vg.connect(master); AUD.verb = cv; } catch (e) { AUD.verb = null; }
     const buf = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate), d = buf.getChannelData(0); let br = 0;
     for (let i = 0; i < d.length; i++) { const wn = Math.random() * 2 - 1; br = 0.985 * br + 0.015 * wn; d[i] = wn * 0.35 + br * 4; }
     AUD.noise = buf;
-    const loop = (type, f, q) => { const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.playbackRate.value = 0.8 + Math.random() * 0.4; const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const gn = ctx.createGain(); gn.gain.value = 0; src.connect(fl); fl.connect(gn); gn.connect(master); src.start(0, Math.random() * 2); return { fl, gn }; };
-    AUD.wind = loop('bandpass', 500, 0.7); AUD.whistle = loop('bandpass', 1900, 10); AUD.water = loop('lowpass', 400, 0.6); AUD.wash = loop('bandpass', 850, 0.7); AUD.flap = loop('lowpass', 220, 1.2); AUD.rain = loop('highpass', 2600, 0.4);
+    const loop = (type, f, q) => { const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.playbackRate.value = 0.8 + Math.random() * 0.4; const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const gn = ctx.createGain(); gn.gain.value = 0; const pn = ctx.createStereoPanner ? ctx.createStereoPanner() : null; src.connect(fl); fl.connect(gn); gn.connect(pn || master); if (pn) pn.connect(master); src.start(0, Math.random() * 2); return { pn, fl, gn }; };
+    AUD.wind = loop('bandpass', 500, 0.7); AUD.whistle = loop('bandpass', 1900, 10); AUD.water = loop('lowpass', 400, 0.6); AUD.wash = loop('bandpass', 850, 0.7); AUD.flap = loop('lowpass', 220, 1.2); AUD.rain = loop('highpass', 2600, 0.4); AUD.swell = loop('lowpass', 85, 0.7); AUD.hiss = loop('highpass', 5200, 0.5);
     const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 140; const of = ctx.createBiquadFilter(); of.type = 'lowpass'; of.frequency.value = 500; const og = ctx.createGain(); og.gain.value = 0; o.connect(of); of.connect(og); og.connect(master); o.start(); AUD.hum = { o, gn: og };
   } catch (e) { AUD.ctx = null; }
 }
@@ -2252,6 +2268,46 @@ function sfxThunder(p) {
   g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.9 * p, t + 0.08 + (1 - p) * 0.4); g.gain.setTargetAtTime(0.5 * p, t + 0.5, 0.4); g.gain.exponentialRampToValueAtTime(0.001, t + 3.5 + p * 1.5);
   src.connect(f); f.connect(g); g.connect(AUD.master); src.start(t, Math.random() * 1.5); src.stop(t + 5.5);
 }
+/* ----- Effets d'ambiance : clapot contre la coque, craquements de structure, cliquetis de gréement, faune (dauphins, oiseaux, baleine).
+   Tous synthétisés (bruit filtré, oscillateurs) : aucun fichier à charger. ----- */
+function aOut(g, pan, wet) { const ctx = AUD.ctx; let n = g; AUD.n = (AUD.n || 0) + 1; if (ctx.createStereoPanner && pan) { const p = ctx.createStereoPanner(); p.pan.value = clamp(pan, -1, 1); g.connect(p); n = p; } n.connect(AUD.master); if (AUD.verb && wet) { const w = ctx.createGain(); w.gain.value = wet; n.connect(w); w.connect(AUD.verb); } }
+function aNoise(t, dur, type, f, q, rate = 1) { const ctx = AUD.ctx, src = ctx.createBufferSource(); src.buffer = AUD.noise; src.playbackRate.value = rate; const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; src.connect(fl); src.start(t, Math.random() * 2); src.stop(t + dur + 0.05); return fl; }
+function sfxSlap(p, pan) { // clapot sur la coque : choc sourd, bref, un peu de résonance de coque
+  if (!AUD.ctx || !AUD.on) return; const ctx = AUD.ctx, t = ctx.currentTime, d = 0.18 + 0.25 * p, g = ctx.createGain();
+  const fl = aNoise(t, d, 'bandpass', 260 + Math.random() * 260, 0.9, 0.7 + Math.random() * 0.3); fl.connect(g);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.32 * p, t + 0.012); g.gain.exponentialRampToValueAtTime(0.001, t + d); aOut(g, pan, 0.18);
+}
+function sfxCreak(p) { // craquement de structure (bordé, cadènes, émerillons) : grincement bref à hauteur glissante
+  if (!AUD.ctx || !AUD.on) return; const ctx = AUD.ctx, t = ctx.currentTime, d = 0.25 + Math.random() * 0.45, f0 = 55 + Math.random() * 70;
+  const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * (0.75 + Math.random() * 0.6), t + d);
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 500 + Math.random() * 700; bp.Q.value = 6; const g = ctx.createGain();
+  const am = ctx.createOscillator(), amg = ctx.createGain(); am.frequency.value = 18 + Math.random() * 25; amg.gain.value = 0.5; am.connect(amg); amg.connect(g.gain);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05 * p, t + 0.05); g.gain.setTargetAtTime(0.0001, t + d * 0.6, d * 0.25);
+  o.connect(bp); bp.connect(g); aOut(g, (Math.random() - 0.5) * 0.8, 0.35); o.start(t); am.start(t); o.stop(t + d + 0.3); am.stop(t + d + 0.3);
+}
+function sfxRattle(p) { // cliquetis de manille / drisse contre le mât : 2 à 5 petits tics métalliques
+  if (!AUD.ctx || !AUD.on) return; const ctx = AUD.ctx, t0 = ctx.currentTime, n = 2 + Math.floor(Math.random() * 4), pan = (Math.random() - 0.5) * 0.6;
+  for (let i = 0; i < n; i++) { const t = t0 + i * (0.05 + Math.random() * 0.09), g = ctx.createGain(), fl = aNoise(t, 0.06, 'bandpass', 3200 + Math.random() * 2600, 9); fl.connect(g);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.07 * p, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.05); aOut(g, pan, 0.25); }
+}
+function sfxDolphin(p, pan) { // clics en rafale + sifflement modulé
+  if (!AUD.ctx || !AUD.on) return; const ctx = AUD.ctx, t0 = ctx.currentTime;
+  if (Math.random() < 0.55) { const n = 6 + Math.floor(Math.random() * 14), dt = 0.012 + Math.random() * 0.03; for (let i = 0; i < n; i++) { const t = t0 + i * dt, g = ctx.createGain(), fl = aNoise(t, 0.02, 'bandpass', 2500 + Math.random() * 1500, 4); fl.connect(g);
+      g.gain.setValueAtTime(0.05 * p, t); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.012); aOut(g, pan, 0.2); } }
+  else { const o = ctx.createOscillator(), g = ctx.createGain(), d = 0.35 + Math.random() * 0.5, f = 6000 + Math.random() * 4000; o.type = 'sine';
+    o.frequency.setValueAtTime(f * 0.7, t0); o.frequency.exponentialRampToValueAtTime(f, t0 + d * 0.4); o.frequency.exponentialRampToValueAtTime(f * (0.55 + Math.random() * 0.3), t0 + d);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.022 * p, t0 + 0.04); g.gain.exponentialRampToValueAtTime(0.0005, t0 + d); o.connect(g); aOut(g, pan, 0.3); o.start(t0); o.stop(t0 + d + 0.05); }
+}
+function sfxBird(p, pan) { // cri d'oiseau de mer : 2 ou 3 appels descendants, légèrement rauques
+  if (!AUD.ctx || !AUD.on) return; const ctx = AUD.ctx, t0 = ctx.currentTime, n = 2 + Math.floor(Math.random() * 2), f = 1100 + Math.random() * 600;
+  for (let i = 0; i < n; i++) { const t = t0 + i * (0.22 + Math.random() * 0.08), d = 0.16 + Math.random() * 0.08, o = ctx.createOscillator(), g = ctx.createGain(), bp = ctx.createBiquadFilter();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(f * 1.25, t); o.frequency.exponentialRampToValueAtTime(f * 0.7, t + d); bp.type = 'bandpass'; bp.frequency.value = f * 1.6; bp.Q.value = 2.5;
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.035 * p, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0005, t + d); o.connect(bp); bp.connect(g); aOut(g, pan, 0.45); o.start(t); o.stop(t + d + 0.05); }
+}
+function sfxBlow(p, pan) { // souffle de baleine : expiration puissante, grave et soufflée
+  if (!AUD.ctx || !AUD.on) return; const ctx = AUD.ctx, t = ctx.currentTime, g = ctx.createGain(), fl = aNoise(t, 1.8, 'bandpass', 420, 0.8, 0.6); fl.connect(g);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.4 * p, t + 0.12); g.gain.setTargetAtTime(0.0001, t + 0.5, 0.35); aOut(g, pan, 0.6);
+}
 function sfxClick() {
   if (!AUD.ctx || !AUD.on) return; const ctx = AUD.ctx, t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
   o.type = 'square'; o.frequency.value = 1500 + Math.random() * 400; g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.025); o.connect(g); g.connect(AUD.master); o.start(t); o.stop(t + 0.03);
@@ -2263,7 +2319,7 @@ function sfxChime() {
 function updateAudio(rdt) {
   if (!AUD.ctx) return; const t = AUD.ctx.currentTime, P = player, live = running && !paused ? 1 : 0.25;
   const a = Math.abs(P.twa || 0) * D2R, tws = P.tws || 0, aws = Math.sqrt(tws * tws + P.spd * P.spd + 2 * tws * P.spd * Math.cos(a)), near = 1 - clamp(cam.dist / 500, 0, 0.75);
-  AUD.wind.gn.gain.setTargetAtTime(clamp(aws / 45, 0, 1) * 0.5 * live, t, 0.4); AUD.wind.fl.frequency.setTargetAtTime(220 + aws * 22, t, 0.5);
+  AUD.wind.fl.frequency.setTargetAtTime(220 + aws * 22, t, 0.5);
   AUD.whistle.gn.gain.setTargetAtTime(smooth(20, 40, aws) * 0.1 * live, t, 0.5); AUD.whistle.fl.frequency.setTargetAtTime(1400 + aws * 22, t, 0.6);
   AUD.water.gn.gain.setTargetAtTime(clamp(P.spd / 24, 0, 1) * 0.55 * near * live, t, 0.3); AUD.water.fl.frequency.setTargetAtTime(220 + P.spd * 28, t, 0.4);
   AUD.wash.gn.gain.setTargetAtTime((0.03 + 0.08 * (seaAmp + swellAmp * 0.5)) * near * live * (0.55 + 0.45 * Math.sin(realT * 0.9)), t, 0.4);
@@ -2271,6 +2327,21 @@ function updateAudio(rdt) {
   AUD.flap.gn.gain.setTargetAtTime(flapping ? clamp(aws / 25, 0.2, 1) * 0.4 * live * (0.4 + 0.6 * Math.abs(Math.sin(realT * 22))) : 0, t, 0.02);
   if (AUD.rain) AUD.rain.gn.gain.setTargetAtTime(ENV.rain * 0.22 * (running && !paused ? 1 : 0.4), t, 0.6);
   AUD.hum.gn.gain.setTargetAtTime(clamp(P.lift / 1.2, 0, 1) * 0.05 * near * live, t, 0.4); AUD.hum.o.frequency.setTargetAtTime(80 + P.spd * 7, t, 0.5);
+  const night = ENV.night || 0, side = (P.twa || 0) >= 0 ? 1 : -1, act = running && !paused;
+  if (AUD.wind.pn) AUD.wind.pn.pan.setTargetAtTime(side * 0.45 * smooth(25, 120, Math.abs(P.twa || 0)), t, 0.6); if (AUD.water.pn) AUD.water.pn.pan.setTargetAtTime(-side * 0.25, t, 0.6);
+  AUD.wind.gn.gain.setTargetAtTime(clamp(aws / 45, 0, 1) * 0.5 * live * (1 - 0.2 * night), t, 0.4);
+  AUD.swell.gn.gain.setTargetAtTime((0.05 + 0.12 * clamp(swellAmp + seaAmp * 0.4, 0, 2)) * live * (1 + 0.35 * night), t, 0.8);
+  AUD.hiss.gn.gain.setTargetAtTime(smooth(14, 32, P.spd) * 0.05 * near * live, t, 0.3);
+  if (act && near > 0.3) {
+    const sea = clamp(seaAmp + swellAmp * 0.5, 0, 3);
+    AUD.slapT = (AUD.slapT ?? 1) - rdt; if (AUD.slapT <= 0) { AUD.slapT = (0.5 + Math.random() * 1.6) / (0.5 + 0.35 * sea + P.spd / 25); sfxSlap(clamp(0.25 + 0.25 * sea + P.spd / 40, 0.2, 1) * near * (1 + 0.25 * night), (Math.random() - 0.5) * 0.9); }
+    AUD.creakT = (AUD.creakT ?? 4) - rdt; if (AUD.creakT <= 0) { AUD.creakT = (3 + Math.random() * 7) / (0.6 + 0.4 * sea); sfxCreak(clamp(0.5 + 0.3 * sea, 0.4, 1.3) * near); }
+    AUD.ratT = (AUD.ratT ?? 6) - rdt; if (AUD.ratT <= 0) { AUD.ratT = (2 + Math.random() * 6) / (0.4 + smooth(14, 30, aws) + (flapping ? 1.2 : 0)); if (aws > 12 || flapping) sfxRattle(clamp(aws / 30, 0.3, 1) * near); }
+    if (typeof FA !== 'undefined') {
+      if (FA.pod) { AUD.dolT = (AUD.dolT ?? 0.5) - rdt; if (AUD.dolT <= 0) { AUD.dolT = 0.25 + Math.random() * 1.4; sfxDolphin(0.8 * near, (Math.random() - 0.5) * 1.4); } }
+      if (FA.birds && FA.birds.length) { AUD.birdT = (AUD.birdT ?? 3) - rdt; if (AUD.birdT <= 0) { AUD.birdT = 5 + Math.random() * 12; sfxBird(0.8 * (1 - 0.6 * night), (Math.random() - 0.5) * 1.6); } }
+    }
+  }
   if (P.man && running && !paused && P.man.type !== 'foil') { AUD.clickT -= rdt; if (AUD.clickT <= 0) { AUD.clickT = 0.06 + Math.random() * 0.06; sfxClick(); } }
   else if (P.man && running && !paused) { AUD.clickT -= rdt; if (AUD.clickT <= 0) { AUD.clickT = 0.18; sfxClick(); } }
 }
@@ -4561,7 +4632,7 @@ function updateParticles(rdt, bx, bz) {
 const C3 = (r, g, b) => new THREE.Color(r, g, b);
 const HZ = { day: C3(0.77, 0.86, 0.91), set: C3(0.96, 0.62, 0.42), night: C3(0.07, 0.1, 0.16), grey: C3(0.6, 0.65, 0.69) };
 const ZN = { day: C3(0.17, 0.43, 0.7), set: C3(0.24, 0.31, 0.52), night: C3(0.015, 0.03, 0.07), grey: C3(0.46, 0.51, 0.56) };
-const SC = { day: C3(1, 0.93, 0.8), low: C3(1, 0.58, 0.3) }, HEMI_D = C3(0.87, 0.94, 1), HEMI_N = C3(0.42, 0.5, 0.68), MOONC = C3(0.62, 0.7, 0.9);
+const SC = { day: C3(1, 0.93, 0.8), low: C3(1, 0.58, 0.3) }, HEMI_D = C3(0.87, 0.94, 1), HEMI_N = C3(0.46, 0.54, 0.74), MOONC = C3(0.66, 0.74, 0.95), HZ_M = C3(0.12, 0.16, 0.24), ZN_M = C3(0.03, 0.055, 0.12);
 const tc = new THREE.Color();
 function sunDirAt(lat, local, dec, out) {
   const H = (local - 12) * 15 * D2R, la = lat * D2R, de = dec * D2R;
@@ -4579,26 +4650,28 @@ function updateEnv(rdt) {
   const rT = clamp(smooth(0.35, 0.8, sq) + (MODE === 'race' ? 0.45 * smooth(1000, 984, pr) : 0), 0, 1);
   ENV.cloud += (clamp(cT, 0.06, 0.95) - ENV.cloud) * Math.min(1, rdt * 0.4); ENV.rain += (rT - ENV.rain) * Math.min(1, rdt * 0.5);
   const cl = ENV.cloud, rn = ENV.rain; ENV.dayF = dayF; ENV.sunUp = sunUp; ENV.night = 1 - smooth(-0.06, 0.08, el);
-  HORIZON.copy(HZ.night).lerp(HZ.day, dayF).lerp(HZ.set, low * 0.7 * (1 - cl * 0.6)); tc.copy(HZ.grey).multiplyScalar(0.08 + 0.92 * dayF); HORIZON.lerp(tc, cl * 0.75).multiplyScalar(1 - 0.32 * rn);
-  ZENITH.copy(ZN.night).lerp(ZN.day, dayF).lerp(ZN.set, low * 0.55); tc.copy(ZN.grey).multiplyScalar(0.06 + 0.94 * dayF); ZENITH.lerp(tc, cl * 0.8).multiplyScalar(1 - 0.3 * rn);
+  const moonUp0 = smooth(-0.02, 0.15, MOON.y) * (1 - dayF) * (1 - 0.7 * cl);
+  HORIZON.copy(HZ.night).lerp(HZ_M, moonUp0 * 0.8).lerp(HZ.day, dayF).lerp(HZ.set, low * 0.7 * (1 - cl * 0.6)); tc.copy(HZ.grey).multiplyScalar(0.08 + 0.92 * dayF); HORIZON.lerp(tc, cl * 0.75).multiplyScalar(1 - 0.32 * rn);
+  ZENITH.copy(ZN.night).lerp(ZN_M, moonUp0 * 0.8).lerp(ZN.day, dayF).lerp(ZN.set, low * 0.55); tc.copy(ZN.grey).multiplyScalar(0.06 + 0.94 * dayF); ZENITH.lerp(tc, cl * 0.8).multiplyScalar(1 - 0.3 * rn);
   SUNCOL.copy(SC.day).lerp(SC.low, smooth(0.3, 0.02, el));
   // éclairs dans les grains les plus actifs, tonnerre avec un retard proportionnel à la distance
   if (running && !paused && rn > 0.45 && sq > 0.6 && Math.random() < rdt * 0.16 * sq) { ENV.flash = 0.7 + Math.random() * 0.5; const d = 0.6 + Math.random() * 4; ENV.nextThunder.push({ t: realT + d, p: clamp(1.2 - d / 5, 0.3, 1) }); }
   else if (ENV.flash > 0.25 && Math.random() < rdt * 6) ENV.flash = Math.max(ENV.flash, 0.6);
   ENV.flash *= Math.exp(-rdt * 10); if (ENV.flash < 0.01) ENV.flash = 0;
   ENV.nextThunder = ENV.nextThunder.filter(th => { if (realT >= th.t) { sfxThunder(th.p); return false; } return true; });
-  const fl = ENV.flash, light = (0.16 + 0.84 * dayF) * (1 - 0.35 * cl);
-  SKYU.uDay.value = dayF; SKYU.uCloud.value = cl; SKYU.uFlash.value = fl * 0.6;
+  const fl = ENV.flash, light = (0.16 + 0.84 * dayF + 0.1 * moonUp0) * (1 - 0.35 * cl);
+  SKYU.uDay.value = dayF; SKYU.uCloud.value = cl; SKYU.uFlash.value = fl * 0.6; SKYU.uMoonUp.value = moonUp0; SKYU.uSkyT.value = realT;
   const wa = ((player.twd || 0) + 180) * D2R; SKYU.uCloudOff.value.x += Math.sin(wa) * (player.tws || 10) * 0.00012 * rdt; SKYU.uCloudOff.value.y += -Math.cos(wa) * (player.tws || 10) * 0.00012 * rdt;
   oceanU.uRain.value = rn; oceanU.uGustT.value += (player.tws || 10) * KN * 0.55 * rdt;
   UL.value = light + fl * 0.5;
   const fd = ENV.fd0 * (1 + 0.8 * cl + 3.2 * rn) * (GFX.fogK || 1); scene.fog.density = fd; oceanU.uFog.value = fd; scene.fog.color.copy(HORIZON);
   const moonUp = smooth(-0.02, 0.1, MOON.y) * (1 - dayF);
-  sunLight.color.copy(sunUp > 0.02 ? SUNCOL : MOONC); sunLight.intensity = 1.1 * sunUp * (1 - 0.62 * cl) + 0.4 * moonUp * (1 - 0.6 * cl) + fl * 0.6;
+  sunLight.color.copy(sunUp > 0.02 ? SUNCOL : MOONC); sunLight.intensity = 1.1 * sunUp * (1 - 0.62 * cl) + 0.72 * moonUp * (1 - 0.6 * cl) + fl * 0.6;
   sunLight.position.copy(sunUp > 0.02 ? SUN : MOON).multiplyScalar(60); sunLight.target.position.set(0, 0, 0);
   const wantSh = !isMobile() && (sunUp > 0.02 || moonUp > 0.2); if (sunLight.castShadow !== wantSh) sunLight.castShadow = wantSh;
   hemi.color.copy(HEMI_N).lerp(HEMI_D, dayF); hemi.groundColor.setRGB(0.11, 0.23, 0.32).multiplyScalar(0.25 + 0.75 * dayF);
-  hemi.intensity = (0.34 + 0.42 * dayF * (1 - 0.15 * cl)) * (ENVMAP.on ? 0.42 : 1) + fl * 1.4;
+  // nuit : la lumière des étoiles et du ciel lunaire garde un peu de lecture des volumes (l'IBL est quasi noire la nuit)
+  hemi.intensity = (0.34 + 0.42 * dayF * (1 - 0.15 * cl) + 0.12 * moonUp0) * (ENVMAP.on ? 0.42 + 0.4 * (1 - dayF) : 1) + fl * 1.4;
   updateEnvMap();
   pLines.material.opacity = 0.25 + 0.75 * light;
   updateRain(rdt, rn);
@@ -4704,7 +4777,7 @@ function updateFauna(rdt, svx, svz) {
       W.o.position.set(W.x, wy + y, W.z); W.o.rotation.set(0, Math.atan2(W.dx, W.dz), 0); W.body.position.set(0, 0, -6.5); W.body.rotation.x = W.t < 21 ? -0.16 * Math.cos(Math.PI * clamp(tt / 5, 0, 1)) : 0.5 * sonde; // tête qui sort, dos qui roule, tête qui replonge
       // caudale : se lève au-dessus de l'eau pendant la sonde, puis glisse dedans
       W.tail.position.set(0, -1.2 + 5.6 * sonde * (1 - smooth(25.5, 28, W.t)), -6.5 - 2.5 * sonde); W.tail.rotation.x = -1.35 * sonde; W.tail.visible = sonde > 0.02;
-      if (W.t < 21 && tt > 0.3 && !W.blow[k]) { W.blow[k] = 1; const bxw = W.x + W.dx * 4.5, bzw = W.z + W.dz * 4.5, ws = (SS.tws || 10) * KN, wa = (SS.twd + 180) * D2R;
+      if (W.t < 21 && tt > 0.3 && !W.blow[k]) { W.blow[k] = 1; { const dd = Math.hypot(W.x, W.z); sfxBlow(clamp(60 / Math.max(30, dd), 0.15, 1), clamp(W.x / Math.max(1, dd), -1, 1) * 0.8); } const bxw = W.x + W.dx * 4.5, bzw = W.z + W.dz * 4.5, ws = (SS.tws || 10) * KN, wa = (SS.twd + 180) * D2R;
         for (let i = 0; i < 110; i++) { const up = frnd(8, 13), sp = frnd(0, 1); spawn(bxw + frnd(-0.2, 0.2), wy + 0.3, bzw + frnd(-0.2, 0.2), Math.sin(wa) * ws * 0.3 + frnd(-0.5, 0.5) * (1 + 2 * sp), up, -Math.cos(wa) * ws * 0.3 + frnd(-0.5, 0.5) * (1 + 2 * sp), frnd(1.2, 2.2), frnd(0.35, 0.9)); } } } }
 }
 /* ----- Gouttes sur l'objectif (vue à bord seulement) : après un coup de bélier, sous les embruns à haute vitesse, sous la pluie.
