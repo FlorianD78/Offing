@@ -840,7 +840,7 @@ const CLASSES = {
   c40: { id: 'c40', name: 'Class40', long: 'Class40 scow', V0: V0_C40, sails: SAILS_MINI, foils: false, foil: { max: 0, v0: 12, v1: 16, c: 105 }, man: { tack: 150, gybe: 210, sail: 420, foil: 0, reef: 200 }, tau: 45, seaT: 21, seaK: 0.017,
     cap: v => v <= 22 ? v : 22 + (v - 22) * 0.5, heelMax: 21, cam: 58, k: 0.62, reef: true, overT: 22, broach: true },
   o50: { id: 'o50', name: 'Ocean Fifty', long: 'Trimaran Ocean Fifty', V0: V0_O50, FG: FG_O50, sails: SAILS_IMOCA, foils: true, foil: { max: 0.3, v0: 10, v1: 16, c: 110 }, man: { tack: 210, gybe: 240, sail: 480, foil: 150, reef: 240 }, tau: 50, seaT: 22, seaK: 0.016,
-    cap: v => v <= 36 ? v : 36 + (v - 36) * 0.45, heelMax: 11, cam: 78, k: 0.85, reef: true, overT: 24, broach: true, broachT: 23, tri: true },
+    cap: v => v <= 36 ? v : 36 + (v - 36) * 0.45, heelMax: 12, cam: 78, k: 0.85, reef: true, overT: 24, broach: true, broachT: 23, tri: true },
   proto: { id: 'proto', name: 'Mini proto', long: 'Mini 6.50 proto à foils', V0: V0_PROTO, FG: FG_PROTO, sails: SAILS_MINI, foils: true, foil: { max: 0.34, v0: 8.5, v1: 13, c: 105 },
     man: { tack: 100, gybe: 160, sail: 300, foil: 60, reef: 150 }, tau: 25, seaT: 18, seaK: 0.024, cap: v => v <= 26 ? v : 26 + (v - 26) * 0.5, heelMax: 16, cam: 34, k: 0.36, reef: true, overT: 17, broach: true },
 };
@@ -1130,7 +1130,7 @@ const MASK_MAT = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: tr
 const MASK_Y = { imoca: 0.8, c40: 0.42, mini: 0.42, proto: 0.42, o50: 0.85 }; // unités du modèle (Class40 = Mini ×1,875)
 function waterMask(V, capY) {
   const root = V.root, excl = new Set();
-  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.mainMesh, V.sheets, V.wake, V.tri, V.skip && V.skip.g].concat(V.heads || []).forEach(o => o && o.traverse && o.traverse(c => excl.add(c)));
+  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.mainMesh, V.sheets, V.wake, V.tri].concat(V.heads || []).forEach(o => o && o.traverse && o.traverse(c => excl.add(c)));
   if (V.mask) { root.remove(V.mask); V.mask.geometry.dispose(); V.mask = null; }
   const qp = root.position.clone(), qq = root.quaternion.clone(); root.position.set(0, 0, 0); root.quaternion.identity(); root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m = new THREE.Matrix4(), v3 = new THREE.Vector3(), B = new Map(), dz = 0.3;
@@ -1146,7 +1146,7 @@ function waterMask(V, capY) {
 function hullFootprint(V) {
   if (V.fp) return V.fp;
   const root = V.root, excl = new Set();
-  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.tri, V.skip && V.skip.g].forEach(o => o && o.traverse(c => excl.add(c)));
+  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.tri].forEach(o => o && o.traverse(c => excl.add(c)));
   const qp = root.position.clone(), qq = root.quaternion.clone(); root.position.set(0, 0, 0); root.quaternion.identity(); root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m = new THREE.Matrix4(), v3 = new THREE.Vector3(), sc = root.scale.x, P = [];
   root.traverseVisible(o => { if (!o.isMesh || excl.has(o) || o.isSprite) return; const pos = o.geometry && o.geometry.attributes.position; if (!pos) return; m.multiplyMatrices(inv, o.matrixWorld);
@@ -1700,7 +1700,7 @@ function imocaMats(M) {
 function mergeStatic(V) {
   unmergeStatic(V); const conts = [V.root].concat(V.tri ? [V.tri] : []);
   // tout ce qui bouge par rapport à la coque reste à part ; les groupes fixes (safrans, gréement dormant…) sont parcourus
-  const skip = new Set([V.mainMesh, V.bowWave, V.hd, V.wake, V.keel, V.foilS, V.foilP, V.boomPivot, V.vane, V.mast, V.mastOuter, V.tt, V.sheets, V.tri, V.skip && V.skip.g].concat(V.heads || []).filter(Boolean));
+  const skip = new Set([V.mainMesh, V.bowWave, V.hd, V.wake, V.keel, V.foilS, V.foilP, V.boomPivot, V.vane, V.mast, V.mastOuter, V.tt, V.sheets, V.tri].concat(V.heads || []).filter(Boolean));
   V.merged = []; V.mergedHid = [];
   for (const C of conts) {
     const groups = new Map(), walk = P => P.children.forEach(o => { if (skip.has(o) || !o.visible || o.userData.merged) return;
@@ -1934,13 +1934,15 @@ function makeMini(hull, accent, name, isPlayer, proto, c40) {
 /* ----- Ocean Fifty : trimaran 15,24 × 15,24 m — coque centrale étroite, flotteurs de 14 m à étraves hautes, deux bras arqués,
    trampolines, mât-aile rotatif de 22,4 m (tirant d'air 23,8 m), dérive centrale, safrans en T, foils en C dans les flotteurs.
    Proportions relevées sur les plans de classe et les photos (Arkema, Primonial/Viabilis, Edenred, Solidaires en Peloton). ----- */
-const HK_O50 = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.92, 1.08, 1.2, 1.2, 1.06, 0.78, 0.5, 0.12], bC: [0.84, 0.98, 1.08, 1.06, 0.9, 0.64, 0.38, 0.08],
-  yD: [1.12, 1.15, 1.2, 1.27, 1.38, 1.52, 1.64, 1.76], yC: [0.08, -0.06, -0.16, -0.16, -0.04, 0.24, 0.55, 1.0], yB: [-0.1, -0.32, -0.5, -0.52, -0.38, -0.04, 0.32, 0.9] };
-const HK_O50F = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.34, 0.48, 0.58, 0.6, 0.54, 0.42, 0.28, 0.06], bC: [0.3, 0.44, 0.53, 0.55, 0.48, 0.35, 0.2, 0.04],
-  yD: [0.98, 1.02, 1.08, 1.15, 1.28, 1.46, 1.62, 1.82], yC: [0.32, 0.1, -0.04, -0.06, 0.04, 0.3, 0.62, 1.12], yB: [0.24, -0.06, -0.2, -0.24, -0.12, 0.18, 0.52, 1.02] };
+// d'après photos (Edenred, Arkema, Primonial) : coque centrale à franc-bord haut devant et étrave droite ; flotteurs très volumineux,
+// pont plat, carène en V profond, étrave haute et quasi verticale, presque aussi longs que la coque centrale
+const HK_O50 = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.95, 1.1, 1.22, 1.24, 1.12, 0.86, 0.56, 0.1], bC: [0.86, 1.0, 1.1, 1.1, 0.96, 0.7, 0.42, 0.07],
+  yD: [1.12, 1.16, 1.24, 1.34, 1.5, 1.7, 1.86, 2.0], yC: [0.1, -0.05, -0.15, -0.14, 0.0, 0.32, 0.7, 1.35], yB: [-0.1, -0.34, -0.52, -0.54, -0.4, -0.06, 0.4, 1.15] };
+const HK_O50F = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.4, 0.56, 0.66, 0.7, 0.66, 0.54, 0.36, 0.05], bC: [0.33, 0.48, 0.57, 0.6, 0.55, 0.42, 0.26, 0.03],
+  yD: [1.12, 1.2, 1.32, 1.46, 1.66, 1.92, 2.14, 2.36], yC: [0.5, 0.26, 0.06, 0.0, 0.12, 0.48, 0.95, 1.8], yB: [0.3, -0.06, -0.28, -0.32, -0.2, 0.12, 0.6, 1.6] };
 HULLDEF.o50 = { HK: HK_O50, L: 15.24, cock: { z0: 1.7, z1: 2.2, dep: 0.5, xi: 0.74, xr: 0.64, cam: 0.07 } };
-HULLDEF.o50f = { HK: HK_O50F, L: 14.0, cock: { z0: 99, z1: 100, dep: 0, xi: 0.2, xr: 0.3, cam: 0.05 } };
-const O50_X = 6.85, O50_ZF = -2.4, O50_ZA = 3.6, O50_MZ = -2.35, O50_BY = u => 1.38 + 0.56 * (1 - Math.pow(u, 1.7)); // flotteurs, bras avant / arrière, pied de mât
+HULLDEF.o50f = { HK: HK_O50F, L: 14.6, cock: { z0: 99, z1: 100, dep: 0, xi: 0.2, xr: 0.3, cam: 0.05 } };
+const O50_X = 6.8, O50_ZF = -2.35, O50_ZA = 3.5, O50_MZ = -2.35, O50_BY = u => 1.5 + 0.5 * (1 - Math.pow(u, 1.5)); // bras arqués, plus hauts côté coque centrale // flotteurs, bras avant / arrière, pied de mât
 const SAIL_DEFS_O50 = {
   main: { T: [0, 2.45, -2.2], H: [0, 23.45, -2.3], C: [0, 2.55, 5.0], HA: [0, 22.95, 1.2], roach: 0.12, camber: 0.08, twist: 8, min: 1, max: 28, kind: 'main' },
   foc:  { T: [0, 1.85, -7.45], H: [0, 18.6, -2.6], C: [0, 2.2, -0.3], camber: 0.09, twist: 8, min: 8, max: 34, kind: 'jib' },
@@ -1948,8 +1950,8 @@ const SAIL_DEFS_O50 = {
   spi:  { T: [0, 1.85, -9.65], H: [0, 23.25, -2.5], C: [0, 4.4, 4.6], camber: 0.22, twist: 12, min: 20, max: 80, kind: 'spi' },
 };
 const CD_O50 = { sails: SAIL_DEFS_O50, boomPivot: [0, 2.35, -2.2], boomEnd: [0, 2.35, 5.0], trav: [2.7, 2.0, O50_ZA], leads: [[1.7, 1.75, -0.4], [3.6, 1.95, 1.2], [O50_X - 0.3, 1.5, 4.8]],
-  foils: true, cant: false, mastRot: 1.2, k: 0.85, bw: 0.65, heel: 0.42, surf: 0.25, furlers: true, tri: true };
-let O50_KIT = null;
+  foils: true, cant: false, mastRot: 1.2, k: 0.85, bw: 0.65, heel: 0.7, surf: 0.25, furlers: true, tri: true }; // gîte plus franche : le flotteur au vent décolle dès ~14 nd (cf. photos)
+let O50_KIT = null; const O50_BEAM = new THREE.MeshStandardMaterial({ color: 0xf1f3f5, roughness: 0.32, metalness: 0.1, side: THREE.DoubleSide });
 function o50Kit() {
   if (O50_KIT) return O50_KIT;
   useHull('o50'); const HM = mkHullGeos(); useHull('o50f'); const HF = mkHullGeos(); useHull('imoca');
@@ -1957,25 +1959,29 @@ function o50Kit() {
   const netTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = 'rgba(28,32,36,0.5)'; g.fillRect(0, 0, 128, 128); g.strokeStyle = 'rgba(16,18,21,0.95)'; g.lineWidth = 5;
     for (let i = 0; i <= 128; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 128); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(128, i); g.stroke(); }
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 12); t.anisotropy = 4; return t; })();
-  const net = (() => { const pos = [], uv = [], idx = [], NX = 10, NZ = 8, x0 = 1.05, x1 = O50_X - 0.5, z0 = O50_ZF + 0.3, z1 = O50_ZA - 0.3;
+  const net = (() => { const pos = [], uv = [], idx = [], NX = 10, NZ = 8, x0 = 1.1, x1 = O50_X - 0.6, z0 = O50_ZF + 0.72, z1 = O50_ZA - 0.58;
     for (let k of [1, -1]) { const b = pos.length / 3; for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NX; i++) { const u = i / NX, w = j / NZ, x = x0 + (x1 - x0) * u;
-      pos.push(k * x, O50_BY(x / 6.55) - 0.14 - 0.14 * Math.sin(Math.PI * u) * Math.sin(Math.PI * w), z0 + (z1 - z0) * w); uv.push(u, w); }
+      pos.push(k * x, O50_BY(x / 6.55) - 0.1 - 0.12 * Math.sin(Math.PI * u) * Math.sin(Math.PI * w), z0 + (z1 - z0) * w); uv.push(u, w); }
       for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) { const a = b + j * (NX + 1) + i, c = a + NX + 1; idx.push(a, c, a + 1, a + 1, c, c + 1); } }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g; })();
-  const coach = (() => { const sh = new THREE.Shape(); sh.moveTo(1.9, 1.2); sh.lineTo(1.9, 1.72); sh.quadraticCurveTo(0.2, 1.82, -1.2, 1.74); sh.quadraticCurveTo(-1.85, 1.6, -2.05, 1.32); sh.lineTo(-2.05, 1.2); sh.closePath();
-    const g = new THREE.ExtrudeGeometry(sh, { depth: 1.36, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 2, curveSegments: 8 }); g.rotateY(-Math.PI / 2); g.translate(0.68, 0, 0); return g; })();
-  const win = (() => { const pos = [], q = (a, b, c, d) => pos.push(...a, ...b, ...c, ...b, ...d, ...c); [1, -1].forEach(k => { const x = k * 0.745; q([x, 1.38, -1.5], [x, 1.38, 0.6], [x, 1.6, -1.5], [x, 1.62, 0.6]); });
-    q([-0.6, 1.3, -1.98], [0.6, 1.3, -1.98], [-0.55, 1.6, -1.55], [0.55, 1.6, -1.55]); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g; })();
+  const ext = (pts, w) => { const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) { const p = pts[i]; p.length === 4 ? sh.quadraticCurveTo(p[0], p[1], p[2], p[3]) : sh.lineTo(p[0], p[1]); } sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 2, curveSegments: 8 }); g.rotateY(-Math.PI / 2); g.translate(w / 2, 0, 0); return g; };
+  // roof juste derrière le pied de mât, puis casquette de cockpit plus haute et vitrée
+  const coach = ext([[1.9, 1.25], [1.9, 1.78], [0.2, 1.86, -1.2, 1.8], [-1.85, 1.66, -2.05, 1.4], [-2.05, 1.25]], 1.46);
+  const dodger = ext([[3.7, 1.2], [3.7, 1.55], [3.0, 2.02, 2.2, 2.08], [1.6, 2.06, 1.5, 1.8], [1.5, 1.2]], 1.3);
+  const win = (() => { const pos = [], q = (a, b, c, d) => pos.push(...a, ...b, ...c, ...b, ...d, ...c); [1, -1].forEach(k => { const x = k * 0.79; q([x, 1.42, -1.5], [x, 1.42, 0.6], [x, 1.66, -1.5], [x, 1.68, 0.6]);
+      const y = k * 0.71; q([y, 1.62, 1.65], [y, 1.62, 3.0], [y, 1.95, 1.75], [y, 1.92, 2.75]); });
+    q([-0.6, 1.3, -1.98], [0.6, 1.3, -1.98], [-0.55, 1.62, -1.55], [0.55, 1.62, -1.55]); q([-0.55, 1.62, 1.52], [0.55, 1.62, 1.52], [-0.5, 2.0, 1.75], [0.5, 2.0, 1.75]); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g; })();
   const rig = (() => { const pos = [], L = (a, b) => pos.push(...a, ...b), top = [0, 23.35, O50_MZ - 0.05], mid = [0, 15.2, O50_MZ], bs = [0, 1.85, -9.6];
     [1, -1].forEach(k => { const cp = [k * O50_X, 1.45, O50_ZF + 0.5], dia = [k * 1.25, 12.0, O50_MZ + 0.1]; L(top, cp); L(mid, cp); L([0, 3.0, O50_MZ], dia); L(dia, top); L(top, [k * O50_X, 1.25, 5.9]); L(bs, [k * O50_X, 1.55, -6.6]); L([0, 0.95, O50_ZF], [k * O50_X * 0.55, O50_BY(0.55), O50_ZF]); });
     L([0, 22.6, O50_MZ - 0.1], [0, 1.85, -7.5]); L([0, 23.3, O50_MZ - 0.1], bs); L(bs, [0, 0.75, -7.35]); L([0, O50_BY(0), O50_ZF], [0, 0.95, O50_ZF]);
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g; })();
   const rail = (() => { const pos = [], L = (a, b) => pos.push(...a, ...b); [1, -1].forEach(k => { for (let z = -6.2; z < 5.5; z += 1.6) { const x = k * 1.0; L([x, 1.3, z], [x, 1.85, z]); L([x, 1.85, z], [x, 1.85, Math.min(5.5, z + 1.6)]); } }); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g; })();
-  return (O50_KIT = { HM, HF, net, netTex, coach, win, rig, rail,
-    BEAM_F: bladeGeo(arc(O50_ZF), 0.52, 0.52, 0.34, 36, 10), BEAM_A: bladeGeo(arc(O50_ZA), 0.46, 0.46, 0.3, 36, 10),
+  return (O50_KIT = { HM, HF, net, netTex, coach, dodger, win, rig, rail,
+    BEAM_F: bladeGeo(arc(O50_ZF), 1.5, 1.25, 0.26, 36, 12), BEAM_A: bladeGeo(arc(O50_ZA), 1.2, 1.0, 0.24, 36, 12),
     MAST: new THREE.CylinderGeometry(0.1, 0.16, 22.2, 10), BOOM: new THREE.CylinderGeometry(0.06, 0.09, 7.3, 8), SPRIT: new THREE.CylinderGeometry(0.05, 0.08, 2.3, 8), STRIKER: new THREE.CylinderGeometry(0.04, 0.05, 1.0, 6),
     BOARD: bladeGeo([[0, 0.5, 0], [0, -1.2, 0.03], [0, -2.6, 0.08], [0, -3.15, 0.1]], 0.62, 0.42, 0.075, 16, 10),
-    FOIL: bladeGeo([[0, 0.7, 0], [-0.04, -0.35, 0.02], [-0.22, -1.25, 0.05], [-0.62, -1.95, 0.08], [-1.25, -2.3, 0.1], [-1.75, -2.38, 0.11]], 0.56, 0.3, 0.075, 34, 10),
+    FOIL: bladeGeo([[0, 0.9, 0], [0, -0.5, 0.02], [-0.02, -1.55, 0.05], [-0.18, -2.0, 0.07], [-0.6, -2.18, 0.09], [-1.25, -2.22, 0.1], [-1.7, -2.15, 0.11]], 0.55, 0.32, 0.075, 40, 10),
     TILLER: new THREE.BoxGeometry(0.05, 0.05, 1.4), WINCH: new THREE.CylinderGeometry(0.11, 0.15, 0.18, 12) });
 }
 function makeTri(hull, accent, name, isPlayer) {
@@ -1986,13 +1992,13 @@ function makeTri(hull, accent, name, isPlayer) {
   const livS = liv(false), livP = liv(true), param = [];
   const add = (geo, mat, x = 0, y = 0, z = 0, par = root) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); par.add(m); param.push(m); return m; };
   const H = K.HM; add(H.deck, MAT.deck); add(H.topS, livS); add(H.topP, livP); add(H.strS, accMat); add(H.strP, accMat); add(H.bottom, MAT.bottom); add(H.ends, hullMat);
-  add(K.coach, MAT.roof); add(K.win, MAT.glass);
+  add(K.coach, MAT.roof); add(K.dodger, MAT.roof); add(K.win, MAT.glass);
   // flotteurs, bras et trampolines : groupe à part (exclu de l'empreinte de flottaison et du masque d'eau de la coque centrale)
   const tri = new THREE.Group(); root.add(tri);
-  [1, -1].forEach(k => { const F = K.HF; add(F.deck, MAT.deck, k * O50_X, 0, 0.3, tri); add(F.topS, k > 0 ? livS : hullMat, k * O50_X, 0, 0.3, tri); add(F.topP, k > 0 ? hullMat : livP, k * O50_X, 0, 0.3, tri);
-    add(F.strS, accMat, k * O50_X, 0, 0.3, tri); add(F.strP, accMat, k * O50_X, 0, 0.3, tri); add(F.bottom, MAT.bottom, k * O50_X, 0, 0.3, tri); add(F.ends, hullMat, k * O50_X, 0, 0.3, tri);
-    const r = new THREE.Group(); r.position.set(k * O50_X, 0.45, 6.75); r.scale.set(0.7 * k, 0.62, 0.7); r.add(new THREE.Mesh(RUDDER_GEO, MAT.bottom)); r.add(new THREE.Mesh(ELEV_GEO, MAT.bottom)); tri.add(r); param.push(r); });
-  add(K.BEAM_F, hullMat, 0, 0, 0, tri); add(K.BEAM_A, hullMat, 0, 0, 0, tri);
+  [1, -1].forEach(k => { const F = K.HF; add(F.deck, MAT.deck, k * O50_X, 0, 0, tri); add(F.topS, k > 0 ? livS : hullMat, k * O50_X, 0, 0, tri); add(F.topP, k > 0 ? hullMat : livP, k * O50_X, 0, 0, tri);
+    add(F.strS, accMat, k * O50_X, 0, 0, tri); add(F.strP, accMat, k * O50_X, 0, 0, tri); add(F.bottom, MAT.bottom, k * O50_X, 0, 0, tri); add(F.ends, hullMat, k * O50_X, 0, 0, tri);
+    const r = new THREE.Group(); r.position.set(k * O50_X, 0.5, 7.1); r.scale.set(0.7 * k, 0.62, 0.7); r.add(new THREE.Mesh(RUDDER_GEO, MAT.bottom)); r.add(new THREE.Mesh(ELEV_GEO, MAT.bottom)); tri.add(r); param.push(r); });
+  add(K.BEAM_F, O50_BEAM, 0, 0, 0, tri); add(K.BEAM_A, O50_BEAM, 0, 0, 0, tri);
   const netMat = new THREE.MeshStandardMaterial({ map: K.netTex, color: 0xb8c0c8, transparent: true, depthWrite: false, alphaTest: 0.05, roughness: 0.9, side: THREE.DoubleSide }); add(K.net, netMat, 0, 0, 0, tri);
   add(K.STRIKER, MAT.dark, 0, 1.42, O50_ZF, tri);
   { const r = new THREE.LineSegments(K.rail, MAT.rail); root.add(r); }
@@ -2013,7 +2019,7 @@ function makeTri(hull, accent, name, isPlayer) {
   const sheetGeo = new THREE.BufferGeometry(); sheetGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
   const sheets = new THREE.LineSegments(sheetGeo, MAT.sheet); sheets.frustumCulled = false; root.add(sheets);
   const bowWave = makeBowWave(); root.add(bowWave);
-  const [foilS, foilP] = [1, -1].map(k => { const g = new THREE.Group(); g.scale.x = k; const f = new THREE.Mesh(K.FOIL, MAT.foil); g.add(f); param.push(f); root.add(g); return g; });
+  const [foilS, foilP] = [1, -1].map(k => { const g = new THREE.Group(); g.scale.x = k; const f = new THREE.Mesh(K.FOIL, MAT.dark); /* foils carbone, noirs sur les photos */ g.add(f); param.push(f); root.add(g); return g; });
   const label = makeLabel(name, hexCss(isPlayer ? accent : hull), isPlayer ? 160 : 256); label.position.set(0, 29, 0); root.add(label);
   const navMats = [];
   const nav = (c, x, y, z, sz) => { const m = new THREE.SpriteMaterial({ map: GLOW_TEX, color: c, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 }); navMats.push(m); const sp = new THREE.Sprite(m); sp.position.set(x, y, z); sp.scale.set(sz, sz, 1); root.add(sp); };
@@ -4411,47 +4417,11 @@ function updateBoatVisual(b, rdt) {
   if (v.foilPos) { const F = v.foilPos; v.foilS.position.set(F[0] - F[3] * (1 - b.foilS), F[1] + F[4] * (1 - b.foilS), F[2]); v.foilP.position.set(-(F[0] - F[3] * (1 - b.foilP)), F[1] + F[4] * (1 - b.foilP), F[2]); }
   else if (cd.foils) { const k = cd.k; v.foilS.position.set((2.3 - 2.1 * (1 - b.foilS)) * k, (0.3 + 2.0 * (1 - b.foilS)) * k, -1.7 * k); v.foilP.position.set((-2.3 + 2.1 * (1 - b.foilP)) * k, (0.3 + 2.0 * (1 - b.foilP)) * k, -1.7 * k); }
   if (b.isGhost) return;
-  if (b.isPlayer && GFX.level !== 'low') updateSkipper(b, v, rdt, side);
   if (!b.isPlayer) { const dx = px - camera.position.x, dz = pz - camera.position.z, d = Math.hypot(dx, dz), L = 30 + (b.dspd || b.spd) * 6;
     _wkS.center.set(px - fx * L * 0.5, 0, pz - fz * L * 0.5); _wkS.radius = L * 0.6 + 10;
     const see = d < 2500 && _wkF.intersectsSphere(_wkS); v.wake.visible = see; if (!see) return; }
   updateWake(b, px, pz, fx, fz, rx, rz);
   if (Math.hypot(px - camera.position.x, pz - camera.position.z) < 1500) boatSpray(b, px, pz, fx, fz, rx, rz, hb * damp + b.lift, rdt);
-}
-/* ----- Skipper (bateau du joueur seulement) : silhouette low-poly en ciré, debout au vent près de la barre ; passe d'un bord à l'autre
-   pendant les virements, reste à peu près vertical quand le bateau gîte. Donne l'échelle du bateau en caméra proche. ----- */
-const SKIP_GEO = (() => { const c = (rt, rb, h, n = 8) => new THREE.CylinderGeometry(rt, rb, h, n);
-  return { leg: c(0.075, 0.065, 0.85), torso: c(0.2, 0.17, 0.62, 10), arm: c(0.055, 0.05, 0.6), head: new THREE.SphereGeometry(0.12, 12, 10), cap: new THREE.SphereGeometry(0.13, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), boot: new THREE.BoxGeometry(0.11, 0.08, 0.26) }; })();
-const SKIP_MAT = { jacket: new THREE.MeshStandardMaterial({ color: 0xd8402f, roughness: 0.55 }), pants: new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.7 }),
-  skin: new THREE.MeshStandardMaterial({ color: 0xd9a77f, roughness: 0.6 }), cap: new THREE.MeshStandardMaterial({ color: 0xf2f4f6, roughness: 0.4 }), boot: new THREE.MeshStandardMaterial({ color: 0x1a1d21, roughness: 0.5 }) };
-function makeSkipper() {
-  const g = new THREE.Group(), body = new THREE.Group(); g.add(body); const add = (geo, mat, x, y, z, rx = 0, rz = 0, par = body) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, 0, rz); m.castShadow = true; par.add(m); return m; };
-  [-1, 1].forEach(k => { add(SKIP_GEO.leg, SKIP_MAT.pants, 0.11 * k, 0.45, 0.02, 0.12, 0.05 * k); add(SKIP_GEO.boot, SKIP_MAT.boot, 0.12 * k, 0.04, -0.04); });
-  add(SKIP_GEO.torso, SKIP_MAT.jacket, 0, 1.18, 0.03, -0.18);
-  const arms = [-1, 1].map(k => add(SKIP_GEO.arm, SKIP_MAT.jacket, 0.25 * k, 1.12, -0.16, -0.95, 0.12 * k));
-  add(SKIP_GEO.head, SKIP_MAT.skin, 0, 1.62, -0.04); add(SKIP_GEO.cap, SKIP_MAT.cap, 0, 1.64, -0.04);
-  g.userData = { body, arms }; return g;
-}
-function placeSkipper(v) {
-  const s = v.root.scale.y || 1, inv = 1 / s, sk = makeSkipper(); sk.scale.setScalar(inv); v.root.add(sk);
-  // pied de la barre : z de la barre (ou du piédestal), un peu en avant ; plancher et bord du cockpit trouvés par lancer de rayons
-  const hz = v.hd ? v.hd.position.z : 0, z = hz - 0.5 * inv, rc = new THREE.Raycaster(), hits = x => { v.root.updateMatrixWorld(true); const o = new THREE.Vector3(x, 30 * inv, z).applyMatrix4(v.root.matrixWorld);
-    rc.set(o, new THREE.Vector3(0, -1, 0)); const L = []; v.root.traverseVisible(m => { if (m.isMesh && m !== v.mainMesh && !(v.heads || []).includes(m) && m !== v.bowWave && !sk.children.includes(m) && m.material && !m.material.transparent) L.push(m); });
-    const h = rc.intersectObjects(L, false)[0]; return h ? v.root.worldToLocal(h.point.clone()).y : null; };
-  const y0 = hits(0); let xw = 0.35 * inv, yw = y0;
-  if (y0 !== null) for (let x = 0.2 * inv; x < 4 * inv; x += 0.1 * inv) { const y = hits(x); if (y === null || y > y0 + 0.35 * inv) break; xw = x; yw = y; }
-  v.skip = { g: sk, xw: Math.max(0.3 * inv, xw - 0.25 * inv), y: (yw === null ? 0.8 : yw), z, side: 1, t: 0 }; return v.skip;
-}
-function updateSkipper(b, v, rdt, side) {
-  const near = camera.position.distanceToSquared(v.root.position) < 160 * 160;
-  if (!v.skip) { if (!near) return; placeSkipper(v); }
-  const S = v.skip; S.g.visible = near; if (!near) return;
-  S.side += (side - S.side) * Math.min(1, rdt * 1.6); S.t += rdt;
-  const man = b.man && (b.man.type === 'tack' || b.man.type === 'gybe'), hop = Math.max(0, 1 - Math.abs(S.side)) ;
-  S.g.position.set(S.side * S.xw, S.y + hop * 0.05, S.z);
-  S.g.rotation.y = Math.PI - S.side * 0.35; // regarde vers l'avant, légèrement tourné vers les voiles
-  const U = S.g.userData; U.body.rotation.z = -v.root.rotation.z * 0.75 + Math.sin(S.t * 1.3) * 0.02; U.body.rotation.x = (man ? 0.35 : 0.08) + Math.sin(S.t * 0.9) * 0.02;
-  U.arms.forEach((a, i) => a.rotation.x = -0.95 + (man ? 0.5 * Math.sin(S.t * 6 + i * Math.PI) : 0.05 * Math.sin(S.t * 1.7 + i)));
 }
 const tmpV = new THREE.Vector3();
 let landCheckT = 0;
