@@ -2013,25 +2013,31 @@ function makeMini(hull, accent, name, isPlayer, proto, c40) {
 // d'après photos (Edenred, Arkema, Primonial) : coque centrale à franc-bord haut devant et étrave droite ; flotteurs très volumineux,
 // pont plat, carène en V profond, étrave haute et quasi verticale, presque aussi longs que la coque centrale
 // pont rectiligne (pas de tonture) et étrave droite, coque centrale comme flotteurs ; carène en V, flotteurs très volumineux
-const HK_O50 = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.95, 1.1, 1.2, 1.22, 1.12, 0.88, 0.6, 0.12], bC: [0.86, 1.0, 1.1, 1.1, 0.98, 0.74, 0.46, 0.08],
+// vue du dessus (Edenred) : coque centrale fine sur l'avant (≈ 0,8 m de pont à 4 m de l'étrave), large sous le cockpit arrière
+const HK_O50 = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.72, 1.0, 1.08, 0.98, 0.66, 0.42, 0.26, 0.05], bC: [0.66, 0.92, 1.0, 0.9, 0.6, 0.38, 0.22, 0.04],
   yD: [1.45, 1.45, 1.46, 1.47, 1.48, 1.49, 1.5, 1.5], yC: [0.15, 0.0, -0.12, -0.12, -0.04, 0.12, 0.28, 0.6], yB: [-0.05, -0.32, -0.52, -0.55, -0.46, -0.27, -0.08, 0.22] };
-const HK_O50F = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.42, 0.58, 0.68, 0.7, 0.66, 0.52, 0.34, 0.06], bC: [0.34, 0.5, 0.59, 0.61, 0.56, 0.42, 0.26, 0.04],
+// flotteurs fins (≈ 0,8 m de pont), droits, étrave pointue — aussi longs que la coque centrale
+const HK_O50F = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.26, 0.36, 0.41, 0.42, 0.37, 0.27, 0.16, 0.02], bC: [0.22, 0.32, 0.37, 0.38, 0.33, 0.24, 0.14, 0.02],
   yD: [1.5, 1.5, 1.51, 1.52, 1.53, 1.54, 1.55, 1.55], yC: [0.52, 0.26, 0.05, 0.0, 0.04, 0.18, 0.34, 0.7], yB: [0.3, -0.06, -0.28, -0.32, -0.28, -0.14, 0.04, 0.34] };
 HULLDEF.o50 = { HK: HK_O50, L: 15.24, cock: { z0: 1.6, z1: 1.95, dep: 0.45, xi: 0.78, xr: 0.66, cam: 0.05 } }; // cockpit creusé sous la coque ajourée, ouvert vers le tableau
-HULLDEF.o50f = { HK: HK_O50F, L: 14.6, cock: { z0: 99, z1: 100, dep: 0, xi: 0.2, xr: 0.3, cam: 0.05 } };
-const O50_X = 6.8, O50_ZF = -2.35, O50_ZA = 4.6, O50_MZ = -2.35, O50_BY = u => 1.62 + 0.4 * Math.sin(Math.PI * Math.min(1, u * 0.85 + 0.15)) - 0.12 * u; // bras en aile arquée
-// d'après rendus : bras avant en flèche (rejoint les flotteurs ≈ 1,2 m plus en avant), large congé d'emplanture sur la coque centrale ;
-// bras arrière droit, très reculé (≈ 2,5 m du tableau), qui porte le cockpit
-const O50_FZ = u => O50_ZF - 1.2 * Math.pow(u, 1.3), O50_FC = u => 1.15 + 1.25 * Math.exp(-u * 5), O50_AC = u => 1.0 + 1.6 * Math.exp(-u * 4.5); // flotteurs, bras avant / arrière, pied de mât
+HULLDEF.o50f = { HK: HK_O50F, L: 15.0, cock: { z0: 99, z1: 100, dep: 0, xi: 0.2, xr: 0.3, cam: 0.05 } };
+const O50_X = 6.8, O50_ZF = 0.3, O50_MZ = 0.3, O50_BY = u => 1.3 + 0.15 * u + 0.38 * Math.sin(Math.PI * u); /* bras arqués qui arrivent au ras du pont (dessus du bras = livet), pas posés dessus */ // bras en aile arquée
+/* d'après la vue du dessus (Edenred) : bras en X — le bras avant part de la coque juste derrière le mât et file vers l'avant jusqu'au
+   flotteur (≈ 2,3 m de flèche), bordé d'un carénage blanc ; le bras arrière, blanc, très large à l'emplanture (il porte l'arrière du cockpit)
+   et effilé vers le flotteur, file un peu vers l'arrière. Cockpit tout à l'arrière de la coque centrale ; la bôme arrive à son extrémité. */
+const O50_FZ = u => O50_ZF - 2.3 * Math.pow(u, 1.1), O50_FC = u => 0.95 + 0.9 * Math.exp(-u * 5), O50_AZ = u => 5.25 + 0.35 * u, O50_AC = u => 1.2 + 2.2 * Math.exp(-u * 4);
+const O50_FW = u => O50_FZ(u) + O50_FC(u) * 0.5 + 0.45; // carénage blanc derrière le bras avant
 const SAIL_DEFS_O50 = {
-  main: { T: [0, 2.45, -2.2], H: [0, 23.45, -2.3], C: [0, 2.55, 5.0], HA: [0, 22.95, 1.2], roach: 0.12, camber: 0.08, twist: 8, min: 1, max: 28, kind: 'main' },
-  foc:  { T: [0, 1.85, -7.45], H: [0, 18.6, -2.6], C: [0, 2.2, -0.3], camber: 0.09, twist: 8, min: 8, max: 34, kind: 'jib' },
-  gen:  { T: [0, 1.85, -9.5], H: [0, 22.9, -2.55], C: [0, 2.5, 0.8], camber: 0.12, twist: 10, min: 8, max: 40, kind: 'jib' },
-  spi:  { T: [0, 1.85, -9.65], H: [0, 23.25, -2.5], C: [0, 4.4, 4.6], camber: 0.22, twist: 12, min: 20, max: 80, kind: 'spi' },
+  main: { T: [0, 2.45, 0.45], H: [0, 23.45, 0.35], C: [0, 2.55, 7.25], HA: [0, 22.95, 4.0], roach: 0.12, camber: 0.08, twist: 8, min: 1, max: 28, kind: 'main' },
+  foc:  { T: [0, 1.85, -7.45], H: [0, 18.6, 0.05], C: [0, 2.2, 2.35], camber: 0.09, twist: 8, min: 8, max: 34, kind: 'jib' },
+  gen:  { T: [0, 1.85, -7.5], H: [0, 22.9, 0.1], C: [0, 2.5, 3.45], camber: 0.12, twist: 10, min: 8, max: 40, kind: 'jib' },
+  spi:  { T: [0, 1.85, -7.55], H: [0, 23.25, 0.15], C: [0, 4.4, 6.8], camber: 0.22, twist: 12, min: 20, max: 80, kind: 'spi' },
 };
-const CD_O50 = { sails: SAIL_DEFS_O50, boomPivot: [0, 2.35, -2.2], boomEnd: [0, 2.35, 5.0], trav: [2.7, 2.0, O50_ZA], leads: [[1.7, 1.75, -0.4], [3.6, 1.95, 1.2], [O50_X - 0.3, 1.5, 4.8]],
+const CD_O50 = { sails: SAIL_DEFS_O50, boomPivot: [0, 2.35, 0.45], boomEnd: [0, 2.35, 7.25], trav: [2.4, 1.75, 5.7], leads: [[1.5, 1.75, 2.25], [3.4, 1.95, 3.85], [O50_X - 0.3, 1.5, 6.8]],
   foils: true, cant: false, mastRot: 1.2, k: 0.85, bw: 0.65, heel: 0.7, surf: 0.25, furlers: true, tri: true }; // gîte plus franche : le flotteur au vent décolle dès ~14 nd (cf. photos)
 let O50_KIT = null; const O50_DOME = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.32, metalness: 0.05, alphaTest: 0.5, side: THREE.DoubleSide }), O50_BEAM = new THREE.MeshStandardMaterial({ color: 0xf1f3f5, roughness: 0.32, metalness: 0.1, side: THREE.DoubleSide });
+// copie miroir (x → −x) avec l'ordre des sommets inversé et des normales recalculées : une échelle −1 éclairait le bras bâbord par en dessous
+function mirrorX(geo) { const g = geo.clone(); g.scale(-1, 1, 1); const ix = g.index.array; for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; } g.index.needsUpdate = true; g.computeVertexNormals(); return g; }
 function o50Kit() {
   if (O50_KIT) return O50_KIT;
   useHull('o50'); const HM = mkHullGeos(); useHull('o50f'); const HF = mkHullGeos(); useHull('imoca');
@@ -2039,31 +2045,32 @@ function o50Kit() {
   const netTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = 'rgba(28,32,36,0.5)'; g.fillRect(0, 0, 128, 128); g.strokeStyle = 'rgba(16,18,21,0.95)'; g.lineWidth = 5;
     for (let i = 0; i <= 128; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 128); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(128, i); g.stroke(); }
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(9, 9); t.anisotropy = 4; return t; })();
-  // trampolines : entre les bras (bords qui suivent la flèche et les congés) et à l'avant du bras avant (jusqu'à l'étrave de la coque centrale)
+  // trampolines : entre le carénage du bras avant et le bras arrière (bords qui suivent la flèche et les congés)
   const net = (() => { const pos = [], uv = [], idx = [], NX = 12, NZ = 8, x0 = 1.15, x1 = O50_X - 0.65, U = x => x / (O50_X - 0.3);
     const patch = (zA, zB, yOff) => { for (let k of [1, -1]) { const b = pos.length / 3; for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NX; i++) { const u = i / NX, w = j / NZ, x = x0 + (x1 - x0) * u, a = zA(x), c = zB(x);
         pos.push(k * x, O50_BY(U(x)) - yOff(w) - 0.1 * Math.sin(Math.PI * u) * Math.sin(Math.PI * w), a + (c - a) * w); uv.push(u * (x1 - x0) / 5, (c - a) * w / 5); }
       for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) { const a = b + j * (NX + 1) + i, c = a + NX + 1; idx.push(a, c, a + 1, a + 1, c, c + 1); } } };
-    patch(x => O50_FZ(U(x)) + O50_FC(U(x)) * 0.46, x => O50_ZA - O50_AC(U(x)) * 0.46, () => 0.08);
-    patch(x => -6.4 + (O50_FZ(1) - 2.4 + 6.4) * (x - x0) / (x1 - x0), x => O50_FZ(U(x)) - O50_FC(U(x)) * 0.46, w => 0.3 * (1 - w) + 0.08);
+    patch(x => O50_FW(U(x)) + 0.4, x => O50_AZ(U(x)) - O50_AC(U(x)) * 0.46, () => 0.08); // pas de trampoline devant le bras avant (vue du dessus : mer visible)
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g; })();
   const ext = (pts, w) => { const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) { const p = pts[i]; p.length === 4 ? sh.quadraticCurveTo(p[0], p[1], p[2], p[3]) : sh.lineTo(p[0], p[1]); } sh.closePath();
     const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 2, curveSegments: 8 }); g.rotateY(-Math.PI / 2); g.translate(w / 2, 0, 0); return g; };
   // cockpit (d'après rendus) : coque blanche ajourée de grandes découpes, posée sur le bras arrière, au-dessus d'un cockpit creusé
   const domeTex = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d'); g.fillStyle = '#f3f4f6'; g.fillRect(0, 0, 512, 256);
     g.globalCompositeOperation = 'destination-out'; const hole = (x, y, rx, ry) => { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); g.fill(); };
-    for (let k = 0; k < 6; k++) hole(42 + k * 85, 150, 30, 34);          // bandeau de découpes sur le pourtour
-    hole(128, 62, 52, 26); hole(384, 62, 52, 26);                         // deux grandes ouvertures sur le dessus
+    for (let k = 0; k < 8; k++) hole(32 + k * 64, 168, 20, 24);          // bandeau de découpes sur le pourtour
+    g.globalCompositeOperation = 'source-over'; g.fillStyle = '#3b4046';  // hublots et capots sombres en damier sur le dessus (vue du dessus)
+    const rr = (x, y, w, h) => { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, 5) : g.rect(x, y, w, h); g.fill(); };
+    for (let r = 0; r < 3; r++) for (let k = 0; k < 8; k++) rr(14 + k * 64, 30 + r * 34, 34, 22);
     const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t; })();
-  const dome = (() => { const g = new THREE.SphereGeometry(1, 36, 14, 0, Math.PI * 2, 0, Math.PI / 2); g.scale(1.42, 0.58, 1.95); g.translate(0, 1.42, 3.55); return g; })();
-  const rig = (() => { const pos = [], L = (a, b) => pos.push(...a, ...b), top = [0, 23.35, O50_MZ - 0.05], mid = [0, 15.2, O50_MZ], bs = [0, 1.85, -9.6];
-    [1, -1].forEach(k => { const cp = [k * O50_X, 1.45, O50_ZF + 0.5], dia = [k * 1.25, 12.0, O50_MZ + 0.1]; L(top, cp); L(mid, cp); L([0, 3.0, O50_MZ], dia); L(dia, top); L(top, [k * O50_X, 1.25, 5.9]); L(bs, [k * O50_X, 1.55, -6.6]); L([0, 0.95, O50_ZF], [k * O50_X * 0.55, O50_BY(0.55), O50_ZF]); });
-    L([0, 22.6, O50_MZ - 0.1], [0, 1.85, -7.5]); L([0, 23.3, O50_MZ - 0.1], bs); L(bs, [0, 0.75, -7.35]); L([0, O50_BY(0), O50_ZF], [0, 0.95, O50_ZF]);
+  const dome = (() => { const g = new THREE.SphereGeometry(1, 36, 14, 0, Math.PI * 2, 0, Math.PI / 2); g.scale(1.18, 0.78, 2.3); g.translate(0, 1.48, 5.0); /* dépasse du bras arrière, comme sur la photo */ return g; })();
+  const rig = (() => { const pos = [], L = (a, b) => pos.push(...a, ...b), top = [0, 23.35, O50_MZ - 0.05], mid = [0, 15.2, O50_MZ], bs = [0, 1.85, -7.55]; // plus de bout-dehors : amures à l'étrave
+    [1, -1].forEach(k => { const cp = [k * O50_X, 1.45, O50_FZ(1) + 0.5], dia = [k * 1.25, 12.0, O50_MZ + 0.1]; L(top, cp); L(mid, cp); L([0, 3.0, O50_MZ], dia); L(dia, top); L(top, [k * O50_X, 1.25, 5.9]); L([0, 0.95, O50_ZF], [k * O50_X * 0.55, O50_BY(0.55), O50_FZ(0.55)]); });
+    L([0, 22.6, O50_MZ - 0.1], [0, 1.85, -7.5]); L([0, 23.3, O50_MZ - 0.1], bs); L([0, O50_BY(0), O50_ZF], [0, 0.95, O50_ZF]);
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g; })();
   const rail = (() => { const pos = [], L = (a, b) => pos.push(...a, ...b); [1, -1].forEach(k => { for (let z = -6.2; z < 5.5; z += 1.6) { const x = k * 1.0; L([x, 1.3, z], [x, 1.85, z]); L([x, 1.85, z], [x, 1.85, Math.min(5.5, z + 1.6)]); } }); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g; })();
   return (O50_KIT = { HM, HF, net, netTex, dome, domeTex, rig, rail,
-    BEAM_F: bladeGeo(half(O50_FZ), O50_FC, 0, u => 0.34 - 0.14 * u, 30, 14), BEAM_A: bladeGeo(half(() => O50_ZA), O50_AC, 0, u => 0.32 - 0.14 * u, 30, 14),
-    MAST: new THREE.CylinderGeometry(0.1, 0.16, 22.2, 10), BOOM: new THREE.CylinderGeometry(0.06, 0.09, 7.3, 8), SPRIT: new THREE.CylinderGeometry(0.05, 0.08, 2.3, 8), STRIKER: new THREE.CylinderGeometry(0.04, 0.05, 1.0, 6),
+    BEAM_F: bladeGeo(half(O50_FZ), O50_FC, 0, u => 0.34 - 0.14 * u, 30, 14), BEAM_FW: bladeGeo(half(O50_FW), 0.9, 0.9, u => 0.12, 30, 10), BEAM_A: bladeGeo(half(O50_AZ), O50_AC, 0, u => 0.32 - 0.14 * u, 30, 14),
+    MAST: new THREE.CylinderGeometry(0.1, 0.16, 22.2, 10), BOOM: new THREE.CylinderGeometry(0.06, 0.09, 6.8, 8), SPRIT: new THREE.CylinderGeometry(0.05, 0.08, 2.3, 8), STRIKER: new THREE.CylinderGeometry(0.04, 0.05, 1.0, 6),
     BOARD: bladeGeo([[0, 0.5, 0], [0, -1.2, 0.03], [0, -2.6, 0.08], [0, -3.15, 0.1]], 0.62, 0.42, 0.075, 16, 10),
     FOIL: bladeGeo([[0.42, 2.25, 0], [0.18, 1.95, 0], [0.04, 1.45, 0], [0, 0.6, 0.01], [0, -0.6, 0.02], [-0.02, -1.55, 0.05], [-0.18, -2.0, 0.07], [-0.6, -2.18, 0.09], [-1.25, -2.22, 0.1], [-1.7, -2.15, 0.11]], 0.5, 0.32, 0.07, 48, 10),
     TILLER: new THREE.BoxGeometry(0.05, 0.05, 1.4), WINCH: new THREE.CylinderGeometry(0.11, 0.15, 0.18, 12) });
@@ -2075,27 +2082,26 @@ function makeTri(hull, accent, name, isPlayer) {
   const liv = m => new THREE.MeshStandardMaterial({ map: hullTexture(hull, accent, num, m, isPlayer ? 1024 : 512), roughness: 0.25, metalness: 0.18, side: THREE.DoubleSide });
   const livS = liv(false), livP = liv(true), param = [];
   const add = (geo, mat, x = 0, y = 0, z = 0, par = root) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); par.add(m); param.push(m); return m; };
-  const H = K.HM; add(H.deck, MAT.deck); add(H.topS, livS); add(H.topP, livP); add(H.strS, accMat); add(H.strP, accMat); add(H.bottom, MAT.bottom); add(H.ends, hullMat);
+  const H = K.HM; add(H.deck, hullMat); add(H.topS, livS); add(H.topP, livP); add(H.strS, accMat); add(H.strP, accMat); add(H.bottom, MAT.bottom); add(H.ends, hullMat);
   if (!O50_DOME.map) { O50_DOME.map = K.domeTex; O50_DOME.needsUpdate = true; } add(K.dome, O50_DOME);
   // flotteurs, bras et trampolines : groupe à part (exclu de l'empreinte de flottaison et du masque d'eau de la coque centrale)
   const tri = new THREE.Group(); root.add(tri);
-  [1, -1].forEach(k => { const F = K.HF; add(F.deck, MAT.deck, k * O50_X, 0, 0, tri); add(F.topS, k > 0 ? livS : hullMat, k * O50_X, 0, 0, tri); add(F.topP, k > 0 ? hullMat : livP, k * O50_X, 0, 0, tri);
+  [1, -1].forEach(k => { const F = K.HF; add(F.deck, hullMat, k * O50_X, 0, 0, tri); add(F.topS, k > 0 ? livS : hullMat, k * O50_X, 0, 0, tri); add(F.topP, k > 0 ? hullMat : livP, k * O50_X, 0, 0, tri);
     add(F.strS, accMat, k * O50_X, 0, 0, tri); add(F.strP, accMat, k * O50_X, 0, 0, tri); add(F.bottom, MAT.bottom, k * O50_X, 0, 0, tri); add(F.ends, hullMat, k * O50_X, 0, 0, tri);
     const r = new THREE.Group(); r.position.set(k * O50_X, 0.5, 7.1); r.scale.set(0.7 * k, 0.62, 0.7); r.add(new THREE.Mesh(RUDDER_GEO, MAT.bottom)); r.add(new THREE.Mesh(ELEV_GEO, MAT.bottom)); tri.add(r); param.push(r); });
-  [1, -1].forEach(k => { const f = add(K.BEAM_F, hullMat, 0, 0, 0, tri), a = add(K.BEAM_A, O50_BEAM, 0, 0, 0, tri); f.scale.x = a.scale.x = k; });
+  [1, -1].forEach(k => { const M = g => k > 0 ? g : (g.__m || (g.__m = mirrorX(g))); add(M(K.BEAM_F), hullMat, 0, 0, 0, tri); add(M(K.BEAM_FW), O50_BEAM, 0, -0.05, 0, tri); add(M(K.BEAM_A), O50_BEAM, 0, 0, 0, tri); });
   const netMat = new THREE.MeshStandardMaterial({ map: K.netTex, color: 0xb8c0c8, transparent: true, depthWrite: false, alphaTest: 0.05, roughness: 0.9, side: THREE.DoubleSide }); add(K.net, netMat, 0, 0, 0, tri);
   add(K.STRIKER, MAT.dark, 0, 1.42, O50_ZF, tri);
   // pas de filières sur la coque centrale (absentes sur les photos)
   // cockpit : winches, barre
-  [[0.5, 1.55, -1.3], [-0.5, 1.55, -1.3], [0.62, 1.55, 0.1], [-0.62, 1.55, 0.1]].forEach(p => add(K.WINCH, MAT.winch, p[0], p[1], p[2]));
-  const til = new THREE.Mesh(K.TILLER, MAT.dark); til.position.set(0, 1.35, 6.5); root.add(til);
+  [[0.55, 1.55, 3.0], [-0.55, 1.55, 3.0], [0.7, 1.55, 4.2], [-0.7, 1.55, 4.2]].forEach(p => add(K.WINCH, MAT.winch, p[0], p[1], p[2]));
+  const til = new THREE.Mesh(K.TILLER, MAT.dark); til.position.set(0, 1.5, 7.1); root.add(til);
   { const r = new THREE.Group(); r.position.set(0, 0.15, 7.45); r.scale.set(0.85, 0.85, 0.85); r.add(new THREE.Mesh(RUDDER_GEO, MAT.bottom)); r.add(new THREE.Mesh(ELEV_GEO, MAT.bottom)); root.add(r); param.push(r); }
-  const keel = new THREE.Group(); keel.position.set(0, -0.35, -0.9); root.add(keel); { const d = new THREE.Mesh(K.BOARD, accMat); keel.add(d); param.push(d); }
+  const keel = new THREE.Group(); keel.position.set(0, -0.35, 0.7); root.add(keel); { const d = new THREE.Mesh(K.BOARD, accMat); keel.add(d); param.push(d); }
   const mast = new THREE.Mesh(K.MAST, MAT.dark); mast.position.set(0, 1.3 + 11.1, O50_MZ); mast.scale.set(1, 1, 2.3); root.add(mast);
   root.add(new THREE.LineSegments(K.rig, MAT.rig));
-  const sprit = new THREE.Mesh(K.SPRIT, accMat); sprit.position.set(0, 1.85, -8.55); sprit.rotation.x = Math.PI / 2; root.add(sprit);
-  const boomPivot = new THREE.Group(); boomPivot.position.set(0, 2.35, -2.2); root.add(boomPivot);
-  const boom = new THREE.Mesh(K.BOOM, MAT.dark); boom.rotation.x = Math.PI / 2; boom.position.z = 3.65; boomPivot.add(boom);
+  const boomPivot = new THREE.Group(); boomPivot.position.set(0, 2.35, 0.45); root.add(boomPivot);
+  const boom = new THREE.Mesh(K.BOOM, MAT.dark); boom.rotation.x = Math.PI / 2; boom.position.z = 3.4; boomPivot.add(boom); // jusqu'à l'arrière du cockpit
   const sm = (kind, base) => { const tx = sailTexture(kind, base, accent, num, res); return new THREE.MeshStandardMaterial({ map: tx, emissiveMap: tx, emissive: 0xffffff, emissiveIntensity: 0, roughness: kind === 'main' ? 0.5 : 0.62, metalness: kind === 'main' ? 0.1 : 0.02, side: THREE.DoubleSide }); };
   const mkSail = mat => { const m = new THREE.Mesh(makeSailGeo(), mat); m.frustumCulled = false; root.add(m); return m; };
   const mainMesh = mkSail(sm('main', 0x353a40));
@@ -2113,7 +2119,7 @@ function makeTri(hull, accent, name, isPlayer) {
   vane.add(new THREE.Mesh(VANE_GEO, MAT.dark)); const vFin = new THREE.Mesh(VANE_FIN, accMat); vFin.position.set(0, 0.18, 0.72); vane.add(vFin);
   if (isPlayer) root.traverse(o => { if (o.isMesh && o.material && o.material.isMeshStandardMaterial) { o.castShadow = true; o.receiveShadow = true; } });
   scene.add(root);
-  return { root, boomPivot, mainMesh, heads, sheets, bowWave, keel, mast, hd: til, foilS, foilP, foilPos: [O50_X - 0.22, -0.55, O50_ZF - 0.9, 0, 1.25], tri, wake: makeWake(), navMats, vane, awa: 0, cd: CD_O50,
+  return { root, boomPivot, mainMesh, heads, sheets, bowWave, keel, mast, hd: til, foilS, foilP, foilPos: [O50_X - 0.22, -0.55, O50_FZ(1) + 0.4, 0, 1.25], tri, wake: makeWake(), navMats, vane, awa: 0, cd: CD_O50,
     kind: 'o50', param, mats: { hullMat, accMat, livS, livP }, isPlayer, merge: true };
 }
 
