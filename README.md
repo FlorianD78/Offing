@@ -6,6 +6,8 @@ Jeu de course au large en 3D dans le navigateur. Le Défi du jour et la Course d
 
 Course de la semaine : un parcours du large (450 à 1 300 nm) par semaine ISO (lundi, heure de Paris), même météo toute la semaine, toutes les classes. Même table `bests` que le défi du jour, avec `day` = date du lundi ; journal `log.week`, rejeu au pas de 5 s (≈ 2 s pour 60 h de course).
 
+Garde-robe (moteur v15) : le joueur embarque 3 voiles sur 5 avant le départ ; le journal porte `log.kit` (3 identifiants parmi `j2 j1 c0 gk a2`), validé et appliqué par `serverReplay` avant le rejeu. Class40 / Mini : jauge de charge déterministe (rafales calculées depuis la graine), plus de tirage aléatoire de départ au lof.
+
 - **Front** : `public/index.html`, un seul fichier (Three.js r128 via CDN), servi en statique par Vercel.
 - **API** : fonctions Node dans `api/`. Elles chargent le moteur du jeu (le même `index.html`) dans une sandbox `vm` et rejouent le journal d'ordres du joueur.
 - **Base** : Supabase Postgres (tables `players` et `bests`). Elle n'est accessible que par l'API, avec la clé secrète ; RLS est activée sans policy.
