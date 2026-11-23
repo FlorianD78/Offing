@@ -877,6 +877,12 @@ function vmgOpt(tws, up) { let best = -1, ang = up ? 45 : 150; for (let a = up ?
 /* ===================== THREE ===================== */
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+/* Tone mapping filmique « épaule douce » : identique au rendu actuel sous 0,85, les hautes lumières (reflet du soleil, écume, voiles au soleil,
+   ciel près du soleil) s'arrondissent au lieu d'être écrêtées. Appliqué aux matériaux standard et, via TM(), aux shaders du ciel et de la mer. */
+THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace('vec3 CustomToneMapping( vec3 color ) { return color; }',
+  'vec3 CustomToneMapping( vec3 c ) { c = max(c, 0.0); vec3 k = vec3(0.85); vec3 sh = k + 0.15 * (1.0 - exp(-(c - k) / 0.15)); return mix(c, sh, step(k, c)); }');
+renderer.toneMapping = THREE.CustomToneMapping;
+const TM = src => src.replace(/void main\(\)\s*\{/, 'void main0(){') + '\nvoid main(){ main0();\n#include <tonemapping_fragment>\n#include <encodings_fragment>\n}';
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 const scene = new THREE.Scene();
 const HORIZON = new THREE.Color(0xc4dbe8), ZENITH = new THREE.Color(0x2c6db3);
@@ -921,7 +927,7 @@ const NOISE_TEX = (() => {
   return { tex, d }; 
 })();
 const MOON = new THREE.Vector3(0.3, 0.5, 0.8).normalize(), SUNCOL = new THREE.Color(1, 0.93, 0.8);
-const SKYU = { uSun: { value: SUN }, uMoon: { value: MOON }, uSunCol: { value: SUNCOL }, uHorizon: { value: HORIZON }, uZenith: { value: ZENITH }, uDay: { value: 1 }, uCloud: { value: 0.3 }, uFlash: { value: 0 }, uCloudOff: { value: new THREE.Vector2() } };
+const SKYU = { uSun: { value: SUN }, uMoon: { value: MOON }, uSunCol: { value: SUNCOL }, uHorizon: { value: HORIZON }, uZenith: { value: ZENITH }, uDay: { value: 1 }, uCloud: { value: 0.3 }, uFlash: { value: 0 }, uCloudOff: { value: new THREE.Vector2() }, uEnv: { value: 0 } };
 const UL = { value: 1 };
 const ENV = { cycle: true, cloud: 0.25, rain: 0, flash: 0, night: 0, sunUp: 1, dayF: 1, local: 14, fd0: 0.000095, nextThunder: [] };
 try { ENV.cycle = localStorage.getItem('gl3d_dn') !== '0'; } catch (e) {}
@@ -934,8 +940,8 @@ vec3 sky(vec3 r){ float e = clamp(r.y,0.0,1.0); vec3 c = mix(uHorizon,uZenith,po
 const sky = new THREE.Mesh(new THREE.SphereGeometry(50000, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false, uniforms: SKYU,
   vertexShader: `varying vec3 vDir; void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vDir = wp.xyz - cameraPosition; gl_Position = projectionMatrix*viewMatrix*wp; }`,
-  fragmentShader: SKY_FN + `uniform vec2 uCloudOff; varying vec3 vDir;
-    void main(){ vec3 d = normalize(vDir); if (d.y < 0.0) { gl_FragColor = vec4(uHorizon*0.9, 1.0); return; }
+  fragmentShader: TM(SKY_FN + `uniform vec2 uCloudOff; uniform float uEnv; varying vec3 vDir;
+    void main(){ vec3 d = normalize(vDir); if (d.y < 0.0) { gl_FragColor = vec4(mix(uHorizon * 0.9, uHorizon * vec3(0.2, 0.32, 0.42), uEnv * smoothstep(0.0, -0.3, d.y)), 1.0); return; }
       vec3 c = sky(d);
       if (uDay < 0.6) { vec2 sp = vec2(atan(d.z, d.x) * 380.0, d.y * 600.0); vec2 sf = fract(sp) - 0.5; float sh = hash12(floor(sp)); float st = step(0.993, sh) * smoothstep(0.32, 0.0, length(sf)) * (0.4 + 0.6 * fract(sh * 97.0)) * smoothstep(0.02, 0.3, d.y) * (1.0 - uDay / 0.6) * (1.0 - uCloud); c += vec3(0.85, 0.88, 1.0) * st; }
       vec2 uv = d.xz / (d.y + 0.07) * 0.32 + uCloudOff;
@@ -945,9 +951,25 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(50000, 48, 24), new THREE.Sh
       vec3 lit = mix(vec3(0.05, 0.06, 0.09), mix(vec3(0.97, 0.97, 0.99), vec3(1.0, 0.68, 0.48), low), uDay);
       vec3 cc = mix(lit, lit * 0.42, thick * (0.4 + 0.6 * uCloud)) + uSunCol * pow(max(dot(d, uSun), 0.0), 7.0) * 0.4 * uDay * (1.0 - thick);
       c = mix(c, cc + vec3(0.7, 0.72, 0.85) * uFlash, cov * 0.96);
-      gl_FragColor = vec4(c, 1.0); }`,
+      if (uEnv > 0.5) c = min(c, vec3(1.0)) * 0.85; // passe de reflet : pas de disque solaire HDR (le soleil a déjà sa lumière directe)
+      gl_FragColor = vec4(c, 1.0); }`),
 }));
 sky.renderOrder = -1; sky.frustumCulled = false; scene.add(sky);
+/* Reflets d'environnement : le ciel courant (soleil, nuages, mer sombre sous l'horizon) est cuit en carte PMREM et sert de lumière
+   d'ambiance et de reflet à tous les matériaux standard (coques, foils, accastillage). Recalculé seulement quand le ciel change
+   (soleil > 1°, nuages, pluie), au plus une fois toutes les 2 s ; coupé en qualité basse. */
+const ENVMAP = { pm: null, rt: null, sc: new THREE.Scene(), st: null, t: -99, on: false };
+{ const m = new THREE.Mesh(sky.geometry, sky.material); m.frustumCulled = false; ENVMAP.sc.add(m); }
+function updateEnvMap(force) {
+  const want = GFX.level !== 'low'; if (!want) { if (ENVMAP.on) { scene.environment = null; ENVMAP.on = false; } return; }
+  const st = [SUN.x, SUN.y, SUN.z, ENV.cloud, ENV.rain, ENV.dayF], o = ENVMAP.st;
+  if (!force && o && realT - ENVMAP.t < 2) return;
+  if (!force && o && Math.abs(st[0] - o[0]) + Math.abs(st[1] - o[1]) + Math.abs(st[2] - o[2]) < 0.017 && Math.abs(st[3] - o[3]) < 0.05 && Math.abs(st[4] - o[4]) < 0.08 && Math.abs(st[5] - o[5]) < 0.05) return;
+  if (!ENVMAP.pm) ENVMAP.pm = new THREE.PMREMGenerator(renderer);
+  SKYU.uEnv.value = 1; const fl = SKYU.uFlash.value; SKYU.uFlash.value = 0;
+  const rt = ENVMAP.pm.fromScene(ENVMAP.sc, 0, 1, 100000); SKYU.uEnv.value = 0; SKYU.uFlash.value = fl;
+  if (ENVMAP.rt) ENVMAP.rt.dispose(); ENVMAP.rt = rt; scene.environment = rt.texture; ENVMAP.on = true; ENVMAP.st = st; ENVMAP.t = realT;
+}
 
 /* ----- Océan : houle longue + mer du vent (Gerstner), moutons, écume ; maillage polaire centré sur le bateau ----- */
 
@@ -1108,7 +1130,7 @@ const MASK_MAT = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: tr
 const MASK_Y = { imoca: 0.8, c40: 0.42, mini: 0.42, proto: 0.42, o50: 0.85 }; // unités du modèle (Class40 = Mini ×1,875)
 function waterMask(V, capY) {
   const root = V.root, excl = new Set();
-  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.mainMesh, V.sheets, V.wake, V.tri].concat(V.heads || []).forEach(o => o && o.traverse && o.traverse(c => excl.add(c)));
+  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.mainMesh, V.sheets, V.wake, V.tri, V.skip && V.skip.g].concat(V.heads || []).forEach(o => o && o.traverse && o.traverse(c => excl.add(c)));
   if (V.mask) { root.remove(V.mask); V.mask.geometry.dispose(); V.mask = null; }
   const qp = root.position.clone(), qq = root.quaternion.clone(); root.position.set(0, 0, 0); root.quaternion.identity(); root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m = new THREE.Matrix4(), v3 = new THREE.Vector3(), B = new Map(), dz = 0.3;
@@ -1124,7 +1146,7 @@ function waterMask(V, capY) {
 function hullFootprint(V) {
   if (V.fp) return V.fp;
   const root = V.root, excl = new Set();
-  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.tri].forEach(o => o && o.traverse(c => excl.add(c)));
+  [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.tri, V.skip && V.skip.g].forEach(o => o && o.traverse(c => excl.add(c)));
   const qp = root.position.clone(), qq = root.quaternion.clone(); root.position.set(0, 0, 0); root.quaternion.identity(); root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m = new THREE.Matrix4(), v3 = new THREE.Vector3(), sc = root.scale.x, P = [];
   root.traverseVisible(o => { if (!o.isMesh || excl.has(o) || o.isSprite) return; const pos = o.geometry && o.geometry.attributes.position; if (!pos) return; m.multiplyMatrices(inv, o.matrixWorld);
@@ -1201,7 +1223,7 @@ const oceanMat = new THREE.ShaderMaterial({
       vWorld = P;
       gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.0);
     }`,
-  fragmentShader: SKY_FN + WAVE_DECL + `
+  fragmentShader: TM(SKY_FN + WAVE_DECL + `
     uniform sampler2D uSA; uniform sampler2D uSB; uniform sampler2D uNz; uniform float uNzD;
     // bruit lu dans une texture répétable (R = fbm 3 octaves, G/B = ses pentes) : 1 lecture au lieu de 3 bruits de valeur (12 hachages)
     float fbmT(vec2 p){ return texture2D(uNz, p * 0.015625).r; }
@@ -1327,7 +1349,7 @@ const oceanMat = new THREE.ShaderMaterial({
       }
       col = mix(col, uHorizon, 1.0 - exp(-camD * uFog));
       gl_FragColor = vec4(col, 1.0);
-    }`,
+    }`),
 });
 const ocean = new THREE.Mesh(makeOceanGeo(), oceanMat); ocean.frustumCulled = false; ocean.renderOrder = 2; scene.add(ocean);
 // Applique un niveau graphique : résolution, ombres, maillage de la mer, densité des particules
@@ -1672,8 +1694,42 @@ function imocaMats(M) {
   C.vcol = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.12, side: THREE.DoubleSide });
   return M.matCache = C;
 }
+/* ----- Fusion des pièces fixes : un bateau = quelques objets par matériau au lieu de 25 à 65 (appels de dessin ÷ 3 à 4).
+   Ne fusionne que les maillages enfants directs du bateau (et du groupe flotteurs/bras du trimaran) ; tout ce qui bouge reste à part
+   (voiles, bôme, mât, quille, foils, safrans, barre, girouette, sillage). Défaite avant chaque changement de modèle, refaite après. */
+function mergeStatic(V) {
+  unmergeStatic(V); const conts = [V.root].concat(V.tri ? [V.tri] : []);
+  // tout ce qui bouge par rapport à la coque reste à part ; les groupes fixes (safrans, gréement dormant…) sont parcourus
+  const skip = new Set([V.mainMesh, V.bowWave, V.hd, V.wake, V.keel, V.foilS, V.foilP, V.boomPivot, V.vane, V.mast, V.mastOuter, V.tt, V.sheets, V.tri, V.skip && V.skip.g].concat(V.heads || []).filter(Boolean));
+  V.merged = []; V.mergedHid = [];
+  for (const C of conts) {
+    const groups = new Map(), walk = P => P.children.forEach(o => { if (skip.has(o) || !o.visible || o.userData.merged) return;
+      if (!o.isMesh) { if (!o.isSprite && !o.isLine && !o.isPoints && o.children.length) walk(o); return; }
+      if (!o.geometry || !o.geometry.attributes.position || o.userData.noMerge) return;
+      const m = o.material; if (Array.isArray(m)) return; const k = m.uuid + '|' + (o.castShadow ? 1 : 0) + (o.receiveShadow ? 1 : 0) + '|' + o.renderOrder; (groups.get(k) || groups.set(k, []).get(k)).push(o); });
+    walk(C);
+    for (const L of groups.values()) {
+      if (L.length < 2) continue;
+      const mat = L[0].material, wantUv = !!(mat.map || mat.normalMap || mat.roughnessMap), wantCol = !!mat.vertexColors, P = [], N = [], U = [], Co = [];
+      C.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(C.matrixWorld).invert(), M4 = new THREE.Matrix4(), N3 = new THREE.Matrix3(), v = new THREE.Vector3();
+      for (const o of L) { let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry; if (!g.attributes.normal) { if (g === o.geometry) g = g.clone(); g.computeVertexNormals(); }
+        M4.multiplyMatrices(inv, o.matrixWorld); N3.getNormalMatrix(M4); const pa = g.attributes.position, na = g.attributes.normal, ua = g.attributes.uv, ca = g.attributes.color;
+        for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i).applyMatrix4(M4); P.push(v.x, v.y, v.z); v.fromBufferAttribute(na, i).applyMatrix3(N3).normalize(); N.push(v.x, v.y, v.z);
+          if (wantUv) U.push(ua ? ua.getX(i) : 0, ua ? ua.getY(i) : 0); if (wantCol) Co.push(ca ? ca.getX(i) : 1, ca ? ca.getY(i) : 1, ca ? ca.getZ(i) : 1); }
+        if (g !== o.geometry) g.dispose(); }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+      if (wantUv) g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); if (wantCol) g.setAttribute('color', new THREE.Float32BufferAttribute(Co, 3)); g.computeBoundingSphere();
+      const mm = new THREE.Mesh(g, mat); mm.castShadow = L[0].castShadow; mm.receiveShadow = L[0].receiveShadow; mm.renderOrder = L[0].renderOrder; mm.userData.merged = true; C.add(mm); V.merged.push(mm);
+      L.forEach(o => { o.visible = false; V.mergedHid.push(o); });
+    }
+  }
+  V.fp = null; return V;
+}
+function unmergeStatic(V) {
+  if (!V.merged) return; V.merged.forEach(m => { m.parent && m.parent.remove(m); m.geometry.dispose(); }); V.mergedHid.forEach(o => o.visible = true); V.merged = null; V.mergedHid = null;
+}
 function applyImocaModel2(V, M) {
-  if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
+  unmergeStatic(V); if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
   V.param.forEach(o => o.visible = false); (V.oldRig || []).forEach(o => o.visible = false);
   const meta = M.meta, C = imocaMats(M), list = [];
   if (!V.m2) { // groupes créés une fois : mât (axe quêté, tourne sur lui-même), gréement fixe
@@ -1693,12 +1749,12 @@ function applyImocaModel2(V, M) {
   V.vane.position.set(0, 28.79, 2.0); V.cd = CD_IMOCA_M;
   if (V.isPlayer) list.forEach(o => { o.castShadow = true; o.receiveShadow = true; });
   if (V.ghost) list.forEach(o => { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; });
-  V.stlMeshes = list; V.stl = M; V.fp = null;
+  V.stlMeshes = list; V.stl = M; V.fp = null; mergeStatic(V);
 }
 function applyImocaModel(V) {
   const M = (V.isPlayer && GFX.level !== 'low' ? IMOCA_MODEL.hi : IMOCA_MODEL.lo) || IMOCA_MODEL.hi || IMOCA_MODEL.lo; if (!M || V.stl === M) return;
   if (M.v === 2) return applyImocaModel2(V, M);
-  if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
+  unmergeStatic(V); if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
   V.param.forEach(o => o.visible = false); const G = M.geo, list = [], m3 = (geo, mat, parent = V.root) => { if (!geo) return null; const m = new THREE.Mesh(geo, mat); parent.add(m); list.push(m); return m; };
   m3(G.hull_deck, MAT.deck); m3(COCKPIT_TUB(), MAT.deck); m3(G.hull_roof, MAT.roofD); m3(G.hull_topS, V.mats.livS); m3(G.hull_topP, V.mats.livP); m3(G.hull_bottom, MAT.bottom); m3(G.hull_ends, V.mats.hullMat);
   V.keel.position.set(...M.meta.keelPivot); m3(G.keel, V.mats.accMat, V.keel);
@@ -1712,7 +1768,7 @@ function applyImocaModel(V) {
     if (V.isPlayer) { const ped = new THREE.Mesh(PED_GEO, MAT.winch); ped.position.set(0, 0.485 + 0.42, 6.3); V.root.add(ped); list.push(ped); } }
   if (V.isPlayer) list.forEach(o => { o.castShadow = true; o.receiveShadow = true; });
   if (V.ghost) list.forEach(o => { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; });
-  V.stlMeshes = list; V.stl = M; V.fp = null;
+  V.stlMeshes = list; V.stl = M; V.fp = null; mergeStatic(V);
 }
 // binaire OFM1 encodé en base64 dans un JSON (servi tel quel par Vercel comme par l'hébergement d'artifacts)
 const b64buf = t => { const bin = atob(t), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
@@ -1727,13 +1783,13 @@ function loadSmallModels(kind) { if (!SMALL_MODEL[kind]) return;
 }
 function applySmallModel(V) {
   const S = SMALL_MODEL[V.kind]; if (!S) return; const M = (V.isPlayer && GFX.level !== 'low' ? S.hi : S.lo) || S.hi || S.lo; if (!M || V.stl === M) return;
-  if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
+  unmergeStatic(V); if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
   V.param.forEach(o => o.visible = false); const C = imocaMats(M), list = [], matOf = k => k === 'hull' ? V.mats.hullMat : k === 'acc' ? V.mats.accMat : C[k] || C.vcol;
   V.keel.position.set(...M.meta.keelPivot);
   for (const p of M.parts) { const m = new THREE.Mesh(p.geo, matOf(p.mat)); (p.grp === 'keel' ? V.keel : V.root).add(m); list.push(m); }
   if (V.isPlayer) list.forEach(o => { o.castShadow = true; o.receiveShadow = true; });
   if (V.ghost) list.forEach(o => { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; });
-  V.stlMeshes = list; V.stl = M; V.fp = null;
+  V.stlMeshes = list; V.stl = M; V.fp = null; mergeStatic(V);
 }
 const applyModel = V => V.kind ? applySmallModel(V) : applyImocaModel(V);
 function loadImocaModels() {
@@ -1790,7 +1846,7 @@ function makeBoat(hull, accent, name, isPlayer) {
   if (isPlayer) root.traverse(o => { if (o.isMesh && o.material && o.material.isMeshStandardMaterial) { o.castShadow = true; o.receiveShadow = true; } });
   scene.add(root);
   const V = { root, boomPivot, mainMesh, heads, sheets, bowWave, keel, mast, hd, foilS: foils[0], foilP: foils[1], wake: makeWake(), navMats, vane, awa: 0, cd: CD_IMOCA, param, mats: { livS, livP, hullMat, accMat }, sprit, isPlayer, oldRig, navSp };
-  applyImocaModel(V); IMOCA_VIS.push(V); return V;
+  applyImocaModel(V); if (!V.stl) mergeStatic(V); IMOCA_VIS.push(V); return V;
 }
 
 
@@ -1872,7 +1928,7 @@ function makeMini(hull, accent, name, isPlayer, proto, c40) {
   if (c40) { root.scale.setScalar(C40S); label.scale.multiplyScalar(1 / C40S); }
   const V = { root, boomPivot, mainMesh, heads, sheets, bowWave, keel, mast, hd: til, foilS, foilP, wake: makeWake(), navMats, vane, awa: 0, cd: proto ? CD_PROTO : c40 ? CD_C40 : CD_MINI,
     kind: c40 ? 'c40' : 'mini', param, mats: { hullMat, accMat }, isPlayer };
-  SMALL_VIS.push(V); loadSmallModels(V.kind); applySmallModel(V); return V;
+  SMALL_VIS.push(V); loadSmallModels(V.kind); applySmallModel(V); if (!V.stl) mergeStatic(V); return V;
 }
 
 /* ----- Ocean Fifty : trimaran 15,24 × 15,24 m — coque centrale étroite, flotteurs de 14 m à étraves hautes, deux bras arqués,
@@ -1968,7 +2024,7 @@ function makeTri(hull, accent, name, isPlayer) {
   if (isPlayer) root.traverse(o => { if (o.isMesh && o.material && o.material.isMeshStandardMaterial) { o.castShadow = true; o.receiveShadow = true; } });
   scene.add(root);
   return { root, boomPivot, mainMesh, heads, sheets, bowWave, keel, mast, hd: til, foilS, foilP, foilPos: [O50_X - 0.22, 0.1, -1.25, 0, 1.9], tri, wake: makeWake(), navMats, vane, awa: 0, cd: CD_O50,
-    kind: 'o50', param, mats: { hullMat, accMat, livS, livP }, isPlayer };
+    kind: 'o50', param, mats: { hullMat, accMat, livS, livP }, isPlayer, merge: true };
 }
 
 /* ----- Îles 3D ----- */
@@ -2312,7 +2368,7 @@ const boats = BOAT_DEFS.map(d => ({
   name: d.name, isPlayer: !!d.player, skill: d.skill || 1, hyst: d.hyst || 0, every: d.every || 12, strat: d.strat, color: hexCss(d.player ? d.acc : d.hull),
   def: d, visSet: {},
 }));
-const makeBoatOf = (cls, d) => cls === 'imoca' ? makeBoat(d.hull, d.acc, d.name, !!d.player) : cls === 'o50' ? makeTri(d.hull, d.acc, d.name, !!d.player) : makeMini(d.hull, d.acc, d.name, !!d.player, cls === 'proto', cls === 'c40');
+const makeBoatOf = (cls, d) => cls === 'imoca' ? makeBoat(d.hull, d.acc, d.name, !!d.player) : cls === 'o50' ? mergeStatic(makeTri(d.hull, d.acc, d.name, !!d.player)) : makeMini(d.hull, d.acc, d.name, !!d.player, cls === 'proto', cls === 'c40');
 boats.forEach(b => { b.vis = b.visSet.imoca = makeBoatOf('imoca', b.def); });
 const player = boats[0];
 const TRAIN_ACCELS = [1, 5, 10, 30];
@@ -2539,10 +2595,20 @@ function botDecide(b, w, dt) {
 const ASSIST = 0.985;
 // probabilité horaire : nulle sous 17 nd, monte vite au-delà de 20 nd, pire en abattant trop peu (spi « chaud ») ou en bordant trop
 function broachRisk(a, tws, trim) { const T0 = CLS.broachT || 17; if (tws < T0) return 0; const hot = smooth(150, 110, a), over = Math.max(0, topt(a) - trim) * 3; return Math.pow((tws - T0) / 6, 2) * (0.35 + 1.4 * hot + over); }
+const SHARED_MATS = new Set(Object.values(MAT));
+function freeVis(v) {
+  if (!v || v.freed) return; v.freed = true; unmergeStatic(v); scene.remove(v.root); scene.remove(v.wake);
+  [IMOCA_VIS, SMALL_VIS].forEach(L => { const i = L.indexOf(v); if (i >= 0) L.splice(i, 1); });
+  const own = new Set([v.mainMesh, v.wake].concat(v.heads || []).filter(Boolean)), mats = new Set();
+  v.root.traverse(o => { if (o.material) [].concat(o.material).forEach(m => mats.add(m)); }); [v.wake].forEach(o => o && o.material && mats.add(o.material));
+  own.forEach(o => o.geometry && o.geometry.dispose());
+  mats.forEach(m => { if (SHARED_MATS.has(m) || m === MASK_MAT) return; ['map', 'emissiveMap'].forEach(k => { const t = m[k]; if (t && t.isCanvasTexture && t !== GLOW_TEX) t.dispose(); }); if (!m.isShaderMaterial) m.dispose(); });
+}
 function setClass(id) {
   CLS = CLASSES[id] || CLASSES.imoca; SAILS = CLS.sails; PT.clear();
   MAN.tack.dur = CLS.man.tack; MAN.gybe.dur = CLS.man.gybe; MAN.sail.dur = CLS.man.sail; MAN.foil.dur = CLS.man.foil || 1;
-  boats.forEach(b => { Object.values(b.visSet).forEach(v => { v.root.visible = false; v.wake.visible = false; }); b.vis = b.visSet[CLS.id] || (b.visSet[CLS.id] = makeBoatOf(CLS.id, b.def)); });
+  // les visuels d'une classe quittée sont libérés (textures de coque et de voiles, géométries propres au bateau) : la mémoire ne grossit plus à chaque changement
+  boats.forEach(b => { Object.keys(b.visSet).forEach(k => { if (k !== CLS.id) { freeVis(b.visSet[k]); delete b.visSet[k]; } }); b.vis = b.visSet[CLS.id] || (b.visSet[CLS.id] = makeBoatOf(CLS.id, b.def)); });
   hideGhosts();
   cam.dist = CLS.cam; document.body.classList.toggle('cls-mini', !CLS.foils); document.body.classList.toggle('cls-proto', CLS.id === 'proto'); document.body.classList.toggle('has-reef', !!CLS.reef);
   try { localStorage.setItem('gl3d_cls', CLS.id); } catch (e) {}
@@ -3444,7 +3510,14 @@ function updateBalUI() {
   $('flyTxt').textContent = P.crashT > 0 ? T('💥 Planté — redécollage dans ', '💥 Crashed — take-off in ') + Math.ceil(P.crashT / 60) + ' min' : P.fly > 0.85 ? T('✈ En vol', '✈ Flying') + ' · ' + T('rendement ', 'efficiency ') + Math.round((P.foilEff || 1) * 100) + ' %' : P.fly > 0.03 ? T('Décollage ', 'Taking off ') + Math.round(P.fly * 100) + ' %' : T('Dans l\'eau', 'In the water');
 }
 function setBal(mx, ms) { player.mx = Math.round(clamp(mx, -1, 1) * 20) / 20; player.ms = Math.round(clamp(ms, -1, 1) * 20) / 20; player.my = player.ms * ((player.twa || 0) >= 0 ? 1 : -1); player.autoBal = false; if (CLS.foils) updateBalUI(); }
+/* HUD : les écritures DOM identiques à la précédente sont ignorées (évite recalcul de style et mise en page 10 fois par seconde) */
+(() => { if (typeof Element === 'undefined' || typeof Node === 'undefined') return; const H = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML'), Tx = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+  if (!H || !Tx) return;
+  ["board", "foilHint", "iAll", "iBaro", "iHdg", "iHeel", "iPerf", "iSog", "iTwd", "iTws", "iVLbl", "iVmg", "manq", "mantxt", "mstrip", "qAcc", "rInfo", "reefTxt", "tlBody", "trimTxt"].forEach(id => { const el = document.getElementById(id); if (!el) return;
+    Object.defineProperty(el, 'innerHTML', { configurable: true, get() { return H.get.call(this); }, set(v) { v = String(v); if (v !== this.__h) { this.__h = v; this.__t = undefined; H.set.call(this, v); } } });
+    Object.defineProperty(el, 'textContent', { configurable: true, get() { return Tx.get.call(this); }, set(v) { v = String(v); if (v !== this.__t) { this.__t = v; this.__h = undefined; Tx.set.call(this, v); } } }); }); })();
 function updateHUD() {
+  let __tl = '';
   const w = curWind(), twa = norm180(w.twd - player.hdg), a = Math.abs(twa);
   if (isMobile()) {
     const cell = (l, v, c) => `<div><small>${l}</small><b${c ? ` style="color:${c}"` : ''}>${v}</b></div>`;
@@ -3468,7 +3541,7 @@ function updateHUD() {
   const posTxt = `${Math.abs(player.lat).toFixed(2)}°${player.lat >= 0 ? 'N' : 'S'} ${Math.abs(player.lon).toFixed(2)}°${player.lon < 0 ? 'W' : 'E'}`;
   if (MODE === 'race') {
     const st = standings(), r = st.indexOf(player) + 1, d = dtf(player);
-    $('tlBody').innerHTML = row(T('Temps de course', 'Race time'), fmtRace(player.finished ? player.finishT : gameT)) + row(T('Classement', 'Position'), DAILY.on && ghostsOn() ? (() => { const dP = dtf(player), rr = 1 + GHOST.list.filter(g => g.st.finished || g.d < dP).length; return `${ord(rr)} / ${GHOST.list.length + 1} (${T('fantômes', 'ghosts')})`; })() : `${ord(r)} / ${active.length}`)
+    __tl = row(T('Temps de course', 'Race time'), fmtRace(player.finished ? player.finishT : gameT)) + row(T('Classement', 'Position'), DAILY.on && ghostsOn() ? (() => { const dP = dtf(player), rr = 1 + GHOST.list.filter(g => g.st.finished || g.d < dP).length; return `${ord(rr)} / ${GHOST.list.length + 1} (${T('fantômes', 'ghosts')})`; })() : `${ord(r)} / ${active.length}`)
       + (nmk ? row(T('Prochaine marque', 'Next mark'), `${mN(nmk).split(' · ')[0]} · ${gcDist(player.lat, player.lon, nmk.lat, nmk.lon).toFixed(nmk.finish && d < 100 ? 1 : 0)} nm`) : '')
       + row(T('Restant total', 'Distance left'), player.finished ? T('Arrivé ✓', 'Finished ✓') : d.toFixed(0) + ' nm') + row(T('Position', 'Lat / lon'), posTxt) + row(T('Temps réel joué', 'Real time played'), fmtClock(realRaceT));
     const lead = dtf(st.find(b => !b.finished && !b.atStop) || st[0]);
@@ -3477,13 +3550,14 @@ function updateHUD() {
   } else {
     placeBoard();
     const left = TRAIN_BUOYS.filter(b => !b.done); let near = null, nd = 1e9; left.forEach(b => { const dd = gcDist(player.lat, player.lon, b.lat, b.lon); if (dd < nd) { nd = dd; near = b; } });
-    $('tlBody').innerHTML = row(T('Chrono', 'Time'), fmtClock(gameT)) + row(T('Loch', 'Log'), player.log.toFixed(2) + ' nm') + row(T('Bouées validées', 'Buoys rounded'), `${TRAIN_BUOYS.length - left.length} / ${TRAIN_BUOYS.length}`) + (near ? row(T('Bouée proche', 'Nearest buoy'), `${near.name} · ${nd.toFixed(2)} nm · ${Math.round(gcBrg(player.lat, player.lon, near.lat, near.lon))}°`) : row(T('Tour', 'Lap'), T('complet ✓', 'complete ✓')));
+    __tl = row(T('Chrono', 'Time'), fmtClock(gameT)) + row(T('Loch', 'Log'), player.log.toFixed(2) + ' nm') + row(T('Bouées validées', 'Buoys rounded'), `${TRAIN_BUOYS.length - left.length} / ${TRAIN_BUOYS.length}`) + (near ? row(T('Bouée proche', 'Nearest buoy'), `${near.name} · ${nd.toFixed(2)} nm · ${Math.round(gcBrg(player.lat, player.lon, near.lat, near.lon))}°`) : row(T('Tour', 'Lap'), T('complet ✓', 'complete ✓')));
   }
-  $('tlBody').insertAdjacentHTML('beforeend', row(T('Météo', 'Weather'), weatherTxt()));
-  if (MODE === 'race') { const sLeft = Math.max(0, FC.nextReal - realRaceT); $('tlBody').insertAdjacentHTML('beforeend', row(T('Prévision', 'Forecast'), DAILY.on ? T(`run n°${FC.n} · suivant à ${fmtRace(FC.nextGame)}`, `run #${FC.n} · next at ${fmtRace(FC.nextGame)}`) : T(`run n°${FC.n} · suivant dans `, `run #${FC.n} · next in `) + `${Math.floor(sLeft / 60)}:${String(Math.floor(sLeft % 60)).padStart(2, '0')}`));
+  __tl += (row(T('Météo', 'Weather'), weatherTxt()));
+  if (MODE === 'race') { const sLeft = Math.max(0, FC.nextReal - realRaceT); __tl += (row(T('Prévision', 'Forecast'), DAILY.on ? T(`run n°${FC.n} · suivant à ${fmtRace(FC.nextGame)}`, `run #${FC.n} · next at ${fmtRace(FC.nextGame)}`) : T(`run n°${FC.n} · suivant dans `, `run #${FC.n} · next in `) + `${Math.floor(sLeft / 60)}:${String(Math.floor(sLeft % 60)).padStart(2, '0')}`));
     const hW = 1.5 * seaAmp, hS = 3.85 * swellAmp, H = Math.hypot(hW, hS), D = [[0.1, 'calme', 'calm'], [0.5, 'belle', 'smooth'], [1.25, 'peu agitée', 'slight'], [2.5, 'agitée', 'moderate'], [4, 'forte', 'rough'], [6, 'très forte', 'very rough'], [9, 'grosse', 'high'], [14, 'très grosse', 'very high'], [99, 'énorme', 'phenomenal']].find(d => H < d[0]);
     const mL = Math.max(0, SS.nextR - realT), mTr = SS.to && realT - SS.tr0 < SEA_TR;
-    $('tlBody').insertAdjacentHTML('beforeend', row(T('Mer', 'Sea'), `${T(D[1], D[2])} · ${H.toFixed(1)} m · ` + (mTr ? T('évolue…', 'changing…') : T('bulletin dans ', 'update in ') + `${Math.floor(mL / 60)}:${String(Math.floor(mL % 60)).padStart(2, '0')}`))); }
+    __tl += (row(T('Mer', 'Sea'), `${T(D[1], D[2])} · ${H.toFixed(1)} m · ` + (mTr ? T('évolue…', 'changing…') : T('bulletin dans ', 'update in ') + `${Math.floor(mL / 60)}:${String(Math.floor(mL % 60)).padStart(2, '0')}`))); }
+  $('tlBody').innerHTML = __tl;
   const adv = routeAdvice(); let rt = '';
   if (ROUTE.busy && !ROUTE.nodes) rt = `<span class="muted">${T('Calcul en cours…', 'Computing…')} ${ROUTE.steps} isochrones</span>`;
   else if (ROUTE.err) rt = `<span style="color:#ff8a8a">${ROUTE.err}</span>`;
@@ -3766,7 +3840,7 @@ const GCOL = ['#d9f2ff', '#ffe8a3', '#c9ffd9', '#ffd0e6', '#d6d0ff', '#bff4ff', 
 const ghostKey = () => 'gl3d_ghost_' + COURSE.id + '_' + CLS.id;
 function ghostPool() {
   let P = GHOST.pools[CLS.id]; if (P) return P; P = GHOST.pools[CLS.id] = [];
-  for (let i = 0; i < 4; i++) { const v = makeBoatOf(CLS.id, { hull: 0xdfe9f2, acc: 0x9fd8ff, name: '👻' }); v.root.traverse(o => { if (o.material && !o.isSprite) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; } o.castShadow = false; }); v.ghost = true; if (v.stlMeshes) { v.stl = null; applyModel(v); } v.wake.visible = false; v.bowWave.visible = false; v.root.visible = false; P.push(v); }
+  for (let i = 0; i < 4; i++) { const v = makeBoatOf(CLS.id, { hull: 0xdfe9f2, acc: 0x9fd8ff, name: '👻' }); const gm = new Map(); v.root.traverse(o => { if (o.material && !o.isSprite && !Array.isArray(o.material)) { let c = gm.get(o.material); if (!c) { c = o.material.clone(); c.transparent = true; c.opacity = 0.3; c.depthWrite = false; gm.set(o.material, c); } o.material = c; } o.castShadow = false; }); v.ghost = true; if (v.stlMeshes) { v.stl = null; applyModel(v); } v.wake.visible = false; v.bowWave.visible = false; v.root.visible = false; P.push(v); }
   return P;
 }
 const hideGhosts = () => Object.values(GHOST.pools).forEach(P => P.forEach(v => { v.root.visible = false; v.wake.visible = false; }));
@@ -4241,7 +4315,9 @@ function updateBoatVisual(b, rdt) {
   const dh = norm180(b.hdg - b.dispHdg); b.dispHdg = norm360(b.dispHdg + dh * Math.min(1, rdt * 3));
   b.odo += b.spd * KN * rdt * VF;
   const v = b.vis; let px = 0, pz = 0;
-  if (!b.isPlayer) { [px, pz] = rel(b.lat, b.lon); const far = Math.hypot(px, pz) > 20000 || (!active.includes(b) && !b.isGhost); v.root.visible = !far; v.wake.visible = !far && !b.isGhost; if (far) return; }
+  if (!b.isPlayer) { [px, pz] = rel(b.lat, b.lon); const far = Math.hypot(px, pz) > 20000 || (!active.includes(b) && !b.isGhost); v.root.visible = !far; v.wake.visible = !far && !b.isGhost; if (far) return;
+    // au-delà de 2 km : mise à jour 1 image sur 4 avec le temps cumulé (invisible à cette distance, ≈ −50 % de coût pour la flotte)
+    if (Math.hypot(px, pz) > 2000 && b.vis.root.position.lengthSq() > 0) { b.vAcc = (b.vAcc || 0) + rdt; if (((b.vTick = (b.vTick || 0) + 1) & 3) !== 0) return; rdt = b.vAcc; b.vAcc = 0; } else b.vAcc = 0; }
   const h = b.dispHdg * D2R, fx = Math.sin(h), fz = -Math.cos(h), rx = Math.cos(h), rz = Math.sin(h);
   // mer « vue par la coque » : houle + grandes vagues seulement, moyennée sur 3×3 points de la carène (le clapot ne fait pas bouger plusieurs tonnes)
   const fp = v.fp || (v.root.visible ? hullFootprint(v) : null), l = (fp ? fp.L : 18 * v.cd.k) * 0.38, w = v.cd.tri ? O50_X * 0.8 : (fp ? Math.max(...fp.hb) : 2.6 * v.cd.k) * 0.75;
@@ -4323,7 +4399,7 @@ function updateBoatVisual(b, rdt) {
     v.sheets.geometry.attributes.position.needsUpdate = true;
   }
   // feux (la nuit), girouette (vent apparent), voiles à contre-jour
-  const navOp = ENV.night * (b.isPlayer ? 1 : 0.9); v.navMats.forEach(m => m.opacity = navOp);
+  const navOp = ENV.night * (b.isPlayer ? 1 : 0.9); v.navMats.forEach(m => { m.opacity = navOp; m.visible = navOp > 0.01; });
   const tr_ = twa * D2R, tw_ = b.tws || 0, awa = Math.atan2(tw_ * Math.sin(tr_), tw_ * Math.cos(tr_) + b.spd);
   v.awa += norm180((awa - v.awa) * R2D) * D2R * Math.min(1, rdt * 4); v.vane.rotation.y = -v.awa + Math.sin(realT * 7 + px) * 0.03 * (1 + (b.sq || 0) * 3);
   if (near) {
@@ -4335,11 +4411,47 @@ function updateBoatVisual(b, rdt) {
   if (v.foilPos) { const F = v.foilPos; v.foilS.position.set(F[0] - F[3] * (1 - b.foilS), F[1] + F[4] * (1 - b.foilS), F[2]); v.foilP.position.set(-(F[0] - F[3] * (1 - b.foilP)), F[1] + F[4] * (1 - b.foilP), F[2]); }
   else if (cd.foils) { const k = cd.k; v.foilS.position.set((2.3 - 2.1 * (1 - b.foilS)) * k, (0.3 + 2.0 * (1 - b.foilS)) * k, -1.7 * k); v.foilP.position.set((-2.3 + 2.1 * (1 - b.foilP)) * k, (0.3 + 2.0 * (1 - b.foilP)) * k, -1.7 * k); }
   if (b.isGhost) return;
+  if (b.isPlayer && GFX.level !== 'low') updateSkipper(b, v, rdt, side);
   if (!b.isPlayer) { const dx = px - camera.position.x, dz = pz - camera.position.z, d = Math.hypot(dx, dz), L = 30 + (b.dspd || b.spd) * 6;
     _wkS.center.set(px - fx * L * 0.5, 0, pz - fz * L * 0.5); _wkS.radius = L * 0.6 + 10;
     const see = d < 2500 && _wkF.intersectsSphere(_wkS); v.wake.visible = see; if (!see) return; }
   updateWake(b, px, pz, fx, fz, rx, rz);
   if (Math.hypot(px - camera.position.x, pz - camera.position.z) < 1500) boatSpray(b, px, pz, fx, fz, rx, rz, hb * damp + b.lift, rdt);
+}
+/* ----- Skipper (bateau du joueur seulement) : silhouette low-poly en ciré, debout au vent près de la barre ; passe d'un bord à l'autre
+   pendant les virements, reste à peu près vertical quand le bateau gîte. Donne l'échelle du bateau en caméra proche. ----- */
+const SKIP_GEO = (() => { const c = (rt, rb, h, n = 8) => new THREE.CylinderGeometry(rt, rb, h, n);
+  return { leg: c(0.075, 0.065, 0.85), torso: c(0.2, 0.17, 0.62, 10), arm: c(0.055, 0.05, 0.6), head: new THREE.SphereGeometry(0.12, 12, 10), cap: new THREE.SphereGeometry(0.13, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), boot: new THREE.BoxGeometry(0.11, 0.08, 0.26) }; })();
+const SKIP_MAT = { jacket: new THREE.MeshStandardMaterial({ color: 0xd8402f, roughness: 0.55 }), pants: new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.7 }),
+  skin: new THREE.MeshStandardMaterial({ color: 0xd9a77f, roughness: 0.6 }), cap: new THREE.MeshStandardMaterial({ color: 0xf2f4f6, roughness: 0.4 }), boot: new THREE.MeshStandardMaterial({ color: 0x1a1d21, roughness: 0.5 }) };
+function makeSkipper() {
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body); const add = (geo, mat, x, y, z, rx = 0, rz = 0, par = body) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, 0, rz); m.castShadow = true; par.add(m); return m; };
+  [-1, 1].forEach(k => { add(SKIP_GEO.leg, SKIP_MAT.pants, 0.11 * k, 0.45, 0.02, 0.12, 0.05 * k); add(SKIP_GEO.boot, SKIP_MAT.boot, 0.12 * k, 0.04, -0.04); });
+  add(SKIP_GEO.torso, SKIP_MAT.jacket, 0, 1.18, 0.03, -0.18);
+  const arms = [-1, 1].map(k => add(SKIP_GEO.arm, SKIP_MAT.jacket, 0.25 * k, 1.12, -0.16, -0.95, 0.12 * k));
+  add(SKIP_GEO.head, SKIP_MAT.skin, 0, 1.62, -0.04); add(SKIP_GEO.cap, SKIP_MAT.cap, 0, 1.64, -0.04);
+  g.userData = { body, arms }; return g;
+}
+function placeSkipper(v) {
+  const s = v.root.scale.y || 1, inv = 1 / s, sk = makeSkipper(); sk.scale.setScalar(inv); v.root.add(sk);
+  // pied de la barre : z de la barre (ou du piédestal), un peu en avant ; plancher et bord du cockpit trouvés par lancer de rayons
+  const hz = v.hd ? v.hd.position.z : 0, z = hz - 0.5 * inv, rc = new THREE.Raycaster(), hits = x => { v.root.updateMatrixWorld(true); const o = new THREE.Vector3(x, 30 * inv, z).applyMatrix4(v.root.matrixWorld);
+    rc.set(o, new THREE.Vector3(0, -1, 0)); const L = []; v.root.traverseVisible(m => { if (m.isMesh && m !== v.mainMesh && !(v.heads || []).includes(m) && m !== v.bowWave && !sk.children.includes(m) && m.material && !m.material.transparent) L.push(m); });
+    const h = rc.intersectObjects(L, false)[0]; return h ? v.root.worldToLocal(h.point.clone()).y : null; };
+  const y0 = hits(0); let xw = 0.35 * inv, yw = y0;
+  if (y0 !== null) for (let x = 0.2 * inv; x < 4 * inv; x += 0.1 * inv) { const y = hits(x); if (y === null || y > y0 + 0.35 * inv) break; xw = x; yw = y; }
+  v.skip = { g: sk, xw: Math.max(0.3 * inv, xw - 0.25 * inv), y: (yw === null ? 0.8 : yw), z, side: 1, t: 0 }; return v.skip;
+}
+function updateSkipper(b, v, rdt, side) {
+  const near = camera.position.distanceToSquared(v.root.position) < 160 * 160;
+  if (!v.skip) { if (!near) return; placeSkipper(v); }
+  const S = v.skip; S.g.visible = near; if (!near) return;
+  S.side += (side - S.side) * Math.min(1, rdt * 1.6); S.t += rdt;
+  const man = b.man && (b.man.type === 'tack' || b.man.type === 'gybe'), hop = Math.max(0, 1 - Math.abs(S.side)) ;
+  S.g.position.set(S.side * S.xw, S.y + hop * 0.05, S.z);
+  S.g.rotation.y = Math.PI - S.side * 0.35; // regarde vers l'avant, légèrement tourné vers les voiles
+  const U = S.g.userData; U.body.rotation.z = -v.root.rotation.z * 0.75 + Math.sin(S.t * 1.3) * 0.02; U.body.rotation.x = (man ? 0.35 : 0.08) + Math.sin(S.t * 0.9) * 0.02;
+  U.arms.forEach((a, i) => a.rotation.x = -0.95 + (man ? 0.5 * Math.sin(S.t * 6 + i * Math.PI) : 0.05 * Math.sin(S.t * 1.7 + i)));
 }
 const tmpV = new THREE.Vector3();
 let landCheckT = 0;
@@ -4507,7 +4619,8 @@ function updateEnv(rdt) {
   sunLight.position.copy(sunUp > 0.02 ? SUN : MOON).multiplyScalar(60); sunLight.target.position.set(0, 0, 0);
   const wantSh = !isMobile() && (sunUp > 0.02 || moonUp > 0.2); if (sunLight.castShadow !== wantSh) sunLight.castShadow = wantSh;
   hemi.color.copy(HEMI_N).lerp(HEMI_D, dayF); hemi.groundColor.setRGB(0.11, 0.23, 0.32).multiplyScalar(0.25 + 0.75 * dayF);
-  hemi.intensity = 0.34 + 0.42 * dayF * (1 - 0.15 * cl) + fl * 1.4;
+  hemi.intensity = (0.34 + 0.42 * dayF * (1 - 0.15 * cl)) * (ENVMAP.on ? 0.42 : 1) + fl * 1.4;
+  updateEnvMap();
   pLines.material.opacity = 0.25 + 0.75 * light;
   updateRain(rdt, rn);
 }
