@@ -1233,7 +1233,7 @@ function updateHullContact() {
   let n = 0; const fp0 = hullFootprint(player.vis);
   list.forEach(b => { const V = b.vis; if (!V || !V.root.visible) return; const fp = hullFootprint(V); _fw.set(0, 0, -1).applyQuaternion(V.root.quaternion); _fw.y = 0; _fw.normalize();
     oceanU.uBA.value[n].set(V.root.position.x, V.root.position.z, _fw.x, _fw.z); oceanU.uBB.value[n].set((b.dspd || b.spd || 0) * 0.5144, fp.L, fp.bow, b.mz ? b.mz.y : waveH(V.root.position.x, V.root.position.z));
-    oceanU.uBC.value[n].set(V.root.rotation.z, clamp((b.lift || 0) / (1.3 * V.cd.k), 0, 1), V.root.rotation.x, clamp(b.bowWash || 0, 0, 1)); n++; });
+    oceanU.uBC.value[n].set(V.root.rotation.z, clamp(((b.lift || 0) + (b.triL || 0)) / (1.3 * V.cd.k), 0, 1), V.root.rotation.x, clamp(b.bowWash || 0, 0, 1)); n++; });
   oceanU.uNB.value = n; fp0.hb.forEach((h, j) => { oceanU.uHB.value[j] = h; });
 }
 
@@ -4645,7 +4645,13 @@ function updateBoatVisual(b, rdt) {
   const flyW = b.lift > 0.3 ? Math.sin(realT * 2.4 + sd0) * (0.04 * b.lift) : 0, flyP = b.lift > 0.3 ? Math.sin(realT * 2.4 + sd0 + 1.2) * 0.004 * Math.min(1, b.lift) : 0;
   // vibration du coup de bélier (déclenchée par boatSpray), 9 Hz, amortie en 0,4 s
   M.shu = Math.max(0, M.shu - rdt * 2.5); const shake = M.shu > 0 ? Math.sin(realT * 57) * 0.006 * M.shu * M.shu : 0;
-  v.root.position.set(px, M.y * damp + b.lift + flyW - 0.1, pz);
+  // trimaran : le bateau gîte autour du flotteur sous le vent (qui porte), pas autour de la coque centrale — on relève le tout juste assez
+  // pour que le fond du flotteur sous le vent reste au plus ≈ 0,55 m sous sa vague ; la coque centrale décolle (comme sur les photos), la gîte est inchangée
+  const y0 = M.y * damp + b.lift + flyW - 0.1;
+  if (cd.tri) { const roll = M.r * damp + b.heel * D2R, xl = -Math.sign(roll || 1) * O50_X, hf = seaLow(px + rx * xl, pz + rz * xl),
+      bot = y0 - O50_X * Math.abs(Math.sin(roll)) - 0.3 * Math.cos(roll), tgt = Math.max(0, hf - 0.55 - bot);
+    b.triL = (b.triL || 0) + (tgt - (b.triL || 0)) * Math.min(1, rdt * (tgt > (b.triL || 0) ? 6 : 2)); } else b.triL = 0;
+  v.root.position.set(px, y0 + b.triL, pz);
   v.root.rotation.set(M.p * damp + b.lift * 0.025 - (b.surfF - 1) * 0.12 + (b.pitchV || 0) + trimS + flyP + shake, -h + M.yw * (1 - 0.6 * hullUp), M.r * damp + b.heel * D2R + shake * 0.5);
   if (b.crashFx > 0.98 && !b.crashShown) { b.crashShown = true; crashSplash(b, px, pz, fx, fz, rx, rz); } else if (b.crashFx < 0.5) b.crashShown = false;
   if (!b.isGhost && V_MASK_ON && v.maskKey !== (v.stl || 'param')) waterMask(v, MASK_Y[CLS.id] || 0.5);
