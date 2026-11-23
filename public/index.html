@@ -2658,7 +2658,7 @@ function setupMode(mode, courseId, restoring) {
     if (COURSE.coastal) { ACCELS = COAST_ACCELS; accel = coastalAccel(COURSE); }
     else { ACCELS = mi ? COURSE.accelsMini : COURSE.accels; accel = mi ? COURSE.defAccelMini : COURSE.defAccel; } boats.forEach((b, i) => resetBoat(b, COURSE.start.lat + (i % 2) * 0.01, COURSE.start.lon - 0.05 + i * 0.02, 235)); }
   else { active = [player]; ACCELS = TRAIN_ACCELS; accel = 10; TRAIN_BUOYS.forEach(b => b.done = false); const s = tLL(2, -6); resetBoat(player, s[0], s[1], 0); }
-  boats.forEach(b => { Object.values(b.visSet).forEach(v => { v.root.visible = false; v.wake.visible = false; }); const on = active.includes(b); b.vis.root.visible = on; b.vis.wake.visible = on; b.dspd = 0; b.surfF = 1; b.broachT = 0; });
+  boats.forEach(b => { Object.values(b.visSet).forEach(v => { v.root.visible = false; v.wake.visible = false; }); const on = active.includes(b); b.vis.root.visible = on; b.vis.wake.visible = on; b.dspd = b.spd; b.spdV = b.spd; b.surfF = 1; b.broachT = 0; });
   const w = wind(player.lat, player.lon, 0);
   // garde-robe : la flotte (et le joueur, par défaut) embarque le jeu conseillé pour le parcours ; le joueur peut le changer avant le départ
   if (!restoring) { const rk = mode === 'race' ? recKit().kit : DEF_KIT; boats.forEach(b => { b.kit = rk.slice(); b.ldS = 0; }); syncKit(); }
@@ -3262,7 +3262,7 @@ function restoreGame(d) {
   if (DAILY.on && GHOST.list.length) active = [player];
   gameT = d.gameT; realRaceT = d.realRaceT || 0; if (d.FC) Object.assign(FC, d.FC); WX_OFF = d.WX_OFF || 0; START_H = d.START_H || 13; windDirty = true; if (d.LEG) Object.assign(LEG, d.LEG); accel = ACCELS.includes(d.accel) ? d.accel : accel; Object.assign(TW, d.TW || {});
   (d.buoys || []).forEach((x, i) => { if (TRAIN_BUOYS[i]) TRAIN_BUOYS[i].done = x; });
-  d.boats.forEach(o => { const b = boats.find(x => x.name === o.name); if (b) { BFIELDS.forEach(k => { if (o[k] !== undefined) b[k] = o[k]; }); b.route = null; b.routeJob = null; b.nextDecision = Math.random() * 300; } }); syncKit();
+  d.boats.forEach(o => { const b = boats.find(x => x.name === o.name); if (b) { BFIELDS.forEach(k => { if (o[k] !== undefined) b[k] = o[k]; }); b.route = null; b.routeJob = null; b.nextDecision = Math.random() * 300; b.spdV = b.dspd = b.spd; } }); syncKit();
   if (d.route) Object.assign(ROUTE, { dest: d.route.dest, nodes: d.route.nodes, eta: d.route.eta, follow: !!d.route.follow, nmode: d.route.nmode || 'normal', lastAuto: gameT, isos: [] });
   else if (MODE === 'race') startRouting(markDest(player.mi));
   $('twAuto').textContent = TW.auto ? 'Vent : variable' : 'Vent : manuel'; $('twAuto').classList.toggle('on', !TW.auto);
@@ -4574,7 +4574,7 @@ function bowImpact(b, v, M, fp, px, pz, fx, fz, rx, rz, rdt) {
 }
 function updateBoatVisual(b, rdt) {
   const dh = norm180(b.hdg - b.dispHdg); b.dispHdg = norm360(b.dispHdg + dh * Math.min(1, rdt * 3));
-  b.odo += b.spd * KN * rdt * VF;
+  b.odo += (b.dspd || b.spd) * KN * rdt * VF;
   const v = b.vis; let px = 0, pz = 0;
   if (!b.isPlayer) { [px, pz] = rel(b.lat, b.lon); const far = Math.hypot(px, pz) > 20000 || (!active.includes(b) && !b.isGhost); v.root.visible = !far; v.wake.visible = !far && !b.isGhost; if (far) return;
     // au-delà de 2 km : mise à jour 1 image sur 4 avec le temps cumulé (invisible à cette distance, ≈ −50 % de coût pour la flotte)
@@ -4611,7 +4611,12 @@ function updateBoatVisual(b, rdt) {
   // surf (Mini) : au portant dans la brise, le bateau accélère en descendant la face des vagues
   let surfT = 1; if (cd.surf && a > 95 && a < 172 && svi(b) > 0) { const amp = smooth(11, 20, b.tws || 0) * 0.45 * cd.surf * Math.exp(-(((a - 140) / 32) ** 2)); surfT = 1 + amp * clamp((hs - hb) / (0.8 + seaAmp * 0.6) + 0.15, -0.5, 1.2); }
   b.surfF = (b.surfF || 1) + (surfT - (b.surfF || 1)) * Math.min(1, rdt * 1.5);
-  b.spdV = b.spdV === undefined ? b.spd : b.spdV + (b.spd - b.spdV) * Math.min(1, rdt / 1.6); b.dspd = b.spdV * b.surfF; // accélération visible en temps réel
+  // vitesse d'affichage unique (eau, sillage, étrave, gerbes, surf) : lissée en temps réel avec l'inertie de la classe,
+  // accélération plafonnée à 4 nd/s réelle (6 nd/s au freinage brutal : départ au lof, plantage, échouement) — l'accélération du temps ne la fait plus sauter
+  if (b.spdV === undefined || !isFinite(b.spdV)) b.spdV = b.spd;
+  { const tauV = cd.imoca || cd.tri ? 3 : CLS.id === 'c40' ? 2 : 1.5, brk = b.penT > 0 || b.crashT > 0 || b.grounded ? 6 : 4;
+    b.spdV += clamp((b.spd - b.spdV) * Math.min(1, rdt / tauV), -brk * rdt, 4 * rdt); }
+  b.dspd = b.spdV * b.surfF;
   b.heel += (heelT - b.heel) * Math.min(1, rdt * 1.5); b.lift += (boost * (cd && cd.imoca ? 3.7 : 2.3) * (cd ? cd.k : 1) - b.lift) * Math.min(1, rdt * 0.5); // IMOCA en vol : coque ≈ 1 m au-dessus de l'eau, seuls foil sous le vent, safrans et quille dans l'eau
   b.cant += ((a < 25 || !cd.cant ? 0 : side * 0.6) - b.cant) * Math.min(1, rdt * 1.2);
   const damp = 1 - Math.min(0.6, b.lift / 1.5);
@@ -4997,7 +5002,7 @@ const rainLines = new THREE.LineSegments(rnGeo, new THREE.LineBasicMaterial({ co
 function updateRain(rdt, rn) {
   rainLines.visible = rn > 0.02; if (!rainLines.visible) return;
   rainLines.material.opacity = 0.12 + 0.4 * rn; rainLines.material.color.setScalar(0.25 + 0.6 * UL.value).multiply(tc.setRGB(0.85, 0.9, 1));
-  const wa = ((player.twd || 0) + 180) * D2R, ws = (player.tws || 10) * KN * 0.55, h = player.dispHdg * D2R, bs = player.spd * KN * VF;
+  const wa = ((player.twd || 0) + 180) * D2R, ws = (player.tws || 10) * KN * 0.55, h = player.dispHdg * D2R, bs = (player.dspd || player.spd) * KN * VF;
   const vx = Math.sin(wa) * ws - Math.sin(h) * bs, vz = -Math.cos(wa) * ws + Math.cos(h) * bs, vy = -11, cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
   const n = Math.floor(RN_N * clamp(0.25 + rn, 0, 1)), k = 0.07;
   for (let i = 0; i < RN_N; i++) {
@@ -5017,7 +5022,7 @@ function weatherTxt() {
   const h = Math.floor(ENV.local), m = Math.floor((ENV.local - h) * 60);
   return `${ic} · ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${MODE === 'race' ? T('locale', 'local') : ''}`;
 }
-const VF = 1.6; // défilement visuel de l'eau accentué (sensation de glisse) ; la vitesse affichée reste réelle
+const VF = 1; // l'eau défile à la vraie vitesse : bouées, îles, bateaux et fantômes bougent avec elle (1,6 donnait un faux courant)
 const FL_N = 900, fl = { x: new Float32Array(FL_N), z: new Float32Array(FL_N), life: new Float32Array(FL_N), span: new Float32Array(FL_N), size: new Float32Array(FL_N) };
 const flGeo = new THREE.BufferGeometry(), flPos = new Float32Array(FL_N * 3), flA = new Float32Array(FL_N), flS = new Float32Array(FL_N);
 flGeo.setAttribute('position', new THREE.BufferAttribute(flPos, 3)); flGeo.setAttribute('aA', new THREE.BufferAttribute(flA, 1)); flGeo.setAttribute('aS', new THREE.BufferAttribute(flS, 1));
@@ -5111,7 +5116,7 @@ function frame(now) {
     if (realT - lastSaveReal > 15) saveGame();
   } else if (player.mode === 'twa' && !isTurnMan(player.man)) { const w = curWind(); player.hdg = norm360(w.twd - player.lockTwa); player.twd = w.twd; player.tws = w.tws; }
   refCos = Math.cos(player.lat * D2R);
-  const hv = player.dispHdg * D2R, v = player.spd * KN * VF, bvx = Math.sin(hv) * v, bvz = -Math.cos(hv) * v; GX += bvx * rdt; GZ += bvz * rdt;
+  const hv = player.dispHdg * D2R, v = (player.dspd || player.spd) * KN * VF, bvx = Math.sin(hv) * v, bvz = -Math.cos(hv) * v; GX += bvx * rdt; GZ += bvz * rdt;
   seaTick(); const tws = SS.tws;
   const SEA = MODE === 'race' ? COURSE.sea || 1 : 1;
   // mer du vent : hauteur significative ≈ 0,16 U²/g, qui tend vers Pierson-Moskowitz (0,2 U²/g) dans le gros temps
