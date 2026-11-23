@@ -20,6 +20,13 @@ if (fw.log.eng === E.version) {
   let badW = false; try { E.serverReplay({ ...fw.log, course: 'fastnet' }, fw.log.week); badW = true; } catch (e) { /* attendu : parcours hors tirage */ }
   if (badW) { console.log('❌ un parcours hors tirage de la semaine a été accepté'); ok = false; }
 } else console.log('ℹ️  fixture semaine à régénérer');
+// garde-robe : le jeu de 3 voiles du journal est bien appliqué (autre jeu → autre chrono) et un jeu invalide est refusé
+if (Array.isArray(fx.log.kit)) {
+  const alt = ['j2', 'j1', 'c0', 'gk', 'a2'].filter(k => !fx.log.kit.includes(k)).concat(fx.log.kit[0]), k2 = E.serverReplay({ ...fx.log, kit: alt }, fx.log.day);
+  const okK = k2.T !== r.T; ok = ok && okK; console.log(`${okK ? '✅' : '❌'} garde-robe ${fx.log.kit.join('+')} → ${r.T} s · ${alt.join('+')} → ${k2.T} s`);
+  let badK = false; try { E.serverReplay({ ...fx.log, kit: ['j1', 'j1', 'a2'] }, fx.log.day); badK = true; } catch (e) { /* attendu */ }
+  if (badK) { console.log('❌ une garde-robe invalide a été acceptée'); ok = false; }
+} else { console.log('❌ fixture sans garde-robe (log.kit)'); ok = false; }
 let bad = false;
 try { E.serverReplay({ ...fx.log, eng: E.version + 1 }, fx.log.day); bad = true; } catch (e) { /* attendu */ }
 if (bad) { console.log('❌ un journal d\'une autre version a été accepté'); process.exit(1); }

@@ -35,7 +35,7 @@ module.exports = handler(['POST'], async (req) => {
 
   const ev = log.ev.filter(e => Array.isArray(e) && Number.isInteger(e[0]) && typeof e[1] === 'string').slice(0, LIMITS.maxEvents);
   const r = await db().submitBest({ player: p.id, day: log.day, course: log.course, cls: log.cls, time: T, pens: res.pens | 0, engine: E.version,
-    trace: thinTrace(res.trace, weekly ? 600 : 60), log: { v: log.v, eng: log.eng, day: log.day, ...(weekly ? { week: log.week } : {}), course: log.course, cls: log.cls, ev } });
+    trace: thinTrace(res.trace, weekly ? 600 : 60), log: { v: log.v, eng: log.eng, day: log.day, ...(weekly ? { week: log.week } : {}), course: log.course, cls: log.cls, ...(Array.isArray(log.kit) ? { kit: log.kit.slice(0, 3).map(String) } : {}), ev } });
   const { rank, total } = await db().rankOf(log.day, log.course, log.cls, r.best);
   const top = (await db().top(log.day, log.course, log.cls, 10)).map((x, i) => ({ rank: i + 1, name: x.players?.name || '?', T: x.time_s, attempts: x.attempts, me: x.player_id === p.id }));
   return { T, improved: !!r.improved, best: r.best, attempts: r.attempts, rank, total, top };
