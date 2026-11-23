@@ -1127,7 +1127,7 @@ function fftH(c, x, z) {
    dessinée (cockpit, cabine vue par le rouf), alors que l'eau qui passe par-dessus le pont reste visible. */
 const V_MASK_ON = true;
 const MASK_MAT = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
-const MASK_Y = { imoca: 0.8, c40: 0.42, mini: 0.42, proto: 0.42, o50: 0.85 }; // unités du modèle (Class40 = Mini ×1,875)
+const MASK_Y = { imoca: 0.8, c40: 0.42, mini: 0.42, proto: 0.42, o50: 1.15 }; // unités du modèle (Class40 = Mini ×1,875)
 function waterMask(V, capY) {
   const root = V.root, excl = new Set();
   [V.foilS, V.foilP, V.keel, V.mast, V.mastOuter, V.rig, V.boomPivot, V.bowWave, V.hd, V.vane, V.mainMesh, V.sheets, V.wake, V.tri].concat(V.heads || []).forEach(o => o && o.traverse && o.traverse(c => excl.add(c)));
@@ -1936,13 +1936,14 @@ function makeMini(hull, accent, name, isPlayer, proto, c40) {
    Proportions relevées sur les plans de classe et les photos (Arkema, Primonial/Viabilis, Edenred, Solidaires en Peloton). ----- */
 // d'après photos (Edenred, Arkema, Primonial) : coque centrale à franc-bord haut devant et étrave droite ; flotteurs très volumineux,
 // pont plat, carène en V profond, étrave haute et quasi verticale, presque aussi longs que la coque centrale
-const HK_O50 = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.95, 1.1, 1.22, 1.24, 1.12, 0.86, 0.56, 0.1], bC: [0.86, 1.0, 1.1, 1.1, 0.96, 0.7, 0.42, 0.07],
-  yD: [1.12, 1.16, 1.24, 1.34, 1.5, 1.7, 1.86, 2.0], yC: [0.1, -0.05, -0.15, -0.14, 0.0, 0.32, 0.7, 1.35], yB: [-0.1, -0.34, -0.52, -0.54, -0.4, -0.06, 0.4, 1.15] };
-const HK_O50F = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.4, 0.56, 0.66, 0.7, 0.66, 0.54, 0.36, 0.05], bC: [0.33, 0.48, 0.57, 0.6, 0.55, 0.42, 0.26, 0.03],
-  yD: [1.12, 1.2, 1.32, 1.46, 1.66, 1.92, 2.14, 2.36], yC: [0.5, 0.26, 0.06, 0.0, 0.12, 0.48, 0.95, 1.8], yB: [0.3, -0.06, -0.28, -0.32, -0.2, 0.12, 0.6, 1.6] };
-HULLDEF.o50 = { HK: HK_O50, L: 15.24, cock: { z0: 1.7, z1: 2.2, dep: 0.5, xi: 0.74, xr: 0.64, cam: 0.07 } };
+// pont rectiligne (pas de tonture) et étrave droite, coque centrale comme flotteurs ; carène en V, flotteurs très volumineux
+const HK_O50 = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.95, 1.1, 1.2, 1.22, 1.12, 0.88, 0.6, 0.12], bC: [0.86, 1.0, 1.1, 1.1, 0.98, 0.74, 0.46, 0.08],
+  yD: [1.45, 1.45, 1.46, 1.47, 1.48, 1.49, 1.5, 1.5], yC: [0.15, 0.0, -0.12, -0.12, -0.04, 0.12, 0.28, 0.6], yB: [-0.05, -0.32, -0.52, -0.55, -0.46, -0.27, -0.08, 0.22] };
+const HK_O50F = { t: [0, 0.15, 0.35, 0.55, 0.75, 0.88, 0.95, 1], bD: [0.42, 0.58, 0.68, 0.7, 0.66, 0.52, 0.34, 0.06], bC: [0.34, 0.5, 0.59, 0.61, 0.56, 0.42, 0.26, 0.04],
+  yD: [1.5, 1.5, 1.51, 1.52, 1.53, 1.54, 1.55, 1.55], yC: [0.52, 0.26, 0.05, 0.0, 0.04, 0.18, 0.34, 0.7], yB: [0.3, -0.06, -0.28, -0.32, -0.28, -0.14, 0.04, 0.34] };
+HULLDEF.o50 = { HK: HK_O50, L: 15.24, cock: { z0: 5.3, z1: 5.6, dep: 0.35, xi: 0.6, xr: 0.55, cam: 0.05 } }; // petit puits de barre au tableau, derrière la bulle
 HULLDEF.o50f = { HK: HK_O50F, L: 14.6, cock: { z0: 99, z1: 100, dep: 0, xi: 0.2, xr: 0.3, cam: 0.05 } };
-const O50_X = 6.8, O50_ZF = -2.35, O50_ZA = 3.5, O50_MZ = -2.35, O50_BY = u => 1.5 + 0.5 * (1 - Math.pow(u, 1.5)); // bras arqués, plus hauts côté coque centrale // flotteurs, bras avant / arrière, pied de mât
+const O50_X = 6.8, O50_ZF = -2.35, O50_ZA = 4.6, O50_MZ = -2.35, O50_BY = u => 1.6 + 0.42 * (1 - Math.pow(u, 1.5)); // bras arqués ; bras arrière très reculé (≈ 2,5 m du tableau) // flotteurs, bras avant / arrière, pied de mât
 const SAIL_DEFS_O50 = {
   main: { T: [0, 2.45, -2.2], H: [0, 23.45, -2.3], C: [0, 2.55, 5.0], HA: [0, 22.95, 1.2], roach: 0.12, camber: 0.08, twist: 8, min: 1, max: 28, kind: 'main' },
   foc:  { T: [0, 1.85, -7.45], H: [0, 18.6, -2.6], C: [0, 2.2, -0.3], camber: 0.09, twist: 8, min: 8, max: 34, kind: 'jib' },
@@ -1951,7 +1952,7 @@ const SAIL_DEFS_O50 = {
 };
 const CD_O50 = { sails: SAIL_DEFS_O50, boomPivot: [0, 2.35, -2.2], boomEnd: [0, 2.35, 5.0], trav: [2.7, 2.0, O50_ZA], leads: [[1.7, 1.75, -0.4], [3.6, 1.95, 1.2], [O50_X - 0.3, 1.5, 4.8]],
   foils: true, cant: false, mastRot: 1.2, k: 0.85, bw: 0.65, heel: 0.7, surf: 0.25, furlers: true, tri: true }; // gîte plus franche : le flotteur au vent décolle dès ~14 nd (cf. photos)
-let O50_KIT = null; const O50_BEAM = new THREE.MeshStandardMaterial({ color: 0xf1f3f5, roughness: 0.32, metalness: 0.1, side: THREE.DoubleSide });
+let O50_KIT = null; const O50_DOME = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.05 }), O50_BEAM = new THREE.MeshStandardMaterial({ color: 0xf1f3f5, roughness: 0.32, metalness: 0.1, side: THREE.DoubleSide });
 function o50Kit() {
   if (O50_KIT) return O50_KIT;
   useHull('o50'); const HM = mkHullGeos(); useHull('o50f'); const HF = mkHullGeos(); useHull('imoca');
@@ -1966,18 +1967,19 @@ function o50Kit() {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g; })();
   const ext = (pts, w) => { const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) { const p = pts[i]; p.length === 4 ? sh.quadraticCurveTo(p[0], p[1], p[2], p[3]) : sh.lineTo(p[0], p[1]); } sh.closePath();
     const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 2, curveSegments: 8 }); g.rotateY(-Math.PI / 2); g.translate(w / 2, 0, 0); return g; };
-  // roof juste derrière le pied de mât, puis casquette de cockpit plus haute et vitrée
-  const coach = ext([[1.9, 1.25], [1.9, 1.78], [0.2, 1.86, -1.2, 1.8], [-1.85, 1.66, -2.05, 1.4], [-2.05, 1.25]], 1.46);
-  const dodger = ext([[3.7, 1.2], [3.7, 1.55], [3.0, 2.02, 2.2, 2.08], [1.6, 2.06, 1.5, 1.8], [1.5, 1.2]], 1.3);
-  const win = (() => { const pos = [], q = (a, b, c, d) => pos.push(...a, ...b, ...c, ...b, ...d, ...c); [1, -1].forEach(k => { const x = k * 0.79; q([x, 1.42, -1.5], [x, 1.42, 0.6], [x, 1.66, -1.5], [x, 1.68, 0.6]);
-      const y = k * 0.71; q([y, 1.62, 1.65], [y, 1.62, 3.0], [y, 1.95, 1.75], [y, 1.92, 2.75]); });
-    q([-0.6, 1.3, -1.98], [0.6, 1.3, -1.98], [-0.55, 1.62, -1.55], [0.55, 1.62, -1.55]); q([-0.55, 1.62, 1.52], [0.55, 1.62, 1.52], [-0.5, 2.0, 1.75], [0.5, 2.0, 1.75]); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g; })();
+  // cockpit : bulle arrondie et vitrée posée à l'arrière (z 0,5 → 5), sous la bôme ; hublots en bandeau, pare-brise devant
+  const domeTex = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#f2f4f6'; g.fillRect(0, 0, 512, 128);
+    g.fillStyle = '#1c2530'; const win = (x, w) => { g.beginPath(); g.roundRect ? g.roundRect(x, 64, w, 30, 8) : g.rect(x, 64, w, 30); g.fill(); };
+    for (let k = 0; k < 2; k++) { const o = k * 256; win(o + 18, 54); win(o + 84, 54); win(o + 150, 40); }
+    g.beginPath(); g.roundRect ? g.roundRect(372, 38, 120, 50, 14) : g.rect(372, 38, 120, 50); g.fill(); // pare-brise (avant de la bulle)
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t; })();
+  const dome = (() => { const g = new THREE.SphereGeometry(1, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2); g.scale(1.12, 0.66, 2.25); g.translate(0, 1.44, 2.75); return g; })();
   const rig = (() => { const pos = [], L = (a, b) => pos.push(...a, ...b), top = [0, 23.35, O50_MZ - 0.05], mid = [0, 15.2, O50_MZ], bs = [0, 1.85, -9.6];
     [1, -1].forEach(k => { const cp = [k * O50_X, 1.45, O50_ZF + 0.5], dia = [k * 1.25, 12.0, O50_MZ + 0.1]; L(top, cp); L(mid, cp); L([0, 3.0, O50_MZ], dia); L(dia, top); L(top, [k * O50_X, 1.25, 5.9]); L(bs, [k * O50_X, 1.55, -6.6]); L([0, 0.95, O50_ZF], [k * O50_X * 0.55, O50_BY(0.55), O50_ZF]); });
     L([0, 22.6, O50_MZ - 0.1], [0, 1.85, -7.5]); L([0, 23.3, O50_MZ - 0.1], bs); L(bs, [0, 0.75, -7.35]); L([0, O50_BY(0), O50_ZF], [0, 0.95, O50_ZF]);
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g; })();
   const rail = (() => { const pos = [], L = (a, b) => pos.push(...a, ...b); [1, -1].forEach(k => { for (let z = -6.2; z < 5.5; z += 1.6) { const x = k * 1.0; L([x, 1.3, z], [x, 1.85, z]); L([x, 1.85, z], [x, 1.85, Math.min(5.5, z + 1.6)]); } }); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g; })();
-  return (O50_KIT = { HM, HF, net, netTex, coach, dodger, win, rig, rail,
+  return (O50_KIT = { HM, HF, net, netTex, dome, domeTex, rig, rail,
     BEAM_F: bladeGeo(arc(O50_ZF), 1.5, 1.25, 0.26, 36, 12), BEAM_A: bladeGeo(arc(O50_ZA), 1.2, 1.0, 0.24, 36, 12),
     MAST: new THREE.CylinderGeometry(0.1, 0.16, 22.2, 10), BOOM: new THREE.CylinderGeometry(0.06, 0.09, 7.3, 8), SPRIT: new THREE.CylinderGeometry(0.05, 0.08, 2.3, 8), STRIKER: new THREE.CylinderGeometry(0.04, 0.05, 1.0, 6),
     BOARD: bladeGeo([[0, 0.5, 0], [0, -1.2, 0.03], [0, -2.6, 0.08], [0, -3.15, 0.1]], 0.62, 0.42, 0.075, 16, 10),
@@ -1992,7 +1994,7 @@ function makeTri(hull, accent, name, isPlayer) {
   const livS = liv(false), livP = liv(true), param = [];
   const add = (geo, mat, x = 0, y = 0, z = 0, par = root) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); par.add(m); param.push(m); return m; };
   const H = K.HM; add(H.deck, MAT.deck); add(H.topS, livS); add(H.topP, livP); add(H.strS, accMat); add(H.strP, accMat); add(H.bottom, MAT.bottom); add(H.ends, hullMat);
-  add(K.coach, MAT.roof); add(K.dodger, MAT.roof); add(K.win, MAT.glass);
+  if (!O50_DOME.map) { O50_DOME.map = K.domeTex; O50_DOME.needsUpdate = true; } add(K.dome, O50_DOME);
   // flotteurs, bras et trampolines : groupe à part (exclu de l'empreinte de flottaison et du masque d'eau de la coque centrale)
   const tri = new THREE.Group(); root.add(tri);
   [1, -1].forEach(k => { const F = K.HF; add(F.deck, MAT.deck, k * O50_X, 0, 0, tri); add(F.topS, k > 0 ? livS : hullMat, k * O50_X, 0, 0, tri); add(F.topP, k > 0 ? hullMat : livP, k * O50_X, 0, 0, tri);
@@ -2001,10 +2003,10 @@ function makeTri(hull, accent, name, isPlayer) {
   add(K.BEAM_F, O50_BEAM, 0, 0, 0, tri); add(K.BEAM_A, O50_BEAM, 0, 0, 0, tri);
   const netMat = new THREE.MeshStandardMaterial({ map: K.netTex, color: 0xb8c0c8, transparent: true, depthWrite: false, alphaTest: 0.05, roughness: 0.9, side: THREE.DoubleSide }); add(K.net, netMat, 0, 0, 0, tri);
   add(K.STRIKER, MAT.dark, 0, 1.42, O50_ZF, tri);
-  { const r = new THREE.LineSegments(K.rail, MAT.rail); root.add(r); }
+  // pas de filières sur la coque centrale (absentes sur les photos)
   // cockpit : winches, barre
-  [[0.62, 1.05, 2.9], [-0.62, 1.05, 2.9], [0.62, 1.05, 4.6], [-0.62, 1.05, 4.6], [0.45, 1.82, -0.2], [-0.45, 1.82, -0.2]].forEach(p => add(K.WINCH, MAT.winch, p[0], p[1], p[2]));
-  const til = new THREE.Mesh(K.TILLER, MAT.dark); til.position.set(0, 1.05, 6.6); root.add(til);
+  [[0.5, 1.55, -1.3], [-0.5, 1.55, -1.3], [0.62, 1.55, 0.1], [-0.62, 1.55, 0.1]].forEach(p => add(K.WINCH, MAT.winch, p[0], p[1], p[2]));
+  const til = new THREE.Mesh(K.TILLER, MAT.dark); til.position.set(0, 1.35, 6.5); root.add(til);
   { const r = new THREE.Group(); r.position.set(0, 0.15, 7.45); r.scale.set(0.85, 0.85, 0.85); r.add(new THREE.Mesh(RUDDER_GEO, MAT.bottom)); r.add(new THREE.Mesh(ELEV_GEO, MAT.bottom)); root.add(r); param.push(r); }
   const keel = new THREE.Group(); keel.position.set(0, -0.35, -0.9); root.add(keel); { const d = new THREE.Mesh(K.BOARD, accMat); keel.add(d); param.push(d); }
   const mast = new THREE.Mesh(K.MAST, MAT.dark); mast.position.set(0, 1.3 + 11.1, O50_MZ); mast.scale.set(1, 1, 2.3); root.add(mast);
