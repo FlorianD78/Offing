@@ -250,6 +250,18 @@ body.mobile .modes,body.mobile .modes.three{grid-template-columns:1fr}
 body.mobile .card h1{font-size:22px}
 body.mobile.fold #msails,body.mobile.fold #foilLine,body.mobile.fold #reefLine,body.mobile.fold #trimLine,body.mobile.fold #manq,body.mobile.fold #manCancel{display:none!important}
 body.mobile #bc{background:rgba(8,22,36,.66)}
+#tuto{position:fixed;z-index:40;top:70px;left:50%;transform:translateX(-50%);width:min(440px,calc(100vw - 16px));background:rgba(8,22,38,.94);border:1px solid rgba(255,79,216,.55);border-radius:16px;padding:12px 14px 12px;box-shadow:0 14px 40px rgba(0,0,0,.5);color:#eaf4fb;transition:border-color .2s,box-shadow .2s}
+#tuto.done{border-color:#5dff9e;box-shadow:0 0 0 3px rgba(93,255,158,.35),0 14px 40px rgba(0,0,0,.5)}
+#tuto .tk{display:flex;justify-content:space-between;align-items:center;font:700 11px system-ui;letter-spacing:.08em;text-transform:uppercase;color:#ff8fe6}
+#tuto .tx{background:none;border:0;color:#a9c3d6;font-size:16px;padding:0 4px;cursor:pointer}
+#tuto h4{margin:4px 0 4px;font-size:17px}#tuto p{margin:0;font-size:14px;line-height:1.4;color:#d4e6f3}#tuto p b{color:#fff}
+#tuto .tb{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}#tuto .tb button{flex:1;min-height:36px;border-radius:10px;font-weight:700}
+#tuto .tb .tg{background:#ff4fd8;border-color:#ff4fd8;color:#fff}#tuto .tw{flex:2;font-size:13px;color:#ffb3ee;font-style:italic}
+.tutoHi{outline:3px solid #ff4fd8!important;outline-offset:2px;animation:tutoP 1.1s ease-in-out infinite}
+@keyframes tutoP{0%,100%{outline-color:rgba(255,79,216,1)}50%{outline-color:rgba(255,79,216,.25)}}
+body.mobile #tuto{top:62px;background:rgba(8,22,38,.985);width:auto;left:8px;right:8px;transform:none;padding:10px 12px}body.mobile #tuto p{font-size:13px}
+.tutoInv{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:rgba(255,79,216,.14);border:1px solid rgba(255,79,216,.5);border-radius:14px;padding:10px 12px;margin:0 0 12px;font-size:14px}
+.tutoInv span{flex:1;min-width:180px}.tutoInv button{min-height:34px;border-radius:10px;font-weight:700}.tutoInv #tutoGo{background:#ff4fd8;border-color:#ff4fd8;color:#fff}
 /* actions rapides : conseil du routeur, pilote, temps — sans ouvrir de panneau */
 body.mobile #mquick button{min-height:40px;font-size:14px;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.mobile #qAdv{flex:1.7!important;background:rgba(255,79,216,.16);border-color:rgba(255,79,216,.45)}
@@ -2067,8 +2079,13 @@ const COURSES = {
     marks: [{ name: 'Phare du Fastnet', en: 'Fastnet lighthouse', lat: 51.389, lon: -9.603, r: 2 }, { name: 'Arrivée · Cherbourg', en: 'Finish · Cherbourg', lat: 49.75, lon: -1.62, r: 1.5, finish: true }], accels: [10, 30, 60, 120], defAccel: 60, accelsMini: [30, 60, 120, 240], defAccelMini: 60, box: [48.6, 52.4, -11.2, 0.5] },
 };
 COURSES.minitransat = { id: 'minitransat', name: 'Mini Transat : Les Sables → La Palma → Guadeloupe', en: 'Mini Transat: Les Sables → La Palma → Guadeloupe', title: 'MINI TRANSAT · LES SABLES → LA PALMA → GUADELOUPE', start: { lat: 46.42, lon: -1.95 }, firstWp: [45.2, -5.5],
-  marks: [{ name: 'Escale · La Palma', en: 'Stopover · La Palma', lat: 28.66, lon: -17.62, r: 2, stage: true, restart: { lat: 28.5, lon: -17.55 }, firstWp: [26.5, -21] }, { name: 'Arrivée · Saint-François', en: 'Finish · Saint-François', lat: 16.2, lon: -61.15, r: 2.5, finish: true }],
+  marks: [{ name: 'Escale · La Palma', en: 'Stopover · La Palma', port: 'La Palma', next: ['la Guadeloupe', 'Guadeloupe'], leg2: '2 700', lat: 28.66, lon: -17.62, r: 2, stage: true, restart: { lat: 28.5, lon: -17.55 }, firstWp: [26.5, -21] }, { name: 'Arrivée · Saint-François', en: 'Finish · Saint-François', lat: 16.2, lon: -61.15, r: 2.5, finish: true }],
   accels: [60, 120, 300, 600], defAccel: 300, accelsMini: [60, 120, 300, 600, 900], defAccelMini: 600, box: [12, 48.5, -64, 0], legs: 2 };
+/* Les Sables – Açores – Les Sables : 2 étapes d'≈ 1 260 nm (descente vers l'anticyclone, escale à Horta, retour face aux dépressions) */
+COURSES.sas = { id: 'sas', name: 'Les Sables → Açores → Les Sables', en: 'Les Sables → Azores → Les Sables', title: 'LES SABLES → AÇORES → LES SABLES', start: { lat: 46.42, lon: -1.95 }, firstWp: [45.6, -6.0],
+  marks: [{ name: 'Escale · Horta (Faial)', en: 'Stopover · Horta (Faial)', port: 'Horta', next: ['Les Sables', 'Les Sables'], leg2: '1 260', lat: 38.52, lon: -28.56, r: 2, stage: true, restart: { lat: 38.42, lon: -28.7 }, firstWp: [39.8, -24] },
+    { name: 'Arrivée · Les Sables-d\'Olonne', en: 'Finish · Les Sables-d\'Olonne', lat: 46.46, lon: -1.86, r: 1.5, finish: true }],
+  accels: [60, 120, 300, 600], defAccel: 300, accelsMini: [60, 120, 300, 600, 900], defAccelMini: 600, box: [35.5, 48.5, -31.5, 0.5], legs: 2 };
 /* Parcours côtiers : 50 à 110 nm, 5 à 20 min de jeu ; météo et heure de départ tirées au sort à chaque course */
 const COASTAL = [
   { id: 'iroise', name: 'Tour d\'Ouessant', en: 'Round Ushant', zoneEn: 'Iroise Sea', title: 'CÔTIER · TOUR D\'OUESSANT', zone: 'Mer d\'Iroise', nm: 56, start: { lat: 48.22, lon: -4.82 }, firstWp: [48.56, -5.08],
@@ -2545,7 +2562,7 @@ function standings() {
 function onStageArrive(b, m) {
   b.legT = [raceTime(b)]; b.atStop = true; b.spd = 0; b.man = null; b.queue = []; b.lat = m.lat; b.lon = m.lon; b.mi++; b.route = null; b.nextRoute = null;
   if (b.isPlayer) { sfxChime(); toast(`⚓ Arrivée à l'escale en ${fmtDur(b.legT[0])} — fin d'étape 1`, 4000); setTimeout(showStopover, 600); }
-  else if (running) toast(`${b.name} arrive à La Palma en ${fmtDur(b.legT[0])}`, 2500);
+  else if (running) toast(T(`${b.name} arrive à ${m.port || 'l\'escale'} en ${fmtDur(b.legT[0])}`, `${b.name} reaches ${m.port || 'the stopover'} in ${fmtDur(b.legT[0])}`), 2500);
 }
 function finishLeg1() {
   // la flotte encore en mer termine l'étape (simulation accélérée, plafonnée à 8 jours)
@@ -2564,12 +2581,13 @@ function finishLeg1() {
 function showStopover() {
   paused = true; finishedShown = 'stop'; const m0 = curMarks()[0];
   const st = active.slice().sort((a, b) => (a.atStop ? a.legT[0] : 1e12 + gcDist(a.lat, a.lon, m0.lat, m0.lon)) - (b.atStop ? b.legT[0] : 1e12 + gcDist(b.lat, b.lon, m0.lat, m0.lon)));
-  $('card').innerHTML = `<h1>Escale à La Palma — <span>étape 1</span></h1>
-    <p>Ton temps : <b>${fmtDur(player.legT[0])}</b>. Le classement final se fait au <b>temps cumulé</b> des deux étapes. Les concurrents encore en mer vont finir leur étape, puis départ groupé pour la Guadeloupe (≈ 2 700 nm).</p>
+  const nx = m0.next || ['l\'arrivée', 'the finish'];
+  $('card').innerHTML = `<h1>${T('Escale à', 'Stopover in')} ${m0.port || ''} — <span>${T('étape 1', 'leg 1')}</span></h1>
+    <p>${T(`Ton temps : <b>${fmtDur(player.legT[0])}</b>. Le classement final se fait au <b>temps cumulé</b> des deux étapes. Les concurrents encore en mer vont finir leur étape, puis départ groupé pour ${nx[0]} (≈ ${m0.leg2 || '?'} nm).`, `Your time: <b>${fmtDur(player.legT[0])}</b>. Final ranking is on <b>cumulative time</b> over both legs. Boats still at sea will finish their leg, then a group start for ${nx[1]} (≈ ${m0.leg2 || '?'} nm).`)}</p>
     <table>${st.map((b, i) => `<tr class="${b.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="background:${b.color}"></span> ${b.name}</td><td style="text-align:right">${b.atStop ? fmtDur(b.legT[0]) : 'en mer · ' + gcDist(b.lat, b.lon, m0.lat, m0.lon).toFixed(0) + ' nm de l\'escale'}</td></tr>`).join('')}</table>
     <div class="go"><button id="leg2" data-default>⛵ Départ de l'étape 2</button><button id="toMenu" class="sec">Menu</button></div>`;
   $('overlay').classList.remove('hide');
-  $('leg2').onclick = () => { finishLeg1(); finishedShown = false; $('overlay').classList.add('hide'); paused = false; toast('Départ de l\'étape 2 ! Cap sur la Guadeloupe', 4000); };
+  $('leg2').onclick = () => { finishLeg1(); finishedShown = false; $('overlay').classList.add('hide'); paused = false; toast(T(`Départ de l'étape 2 ! Cap sur ${nx[0]}`, `Leg 2 start! Heading for ${nx[1]}`), 4000); };
   $('toMenu').onclick = () => { finishedShown = false; running = false; showMenu(); };
 }
 function rankOf(b) { return standings().indexOf(b) + 1; }
@@ -2779,7 +2797,7 @@ function routePlan() {
   const mine = myFoils(); plan.foilOk = mine === plan.foilNow;
   return plan;
 }
-function applyAdvice() {
+function applyAdvice() { if (TUTO.on) TUTO.f.adv = 1;
   const adv = routeAdviceFor(player, ROUTE); if (!adv) return;
   const w = curWind(), cur = norm180(w.twd - player.hdg);
   if (Math.sign(adv.twa) !== Math.sign(cur) && Math.abs(adv.twa) > 2) {
@@ -2849,7 +2867,7 @@ function foilLeeward() {
   if (requestMan(player, { type: 'foil', P, S })) { player.tgtP = P; player.tgtS = S; }
 }
 function trimBy(d) { player.autoTrim = false; player.trim = clamp(player.trim + d, 0, 1); }
-function setAccel(a) { accel = a; buildAccel(); }
+function setAccel(a) { if (TUTO.on && a !== accel) TUTO.f.acc = 1; accel = a; buildAccel(); }
 function togglePause() { if (!running) return; paused = !paused; $('pause').style.display = paused ? 'block' : 'none'; if (paused) saveGame(); }
 const cam = { dist: 95, elev: 14, az: 0, mode: 'chase', obAz: 0, obEl: 0, obFov: 72, obSide: 1, obIdle: 9 };
 const CAM_LBL = { chase: ['🎥 Suiveuse', '🎥 Chase'], free: ['🎥 Libre', '🎥 Free'], onboard: ['🎥 À bord', '🎥 Onboard'] };
@@ -2896,7 +2914,7 @@ document.querySelectorAll('[data-steer]').forEach(b => {
 $('mode').onclick = toggleMode; $('tackBtn').onclick = doTack; $('vmgBtn').onclick = doVMG; $('camBtn').onclick = toggleCam;
 $('reefP').onclick = () => reefBy(1); $('reefM').onclick = () => reefBy(-1);
 $('foilP').onclick = () => toggleFoil('P'); $('foilS').onclick = () => toggleFoil('S'); $('foilSwap').onclick = foilLeeward;
-$('trim').oninput = e => { player.autoTrim = false; player.trim = e.target.value / 100; };
+$('trim').oninput = e => { player.autoTrim = false; player.trim = e.target.value / 100; if (TUTO.on) TUTO.f.trim = 1; };
 $('aSail').onclick = () => player.autoSail = !player.autoSail; $('aTrim').onclick = () => player.autoTrim = !player.autoTrim; $('aFoil').onclick = () => player.autoFoil = !player.autoFoil;
 { const pad = $('balPad'); let drag = false;
   const at = e => { const r = pad.getBoundingClientRect(); setBal(1 - 2 * (e.clientY - r.top) / r.height, 2 * (e.clientX - r.left) / r.width - 1); };
@@ -3205,9 +3223,9 @@ const twaTxt = t => `${Math.round(Math.abs(t))}° ${t >= 0 ? 'Tb' : 'Bd'}`;
 const RALERT = { warned: null, nowState: false };
 function updateRouteBanner() {
   const el = $('rnext'), pl = (ROUTE.nodes && !player.finished) ? routePlan() : null, qa = $('qAdv');
-  if (!pl) { el.className = ''; RALERT.nowState = false; qa.className = 'off'; qa.textContent = ROUTE.nodes ? '🧭 –' : T('🧭 Router', '🧭 Route'); return; }
+  if (!pl) { el.className = ''; RALERT.nowState = false; qa.classList.remove('ok'); qa.classList.add('off'); qa.textContent = ROUTE.nodes ? '🧭 –' : T('🧭 Router', '🧭 Route'); return; }
   { const ad = pl.adv, cur = norm180(curWind().twd - player.hdg), same = Math.sign(ad.twa) === Math.sign(cur) || Math.abs(ad.twa) < 2, ok = same && Math.abs(Math.abs(ad.twa) - Math.abs(cur)) < 1.5;
-    qa.className = ok ? 'ok' : ''; qa.textContent = ok ? `✓ ${twaTxt(ad.twa)}` : same ? `🧭 ${twaTxt(ad.twa)}` : `⟲ ${twaTxt(ad.twa)}`; }
+    qa.classList.remove('off'); qa.classList.toggle('ok', !!ok); qa.textContent = ok ? `✓ ${twaTxt(ad.twa)}` : same ? `🧭 ${twaTxt(ad.twa)}` : `⟲ ${twaTxt(ad.twa)}`; }
   const lead = MODE === 'race' ? 1800 : 90, soon = pl.turn && pl.turn.dt <= lead;
   let txt;
   if (pl.turnNow) txt = `🧭 <b>${pl.turnNowType} maintenant</b> ${isMobile() ? T('· touche ici', '· tap here') : T('(Espace)', '(Space)')} · ensuite foil <b>${foilName(foilState(Math.abs(pl.adv.twa), pl.adv.twa, curWind().tws))}</b>`;
@@ -3428,6 +3446,7 @@ function showMenu(view = 'home') {
   if (view === 'home') { const PR = loadProfile(), LV = levelOf(PR.pts), dc = pick.courses.map(id => cN(COURSES[id])).join(' · '), dl = pick.classes.map(clsName).join(' · ');
     html = `<div class="mmwrap"><div class="logo">OFF<span>ING</span></div><p class="mmtag">Same wind. Your race.</p>
     <div class="mmprof">${NET.me ? `🌐 <b>${esc(NET.me.name)}</b> · ` : ''}⭐ ${nf(PR.pts)} pts · ${lvlName(LV.name)}<div class="bar"><i style="width:${Math.round(LV.prog * 100)}%"></i></div></div>
+    ${!tutoDone() && !running ? `<div class="tutoInv"><span>🎓 <b>${T('Première fois ?', 'First time?')}</b> ${T('Tutoriel guidé de 4 minutes : barrer, régler, virer, router.', '4-minute guided tutorial: steer, trim, tack, route.')}</span><button id="tutoGo">${T('Lancer', 'Start')}</button><button id="tutoNo" class="sec">${T('Non merci', 'No thanks')}</button></div>` : ''}
     <nav class="mmnav">
       ${running ? `<button id="resume"><b>▶ ${T('Reprendre la course', 'Resume race')}</b><small>${MODE === 'race' ? cN(COURSE) : T('Navigation libre', 'Free sailing')} · ${CLS.name}</small></button>` : sv ? `<button id="goLoad"><b>💾 ${T('Continuer', 'Continue')}</b><small>${svCourse} · ${sv.mode === 'race' ? fmtRace(sv.gameT) : fmtClock(sv.gameT)}</small></button>` : ''}
       <button id="goMulti" data-default><b>🌐 ${T('Défi du jour', 'Daily challenge')}</b><small>${dc} — ${dl}</small></button>
@@ -3462,19 +3481,21 @@ function showMenu(view = 'home') {
     if (SOLO_TAB === 'ocean') html += `<div class="modes three">
       <div class="mode"><h2>⛵ Transat</h2><p>${T('Bretagne → Guadeloupe, ≈ 3 300 nm face à 5 bateaux qui se routent eux aussi.', 'Brittany → Guadeloupe, ≈ 3,300 nm against 5 boats that route too.')} ${CLS.id === 'imoca' ? T('11 à 13 jours de course, <b>≥ 38 min de jeu</b>.', '11 to 13 days of racing, <b>≥ 38 min of play</b>.') : T('≈ 15 à 22 jours de course, <b>≥ 30 min de jeu</b>.', '≈ 15 to 22 days of racing, <b>≥ 30 min of play</b>.')}${recTxt('transat')}</p><button id="goRace" data-default>${T('Prendre le départ', 'Start')}</button></div>
       <div class="mode"><h2>🏝→🌴 Mini Transat</h2><p>${T('Les Sables → La Palma → Saint-François, ≈ 4 000 nm en 2 étapes, classement au temps cumulé. ≈ 45 à 70 min de jeu.', 'Les Sables → La Palma → Saint-François, ≈ 4,000 nm in 2 legs, ranked on cumulative time. ≈ 45 to 70 min of play.')}${recTxt('minitransat')}</p><button id="goMiniT">${T('Prendre le départ', 'Start')}</button></div>
+      <div class="mode"><h2>🏝↔⚓ ${T('Les Sables – Açores', 'Les Sables – Azores')}</h2><p>${T('Les Sables → Horta (Açores) → Les Sables, ≈ 2 500 nm en 2 étapes : descente vers l\'anticyclone, escale à Horta, retour face aux dépressions. Classement au temps cumulé. ≈ 35 à 50 min de jeu.', 'Les Sables → Horta (Azores) → Les Sables, ≈ 2,500 nm in 2 legs: down to the high, stopover in Horta, back against the lows. Ranked on cumulative time. ≈ 35 to 50 min of play.')}${recTxt('sas')}</p><button id="goSAS">${T('Prendre le départ', 'Start')}</button></div>
       <div class="mode"><h2>🗼 Fastnet</h2><p>${T('Solent → phare du Fastnet → Cherbourg, ≈ 620 nm. Côtes, cailloux et dépressions de Manche. ≈ 30 à 70 min de jeu.', 'Solent → Fastnet lighthouse → Cherbourg, ≈ 620 nm. Coasts, rocks and Channel lows. ≈ 30 to 70 min of play.')}${recTxt('fastnet')}</p><button id="goFast">${T('Prendre le départ', 'Start')}</button></div>
       <div class="mode"><h2>🌊 ${T('Océan Indien', 'Indian Ocean')}</h2><p>${T('Le Cap → Fremantle, ≈ 4 700 nm dans les quarantièmes rugissants : dépressions en série, mer très formée, zone des glaces à respecter. ≈ 40 à 60 min de jeu.', 'Cape Town → Fremantle, ≈ 4,700 nm in the Roaring Forties: back-to-back lows, huge seas, ice exclusion zone. ≈ 40 to 60 min of play.')}${recTxt('indien')}</p><button id="goIndien">${T('Prendre le départ', 'Start')}</button></div></div>`;
     else if (SOLO_TAB === 'coast') { const regs = ['all', ...Object.keys(REGION_NAMES).filter(r => COASTAL.some(c => c.region === r))];
       html += `<div class="chips" style="margin:8px 0">${regs.map(r => `<button class="chip ${REG_F === r ? 'on' : ''}" data-reg="${r}">${r === 'all' ? T('Toutes les mers', 'All seas') : T(...REGION_NAMES[r])}</button>`).join('')}</div>
       <p style="font-size:13px">${T('5 à 20 min de jeu, météo et heure de départ tirées au sort, 5 bots.', '5 to 20 min of play, random weather and start time, 5 bots.')}</p>
       <div class="coast">${COASTAL.filter(c => REG_F === 'all' || c.region === REG_F).map(coastCard).join('')}</div>`; }
-    else html += `<div class="modes"><div class="mode"><h2>🏝 ${T('Navigation libre', 'Free sailing')}</h2><p>${T('Archipel de 7 îles et 9 bouées. Vent réglable, routeur vers n\'importe quel point. Idéal pour apprendre les allures, les voiles et les manœuvres.', 'Archipelago of 7 islands and 9 buoys. Adjustable wind, router to any point. Ideal to learn points of sail, sails and manoeuvres.')}</p><button id="goTrain" data-default>${T('S\'entraîner', 'Train')}</button></div>
+    else html += `<div class="modes"><div class="mode"><h2>🎓 ${T('Tutoriel', 'Tutorial')}</h2><p>${T('4 minutes guidées dans l\'archipel : allures, virement, spi, écoute, routeur, accélération du temps.', '4 guided minutes in the archipelago: points of sail, tack, spinnaker, sheet, router, time acceleration.')}</p><button id="tutoGo2">${T('Lancer le tutoriel', 'Start the tutorial')}</button></div><div class="mode"><h2>🏝 ${T('Navigation libre', 'Free sailing')}</h2><p>${T('Archipel de 7 îles et 9 bouées. Vent réglable, routeur vers n\'importe quel point. Idéal pour apprendre les allures, les voiles et les manœuvres.', 'Archipelago of 7 islands and 9 buoys. Adjustable wind, router to any point. Ideal to learn points of sail, sails and manoeuvres.')}</p><button id="goTrain" data-default>${T('S\'entraîner', 'Train')}</button></div>
       <div class="mode"><h2>📖 ${T('Aide', 'Help')}</h2><p>${T('Manœuvres, prévisions, foils, ris, routeur : tout le fonctionnement du jeu.', 'Manoeuvres, forecasts, foils, reefs, router: how the game works.')}</p><button id="goHelp" class="sec">${T('Lire l\'aide', 'Read help')}</button></div></div>`;
     html += FOOT; }
   $('card').innerHTML = html; $('card').classList.add('wide');
   const on = (id, f) => { if ($(id)) $(id).onclick = f; };
   $('card').querySelectorAll('[data-lang]').forEach(b => b.onclick = () => { setLang(b.dataset.lang); showMenu(view); });
   on('goSet', () => showMenu('settings')); on('goSet2', () => showMenu('settings')); on('goBoards', () => showMenu('multi')); on('goMulti2', () => showMenu('multi'));
+  on('tutoGo', tutoStart); on('tutoNo', () => { tutoMark('skip'); showMenu('home'); }); on('tutoGo2', tutoStart);
   on('back', () => showMenu('home')); on('goSolo', () => showMenu('solo')); on('goMulti', () => showMenu('multi')); on('goHelp', () => showHelp(view));
   on('mobToggle', () => { setMobile(!isMobile()); showMenu(view); }); on('sndToggle', () => { setSound(!AUD.on); showMenu(view); });
   $('card').querySelectorAll('[data-set]').forEach(b => b.onclick = () => { const k = b.dataset.set, v = b.dataset.val; SETTINGS[k] = v === 'true' ? true : v === 'false' ? false : v; saveSettings();
@@ -3488,6 +3509,7 @@ function showMenu(view = 'home') {
   $('card').querySelectorAll('[data-coast]').forEach(bt => bt.onclick = () => { const c = COURSES[bt.dataset.coast]; solo(); initAudio(); launch(ldInfo(c), () => setupMode('race', c.id), T(`Départ : ${cN(c)} ! ${c.marks.length - 1} marque${c.marks.length > 2 ? 's' : ''} à virer, ≈ ${c.nm} nm.`, `Start: ${cN(c)}! ${c.marks.length - 1} mark${c.marks.length > 2 ? 's' : ''} to round, ≈ ${c.nm} nm.`)); });
   on('goMiniT', () => { solo(); initAudio(); launch(ldInfo(COURSES.minitransat), () => setupMode('race', 'minitransat'), T('Départ de la Mini Transat ! Étape 1 : Les Sables → La Palma (≈ 1 350 nm).', 'Mini Transat start! Leg 1: Les Sables → La Palma (≈ 1,350 nm).')); });
   on('goRace', () => { solo(); initAudio(); launch(ldInfo(COURSES.transat), () => setupMode('race', 'transat'), T('Départ de la transat ! Le routage vers l\'arrivée se calcule (ligne rose sur la carte).', 'Transat start! Routing to the finish is being computed (pink line on the map).')); });
+  on('goSAS', () => { solo(); initAudio(); launch(ldInfo(COURSES.sas), () => setupMode('race', 'sas'), T('Départ des Sables ! Étape 1 : Les Sables → Horta (≈ 1 260 nm), escale aux Açores puis retour aux Sables.', 'Les Sables start! Leg 1: Les Sables → Horta (≈ 1,260 nm), stopover in the Azores then back to Les Sables.')); });
   on('goIndien', () => { solo(); initAudio(); launch(ldInfo(COURSES.indien), () => setupMode('race', 'indien'), T('Départ du Cap ! Plonge vers les quarantièmes : le vent d\'ouest et la houle t\'attendent, la zone des glaces (en rouge) est interdite.', 'Cape Town start! Dive south to the Forties: westerlies and big seas ahead, the ice zone (red) is off limits.')); });
   on('goFast', () => { solo(); initAudio(); launch(ldInfo(COURSES.fastnet), () => setupMode('race', 'fastnet'), T('Départ du Fastnet ! Cap à l\'ouest dans la Manche, le phare du Fastnet est à ≈ 300 nm.', 'Fastnet start! Head west down the Channel, the Fastnet lighthouse is ≈ 300 nm away.')); });
   on('goTrain', () => { solo(); initAudio(); launch({ t: T('Navigation libre', 'Free sailing'), s: CLS.name + T(' · archipel d\'entraînement', ' · training archipelago') }, () => setupMode('train'), T('Navigation libre : valide les bouées, teste manœuvres, routeur, voiles et foils', 'Free sailing: round the buoys, try manoeuvres, router, sails and foils')); });
@@ -3621,7 +3643,7 @@ const lvlName = n => T(n, LEVELS_EN[n] || n), awardLbl = x => x;
 function loadProfile() { try { const p = JSON.parse(localStorage.getItem('gl3d_profile')); if (p && typeof p.pts === 'number') return p; } catch (e) {} return { pts: 0, races: 0, wins: 0, podiums: 0, hist: [] }; }
 function saveProfile(p) { try { localStorage.setItem('gl3d_profile', JSON.stringify(p)); } catch (e) {} }
 function levelOf(pts) { let i = 0; while (i < LEVELS.length - 1 && pts >= LEVELS[i + 1][0]) i++; const min = LEVELS[i][0], nx = LEVELS[i + 1]; return { i, name: LEVELS[i][1], min, next: nx ? nx[0] : null, nextName: nx ? nx[1] : null, prog: nx ? (pts - min) / (nx[0] - min) : 1 }; }
-const courseBase = () => COURSE.coastal ? Math.round(60 + COURSE.nm) : ({ fastnet: 250, transat: 400, minitransat: 500, indien: 550 })[COURSE.id] || 150;
+const courseBase = () => COURSE.coastal ? Math.round(60 + COURSE.nm) : ({ fastnet: 250, transat: 400, minitransat: 500, indien: 550, sas: 420 })[COURSE.id] || 150;
 function awardPoints(rank, prevBest) {
   const N = active.length, base = courseBase(), f = N > 1 ? (N - rank) / (N - 1) : 1, items = [[T(`${ord(rank)} sur ${N}`, `${ord(rank)} of ${N}`), Math.round(base * (0.25 + 0.75 * f))]];
   if (rank === 1) items.push([T('Victoire', 'Win'), Math.round(base * 0.25)]); else if (rank <= 3) items.push(['Podium', Math.round(base * 0.1)]);
@@ -3758,6 +3780,59 @@ async function startDailyPrep(id) {
     `Daily challenge · ${cN(COURSES[id])} · ${CLS.name} — attempt #${d.n + 1}. Same weather for everyone today. ${withGhosts ? (ng ? (DAILY.net.mine ? 'Ghosts: the 10 players closest to your best time.' : 'Ghosts: today\'s top 10.') : 'Your own attempts are your rivals.') : 'No ghosts yet: you race the bot fleet.'}`));
 }
 function solo() { DAILY.on = false; DAILY.log = null; DAILY.net = null; }
+/* ===================== TUTORIEL (facultatif, ≈ 4 min) =====================
+   Proposé aux nouveaux joueurs sur l'accueil (Lancer / Non merci), relançable depuis l'aide et l'onglet Entraînement.
+   Se joue dans l'archipel d'entraînement, vent fixe de 14 nd : allure, près, virement, spi, écoute, routeur, carte, temps.
+   Chaque étape s'arrête toute seule quand le geste est fait ; « Passer » saute l'étape, « Quitter » arrête le tutoriel. */
+const TUTO = { on: false, i: 0, t: 0, f: {}, side0: 0, el: null };
+const tutoDone = () => { try { return !!localStorage.getItem('offing_tuto'); } catch (e) { return true; } };
+const tutoMark = v => { try { localStorage.setItem('offing_tuto', v); } catch (e) {} };
+const tSel = (desk, mob) => () => isMobile() ? mob : desk;
+const TUTO_STEPS = [
+  { t: ['Bienvenue à bord !', 'Welcome aboard!'], d: ['En 4 minutes : barrer, régler les voiles, virer, suivre le routeur. Le bateau avance tout seul, à toi de le mener. Vent stable, environ 14 nœuds.', 'In 4 minutes: steer, trim, tack, follow the router. The boat sails by itself, you lead it. Steady wind, about 14 knots.'], next: true },
+  { t: ['L\'angle au vent (TWA)', 'True wind angle (TWA)'], d: ['Le <b>TWA</b> est l\'angle entre ton cap et le vent. Le bateau est le plus rapide au <b>travers</b> : amène le TWA entre 90° et 120° avec ◀ ▶ (ou les flèches du clavier).', '<b>TWA</b> is the angle between your heading and the wind. The boat is fastest on a <b>reach</b>: bring TWA between 90° and 120° with ◀ ▶ (or the arrow keys).'],
+    hi: tSel('[data-steer]', '[data-steer="-1"],[data-steer="1"],#mode'), ok: () => { const a = Math.abs(player.twa || 0); return a >= 88 && a <= 122; }, hold: 1.5 },
+  { t: ['Remonter au vent (le près)', 'Upwind (close-hauled)'], d: ['Pour aller vers le vent, serre jusqu\'à <b>TWA 45°</b>. Plus serré que 40°, les voiles faseyent et le bateau s\'arrête.', 'To go towards the wind, head up to <b>TWA 45°</b>. Tighter than 40°, the sails luff and the boat stops.'],
+    hi: tSel('[data-steer]', '[data-steer="-1"],[data-steer="1"]'), ok: () => { const a = Math.abs(player.twa || 0); return a >= 40 && a <= 56; }, hold: 1.5 },
+  { t: ['Virer de bord', 'Tack'], d: ['Pour faire passer le vent de l\'autre côté du bateau : <b>⟲ Virer</b> (ou la touche Espace). Le virement coûte un peu de vitesse.', 'To bring the wind over the other side: <b>⟲ Tack</b> (or the Space key). A tack costs a little speed.'],
+    hi: tSel('#tackBtn', '#tackBtn'), enter: () => { TUTO.side0 = Math.sign(player.twa || 1); }, ok: () => Math.sign(player.twa || 0) === -TUTO.side0 && Math.abs(player.twa || 0) > 30 },
+  { t: ['Le spi au portant', 'Spinnaker downwind'], d: ['Abats jusqu\'à <b>TWA 140°</b> (vent arrière) et envoie le <b>Spi</b> : la grande voile d\'avant colorée. Les voiles s\'adaptent toutes seules si « Voile auto » est actif.', 'Bear away to <b>TWA 140°</b> (downwind) and hoist the <b>Spi</b>: the big colourful headsail. Sails adapt by themselves when « Auto sail » is on.'],
+    hi: () => { const b = [...document.querySelectorAll(isMobile() ? '#msails button' : '#sails button')].filter(x => /Spi/.test(x.textContent)); b.forEach(x => x.classList.add('tutoHi')); return isMobile() ? '[data-steer="1"],[data-steer="-1"]' : '[data-steer]'; }, ok: () => Math.abs(player.twa || 0) >= 125 && (SAILS[plannedSail(player)] || {}).id === 'spi' },
+  { t: ['L\'écoute', 'The sheet'], d: ['L\'écoute règle l\'angle des voiles. Trop choquée : le bord avant bat (regarde les <b>penons</b>). Trop bordée : la voile se ferme et freine. Bouge le curseur, puis laisse l\'écoute auto si tu veux.', 'The sheet sets the sail angle. Too eased: the leading edge flaps (watch the <b>telltales</b>). Too tight: the sail closes and stalls. Move the slider, then leave auto trim on if you like.'],
+    hi: tSel('#trim', '#trim'), ok: () => TUTO.f.trim, next: true },
+  { t: ['Le routeur', 'The router'], d: ['La <b>ligne rose</b> sur la carte est la route la plus rapide calculée avec la météo. Applique son conseil : <b>Appliquer le cap</b> (ou 🧭 sur téléphone).', 'The <b>pink line</b> on the map is the fastest route from the forecast. Apply its advice: <b>Apply heading</b> (or 🧭 on phone).'],
+    hi: tSel('#rApply,#tr', '#qAdv'), enter: () => { const bu = TRAIN_BUOYS.find(b => !b.done) || TRAIN_BUOYS[0]; try { startRouting({ lat: bu.lat, lon: bu.lon, r: 0.27, name: bu.name }); } catch (e) {} }, ok: () => TUTO.f.adv },
+  { t: ['Le temps', 'Time'], d: ['Une transat dure une dizaine de jours : tu la joues en 30 à 40 minutes grâce à l\'<b>accélération du temps</b> (⏩). Essaie une autre vitesse.', 'A transatlantic takes about ten days: you play it in 30 to 40 minutes thanks to <b>time acceleration</b> (⏩). Try another speed.'],
+    hi: tSel('#accel', '#qAcc'), ok: () => TUTO.f.acc, next: true },
+  { t: ['Tu sais l\'essentiel !', 'You know the basics!'], d: ['Prochaine étape : un <b>parcours côtier</b> (5 à 20 min) contre 5 bots, puis le <b>défi du jour</b> : même météo pour tous, bats les fantômes des autres joueurs. L\'aide (?) détaille foils, ris et matossage.', 'Next: a <b>coastal course</b> (5 to 20 min) against 5 bots, then the <b>daily challenge</b>: same weather for all, beat the other players\' ghosts. Help (?) covers foils, reefs and stacking.'], end: true },
+];
+function tutoStart() {
+  solo(); initAudio(); tutoMark('done');
+  launch({ t: T('Tutoriel', 'Tutorial'), s: CLS.name + T(' · archipel d\'entraînement', ' · training archipelago') }, () => { setupMode('train'); TW.auto = false; TW.tws = 14; TW.twd = 60; accel = 30; buildAccel(); }, // ×30 : un virement IMOCA ≈ 10 s
+    T('Tutoriel : suis les consignes en haut de l\'écran', 'Tutorial: follow the instructions at the top of the screen')).then(() => { TUTO.on = true; TUTO.f = {}; tutoGo(0); });
+}
+function tutoStop() { TUTO.on = false; if (TUTO.el) TUTO.el.remove(); TUTO.el = null; document.querySelectorAll('.tutoHi').forEach(x => x.classList.remove('tutoHi')); }
+function tutoGo(i) {
+  document.querySelectorAll('.tutoHi').forEach(x => x.classList.remove('tutoHi'));
+  if (i >= TUTO_STEPS.length) return tutoStop(); const S = TUTO_STEPS[i]; TUTO.i = i; TUTO.t = 0; TUTO.okT = 0; if (S.enter) S.enter();
+  if (!TUTO.el) { TUTO.el = document.createElement('div'); TUTO.el.id = 'tuto'; document.body.appendChild(TUTO.el); }
+  const n = TUTO_STEPS.length - 1;
+  TUTO.el.innerHTML = `<div class="tk">${i ? `${T('Étape', 'Step')} ${i}/${n - 1 > 0 ? n - 1 : n}` : T('Tutoriel', 'Tutorial')}<button class="tx" title="${T('Quitter le tutoriel', 'Quit tutorial')}">✕</button></div><h4>${T(...S.t)}</h4><p>${T(...S.d)}</p>
+    <div class="tb">${S.end ? `<button class="tg" data-a="coast">${T('Parcours côtier', 'Coastal course')}</button><button data-a="daily">${T('Défi du jour', 'Daily challenge')}</button><button class="sec" data-a="close">${T('Continuer à naviguer', 'Keep sailing')}</button>`
+      : `${S.next ? `<button class="tg" data-a="next">${i ? T('Suivant', 'Next') : T('C\'est parti', 'Let\'s go')}</button>` : `<span class="tw">${T('À toi de jouer…', 'Your turn…')}</span>`}${i ? `<button class="sec" data-a="skip">${T('Passer', 'Skip')}</button>` : ''}`}</div>`;
+  TUTO.el.querySelector('.tx').onclick = tutoStop;
+  TUTO.el.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { const a = b.dataset.a; buzz(10);
+    if (a === 'next' || a === 'skip') tutoGo(TUTO.i + 1); else { tutoStop(); if (a === 'coast') { SOLO_TAB = 'coast'; showMenu('solo'); } else if (a === 'daily') showMenu('multi'); } });
+  tutoHi();
+}
+function tutoHi() { const S = TUTO_STEPS[TUTO.i]; if (!S || !S.hi) return; const sel = S.hi(); if (sel) document.querySelectorAll(sel).forEach(x => x.classList.add('tutoHi')); }
+function tutoTick(dt) { // appelée par le HUD (10 Hz)
+  if (!TUTO.on || !running || MODE !== 'train') return; const S = TUTO_STEPS[TUTO.i]; if (!S || S.end) return; TUTO.t += dt;
+  if (S.ok && S.ok()) { TUTO.okT += dt; if (TUTO.okT >= (S.hold || 0.2)) { sfxChime(); buzz(25); TUTO.el.classList.add('done'); const i = TUTO.i; setTimeout(() => { if (TUTO.on && TUTO.i === i) { TUTO.el.classList.remove('done'); tutoGo(i + 1); } }, 700); TUTO.okT = -1e9; } }
+  else if (TUTO.okT > 0) TUTO.okT = 0;
+  if (TUTO.t > 1 && !document.querySelector('.tutoHi')) tutoHi();
+}
+
 function dailyFinish(rank, N) {
   const d = dailyLoad(), prev = d.runs.length ? d.runs[0].T : null;
   const V = DAILY.log ? replayDaily(DAILY.log) : { T: null, trace: player.gRec };
@@ -3804,7 +3879,7 @@ const awardHtml = A => `<div class="award"><div class="tot">+${A.total} pts</div
 function renderResults() {
   if (DAILY.on && player.daily) return renderDailyResults();
   const st = standings(), r = st.indexOf(player) + 1, best = getBest();
-  const A = player.award; $('card').innerHTML = `<h1>${COURSE.coastal ? cN(COURSE) : COURSE.id === 'fastnet' ? 'Fastnet' : COURSE.id === 'minitransat' ? 'Mini Transat' : COURSE.id === 'indien' ? T('Océan Indien', 'Indian Ocean') : 'Transat'} — <span>${ord(r)}</span> / ${active.length}</h1>
+  const A = player.award; $('card').innerHTML = `<h1>${COURSE.coastal ? cN(COURSE) : COURSE.id === 'fastnet' ? 'Fastnet' : COURSE.id === 'minitransat' ? 'Mini Transat' : COURSE.id === 'sas' ? T('Les Sables – Açores', 'Les Sables – Azores') : COURSE.id === 'indien' ? T('Océan Indien', 'Indian Ocean') : 'Transat'} — <span>${ord(r)}</span> / ${active.length}</h1>
     <p>${T('Temps de course', 'Race time')} : <b>${fmtDur(player.finishT)}</b> · ${player.log.toFixed(0)} ${T('nm parcourus', 'nm sailed')} · ${fmtClock(realRaceT)} ${T('de jeu', 'of play')}${best ? ` · ${T('meilleur temps', 'best time')} : ${fmtDur(best)}` : ''}. ${T('La flotte continue, le classement se met à jour.', 'The fleet sails on, standings keep updating.')}</p>
     ${A ? awardHtml(A) + careerBadge() : ''}
     <table>${st.map((b, i) => `<tr class="${b.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="background:${b.color}"></span> ${b.isPlayer ? T('Vous', 'You') : b.name}</td><td style="color:#7fa3bd">${b.strat ? T(b.strat, b.strat.replace('Routage toutes les', 'Routes every').replace('régleur d’élite', 'elite trimmer').replace('très bon régleur', 'very good trimmer').replace('bon régleur', 'good trimmer').replace('régleur moyen', 'average trimmer').replace('régleur prudent', 'cautious trimmer').replace(' h', ' h')) : ''}</td><td style="color:#7fa3bd">${b.legT && b.legT.length ? 'E1 ' + fmtDur(b.legT[0]) + (b.finished ? ' · E2 ' + fmtDur(b.finishT - b.legT[0]) : '') : ''}</td><td style="text-align:right">${b.finished ? fmtDur(b.finishT) : T('en mer · ', 'at sea · ') + dtf(b).toFixed(0) + ' nm'}</td></tr>`).join('')}</table>
@@ -4494,7 +4569,7 @@ function frame(now) {
   updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFauna(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(rdt); updateLens(rdt); updateAudio(rdt);
   hudAcc += rdt; mapAcc += rdt; polAcc += rdt; projAcc += rdt;
   if (projAcc > 0.5) { projAcc = 0; computeProjection(); }
-  if (hudAcc > 0.1) { hudAcc = 0; updateHUD(); }
+  if (hudAcc > 0.1) { tutoTick(hudAcc); hudAcc = 0; updateHUD(); }
   if (mapAcc > 0.1) { mapAcc = 0; drawMap(); }
   if (polAcc > 0.2) { polAcc = 0; drawPolar(); }
   renderer.render(scene, camera);
