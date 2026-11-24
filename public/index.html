@@ -1408,6 +1408,33 @@ function fftH(c, x, z) {
   const a = H[j * N + i], b = H[j * N + (i + 1) % N], d = H[((j + 1) % N) * N + i], e = H[((j + 1) % N) * N + (i + 1) % N];
   return (a * (1 - fu) + b * fu) * (1 - fv) + (d * (1 - fu) + e * fu) * fv;
 }
+// FFT : déplacement horizontal et hauteur (interpolation bilinéaire, comme la lecture de texture du nuanceur de la mer)
+function fftS(c, x, z, o) {
+  const N = FFT_N, L = OCN.L[c], u = (((x + GX) % L) + L) % L / L * N, v = (((z + GZ) % L) + L) % L / L * N, i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j;
+  const a = j * N + i, b = j * N + (i + 1) % N, d = ((j + 1) % N) * N + i, e = ((j + 1) % N) * N + (i + 1) % N, wa = (1 - fu) * (1 - fv), wb = fu * (1 - fv), wd = (1 - fu) * fv, we = fu * fv;
+  const X = OCN.DX[c], H = OCN.H[c], Z = OCN.DZ[c];
+  o[0] = X[a] * wa + X[b] * wb + X[d] * wd + X[e] * we; o[1] = H[a] * wa + H[b] * wb + H[d] * wd + H[e] * we; o[2] = Z[a] * wa + Z[b] * wb + Z[d] * wd + Z[e] * we; return o;
+}
+/* Surface réellement dessinée au point (x, z) : la mer affichée déplace aussi l'eau horizontalement (crêtes pincées de la mer du vent,
+   trochoïdes de la houle), donc la hauteur sous un point fixe n'est pas celle du sommet lu au même endroit sur la grille.
+   On retrouve le point d'origine p0 tel que p0 + D(p0) = (x, z) (3 itérations de point fixe), puis on lit la hauteur en p0.
+   short (0..1) : poids de la petite cascade (vagues de 37 m, dessinées en relief près de la caméra). */
+const _fs = [0, 0, 0];
+function seaSurf(x, z, short = 0) {
+  const d = Math.hypot(x, z), att = 1 - smooth(1200, 6000, d), aF = att * (1 - smooth(400, 1500, d)), aB = short * (1 - smooth(110, 320, d)), sw = swellAmp * att;
+  let px = x, pz = z;
+  for (let it = 0; it < 3; it++) {
+    let Dx = 0, Dz = 0;
+    for (let i = 0; i < WAVES.length; i++) { const w = WAVES[i]; if (w.type) continue; const c = w.S * w.amp * sw * 6 * Math.cos((w.dx * px + w.dz * pz) * w.k + w.om * realT + w.ph + wavePh[i]); Dx += c * w.dx; Dz += c * w.dz; }
+    fftS(0, px, pz, _fs); Dx += _fs[0] * aF; Dz += _fs[2] * aF;
+    if (aB > 0) { fftS(1, px, pz, _fs); Dx += _fs[0] * aB; Dz += _fs[2] * aB; }
+    px = x - Dx; pz = z - Dz;
+  }
+  let h = 0;
+  for (let i = 0; i < WAVES.length; i++) { const w = WAVES[i]; if (w.type) continue; h += w.amp * sw * Math.sin((w.dx * px + w.dz * pz) * w.k + w.om * realT + w.ph + wavePh[i]); }
+  h += fftS(0, px, pz, _fs)[1] * aF; if (aB > 0) h += fftS(1, px, pz, _fs)[1] * aB;
+  return h;
+}
 /* ----- Contact eau / coque : empreinte de flottaison mesurée sur la géométrie de chaque classe (16 demi-largeurs de l'étrave au tableau) ----- */
 /* Couvercle d'occultation de l'eau : plan horizontal invisible (profondeur seule) tendu à l'intérieur de la coque, sous le pont.
    Dessiné après les bateaux et avant l'océan (renderOrder 1 < 2) : l'eau située sous ce plan, à l'intérieur de la coque, n'est plus
@@ -4893,7 +4920,8 @@ function updateBoatVisual(b, rdt) {
   // mer « vue par la coque » : houle + grandes vagues seulement, moyennée sur 3×3 points de la carène (le clapot ne fait pas bouger plusieurs tonnes)
   const fp = v.fp || (v.root.visible ? hullFootprint(v) : null), l = (fp ? fp.L : 18 * v.cd.k) * 0.38, w = v.cd.tri ? O50_X * 0.8 : (fp ? Math.max(...fp.hb) : 2.6 * v.cd.k) * 0.75;
   let hb = 0, hs = 0, hr = 0, hl = 0, hm = 0, yb = 0, ys = 0;
-  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const q = seaLow(px + fx * l * i + rx * w * j, pz + fz * l * i + rz * w * j); hm += q / 9; if (i > 0) hb += q / 3; if (i < 0) hs += q / 3; if (j > 0) hr += q / 3; if (j < 0) hl += q / 3;
+  // hauteur de la surface réellement dessinée (crêtes pincées comprises), pas celle de la grille au même point
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const q = seaSurf(px + fx * l * i + rx * w * j, pz + fz * l * i + rz * w * j); hm += q / 9; if (i > 0) hb += q / 3; if (i < 0) hs += q / 3; if (j > 0) hr += q / 3; if (j < 0) hl += q / 3;
     if (i > 0) yb += j * q; if (i < 0) ys += j * q; } // pente transversale à l'étrave et au tableau : moment de lacet
   const twa = norm180((b.twd || 0) - b.dispHdg), a = Math.abs(twa), side = twa >= 0 ? 1 : -1;
   // décollage vu en temps réel quelle que soit l'accélération du temps : ≥ 6 s pour sortir la coque, retombée immédiate au plantage
@@ -4929,7 +4957,9 @@ function updateBoatVisual(b, rdt) {
   b.dspd = b.spdV * b.surfF;
   b.heel += (heelT - b.heel) * Math.min(1, rdt * 1.5); b.lift += (boost * (cd && cd.imoca ? 3.7 : 2.3) * (cd ? cd.k : 1) - b.lift) * Math.min(1, rdt * 0.5); // IMOCA en vol : coque ≈ 1 m au-dessus de l'eau, seuls foil sous le vent, safrans et quille dans l'eau
   b.cant += ((a < 25 || !cd.cant ? 0 : side * 0.6) - b.cant) * Math.min(1, rdt * 1.2);
-  const damp = 1 - Math.min(0.6, b.lift / 1.5);
+  // en vol, le bateau suit toujours la hauteur des grandes vagues (il vole au-dessus de la surface, pas à altitude fixe) ;
+  // seuls le tangage et le roulis dus aux vagues sont amortis, le pilonnement est un peu plus souple (le foil filtre les vagues courtes)
+  const damp = 1 - Math.min(0.6, b.lift / 1.5), dampY = 1 - Math.min(0.1, b.lift / 15);
   // inertie : chaque mouvement suit la mer par un ressort amorti, avec sa propre période et son amortissement :
   //  pilonnement et tangage ≈ 1,4 s (Mini) / 2,3 s (IMOCA), peu amortis (ζ ≈ 0,3) → le bateau monte, pique et se relève franchement ;
   //  roulis plus lent (×1,6-1,9), freiné par les voiles (ζ ≈ 0,45 au près, moins au portant où le bateau roule davantage) ;
@@ -4939,7 +4969,7 @@ function updateBoatVisual(b, rdt) {
   const omR = om / (cd.imoca ? 1.9 : cd.tri ? 1.15 : 1.6), zR = (0.22 + 0.25 * up) * (1 - 0.35 * dw), omY = om / 2.2;
   const tP = Math.atan2(hb - hs, 2 * l) * (cd.imoca ? 1 : 0.85), tR = Math.atan2(hr - hl, 2 * w) * 0.65 * (1 + 0.6 * dw * sea), tY = clamp(Math.atan2(yb - ys, 4 * w) * (1 + 1.5 * smooth(110, 165, a)) + (b.surfF - 1) * side * 0.25, -0.07, 0.07);
   for (let k = 0, n = Math.ceil(rdt / 0.02), dt = rdt / Math.max(1, n); k < n; k++) {
-    M.vy += (om * om * (hm - M.y) - 2 * 0.32 * om * M.vy) * dt; M.y += M.vy * dt;
+    const omH = om * (1 - 0.3 * Math.min(1, b.lift / 1.2)); M.vy += (omH * omH * (hm - M.y) - 2 * 0.36 * omH * M.vy) * dt; M.y += M.vy * dt;
     M.vp += (om * om * 1.1 * (tP - M.p) - 2 * 0.28 * om * M.vp) * dt; M.p += M.vp * dt;
     M.vr += (omR * omR * (tR - M.r) - 2 * zR * omR * M.vr) * dt; M.r += M.vr * dt;
     M.vyw += (omY * omY * (tY - M.yw) - 2 * 0.6 * omY * M.vyw) * dt; M.yw += M.vyw * dt; }
@@ -4951,8 +4981,8 @@ function updateBoatVisual(b, rdt) {
   M.shu = Math.max(0, M.shu - rdt * 2.5); const shake = M.shu > 0 ? Math.sin(realT * 57) * 0.006 * M.shu * M.shu : 0;
   // trimaran : le bateau gîte autour du flotteur sous le vent (qui porte), pas autour de la coque centrale — on relève le tout juste assez
   // pour que le fond du flotteur sous le vent reste au plus ≈ 0,55 m sous sa vague ; la coque centrale décolle (comme sur les photos), la gîte est inchangée
-  const y0 = M.y * damp + b.lift + flyW - 0.1;
-  if (cd.tri) { const roll = M.r * damp + b.heel * D2R, xl = -Math.sign(roll || 1) * O50_X, hf = seaLow(px + rx * xl, pz + rz * xl),
+  const y0 = M.y * dampY + b.lift + flyW - 0.1;
+  if (cd.tri) { const roll = M.r * damp + b.heel * D2R, xl = -Math.sign(roll || 1) * O50_X, hf = seaSurf(px + rx * xl, pz + rz * xl),
       bot = y0 - O50_X * Math.abs(Math.sin(roll)) - 0.3 * Math.cos(roll), tgt = Math.max(0, hf - 0.55 - bot);
     b.triL = (b.triL || 0) + (tgt - (b.triL || 0)) * Math.min(1, rdt * (tgt > (b.triL || 0) ? 6 : 2)); } else b.triL = 0;
   v.root.position.set(px, y0 + b.triL, pz);
