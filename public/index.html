@@ -3174,11 +3174,26 @@ function cabAudio(ctx, out, rnd = Math.random) {
       send(g, 0.15, 0.4); o.start(t); o2.start(t); o.stop(t + len + 0.1); o2.stop(t + len + 0.1);
       const tick = (tt, f, a, d) => { const s = ctx.createBufferSource(), fl = filt('bandpass', f, 3), gg = ctx.createGain(); s.buffer = white; s.connect(fl); fl.connect(gg); gg.gain.setValueAtTime(a, tt); gg.gain.exponentialRampToValueAtTime(0.0003, tt + d); send(gg, 0.15, 0.4); s.start(tt, rnd()); s.stop(tt + d + 0.02); };
       tick(t, 3800, 0.05, 0.012); tick(t + len + 0.03, 420, 0.14, 0.06); tick(t + len + 0.035, 2600, 0.03, 0.015); },
-    // ---------- centrale nke : bip de touche, alarme (3 bips x 2) ----------
+    // ---------- bips et alertes de bord : centrale nke, logiciel de routage, AIS, OSCAR, pilote, messagerie satellite, énergie ----------
     beep(kind = 'key', t = T()) {
-      const b = (tt, d, f = 2900, a = 0.05) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, tt); g.gain.linearRampToValueAtTime(a, tt + 0.003); g.gain.setValueAtTime(a, tt + d); g.gain.linearRampToValueAtTime(0.0001, tt + d + 0.004);
-        const lp = filt('lowpass', 6000); o.connect(lp); lp.connect(g); send(g, -0.1, 0.3); o.start(tt); o.stop(tt + d + 0.01); };
-      if (kind === 'key') b(t, 0.035, 3100, 0.07); else for (let r = 0; r < 2; r++) for (let i = 0; i < 3; i++) b(t + r * 0.9 + i * 0.2, 0.1, 2900, 0.1); },
+      const tone = (tt, d, f, a, type = 'square', f2 = f, pan = -0.1, lp = 6000) => { const o = ctx.createOscillator(), g = ctx.createGain(), fl = filt('lowpass', lp); o.type = type; o.frequency.setValueAtTime(f, tt); if (f2 !== f) o.frequency.exponentialRampToValueAtTime(f2, tt + d);
+        g.gain.setValueAtTime(0.0001, tt); g.gain.linearRampToValueAtTime(a, tt + 0.004); g.gain.setValueAtTime(a, tt + Math.max(0.005, d - 0.01)); g.gain.linearRampToValueAtTime(0.0001, tt + d); o.connect(fl); fl.connect(g); send(g, pan, 0.3); o.start(tt); o.stop(tt + d + 0.02); };
+      const chime = (tt, f, a, d = 0.5, pan = 0.25) => { [1, 2.76, 5.4].forEach((h, i) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = f * h; g.gain.setValueAtTime(0.0001, tt); g.gain.linearRampToValueAtTime(a / (1 + i * 2.5), tt + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0003, tt + d / (1 + i)); const bp = filt('highpass', 400); o.connect(bp); bp.connect(g); send(g, pan, 0.35); o.start(tt); o.stop(tt + d + 0.05); }); };
+      switch (kind) {
+        case 'key': tone(t, 0.035, 3100, 0.07); break;                                                                       // touche de la centrale nke
+        case 'alarm': for (let r = 0; r < 2; r++) for (let i = 0; i < 3; i++) tone(t + r * 0.9 + i * 0.2, 0.1, 2900, 0.1); break; // alarme instruments (bascule de vent, rafale)
+        case 'pilot': tone(t, 0.06, 1800, 0.07, 'square', 1800, 0.15); tone(t + 0.09, 0.08, 2400, 0.07, 'square', 2400, 0.15); break; // pilote : changement de mode / manœuvre engagée
+        case 'router': chime(t, 988, 0.09); chime(t + 0.22, 740, 0.08); break;                                                // logiciel de routage : nouvelle route calculée
+        case 'grib': chime(t, 659, 0.06, 0.35); chime(t + 0.13, 784, 0.06, 0.35); chime(t + 0.26, 1047, 0.07, 0.6); break;      // fichiers météo reçus
+        case 'routerWarn': for (let i = 0; i < 2; i++) { chime(t + i * 0.5, 1175, 0.1, 0.35); chime(t + i * 0.5 + 0.16, 1175, 0.1, 0.35); } break; // routage : alerte (virement conseillé, route impossible)
+        case 'ais': for (let i = 0; i < 5; i++) tone(t + i * 0.11, 0.055, 4000, 0.05, 'square', 4000, -0.3); break;             // cible AIS en approche
+        case 'oscar': tone(t, 0.16, 1200, 0.06, 'sine', 2400, 0.3, 8000); tone(t + 0.22, 0.16, 1200, 0.06, 'sine', 2400, 0.3, 8000); break; // OSCAR : objet détecté
+        case 'msg': { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(1250, t + 0.07);
+          g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.08, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0003, t + 0.18); o.connect(g); send(g, 0.3, 0.3); o.start(t); o.stop(t + 0.2); break; } // message satellite reçu
+        case 'power': tone(t, 0.4, 1150, 0.05, 'triangle'); tone(t + 0.6, 0.4, 1150, 0.05, 'triangle'); break;                 // énergie (batteries / hydrogénérateur)
+      }
+    },
   };
   return A;
 }
@@ -3190,6 +3205,18 @@ function sheetWork(rdt) { const P = player; if (!P) return SW; const tr = P.trim
   let g = clamp((-d - 0.003) * 40, 0, 1), e = clamp((d - 0.003) * 40, 0, 1); const m = P.man;
   if (m && m.dur) { const u = m.t / m.dur; if (isTurnMan(m)) { if (u > 0.3 && u < 0.85) g = Math.max(g, 0.9); else if (u <= 0.3) e = Math.max(e, 0.8); } else if (m.type === 'sail' || m.type === 'reef') g = Math.max(g, 0.55 + 0.4 * Math.abs(Math.sin(u * 23))); }
   const k = Math.min(1, rdt * 6); SW.g += (g - SW.g) * k; SW.e += (e - SW.e) * k; return SW; }
+// bips et alertes de bord en vue cabine : réactions aux actions du skipper et à la météo, plus un fond d'alertes espacées
+const CAL = { t: {} };
+function cabAlert(kind) { if (AUD.cab && AUD.on && cabOn()) AUD.cab.beep(kind); }
+function cabAlerts(rdt) { const P = player, c = CAL, now = realT; if (!P) return;
+  const sig = [P.mode, Math.round(P.lockTwa || 0), Math.round(P.hdg || 0), P.sail, P.reef, P.autoSail, P.autoTrim, P.autoFoil].join('|'); if (c.sig != null && sig !== c.sig) cabAlert('key'); c.sig = sig;
+  const man = P.man ? P.man.type + (P.man.label || '') : ''; if (man && man !== c.man) cabAlert('pilot'); c.man = man;
+  if (c.twd == null) { c.twd = P.twd || 0; c.tws = P.tws || 0; }
+  const dd = Math.abs(norm180((P.twd || 0) - c.twd)), ds = (P.tws || 0) - c.tws;
+  if ((dd > 12 || ds > 5) && now > (c.t.alarm || 0)) { cabAlert('alarm'); c.t.alarm = now + 60; c.twd = P.twd || 0; c.tws = P.tws || 0; }
+  const k = Math.min(1, rdt / 40); c.twd += norm180((P.twd || 0) - c.twd) * k; c.tws += ((P.tws || 0) - c.tws) * k;
+  const amb = (key, lo, hi, kind, cond = true) => { if (c.t[key] == null) c.t[key] = now + lo * (0.3 + Math.random()); if (now > c.t[key]) { if (cond) cabAlert(kind); c.t[key] = now + lo + Math.random() * (hi - lo); } };
+  amb('ais', 70, 200, 'ais'); amb('msg', 90, 260, 'msg'); amb('grib', 150, 400, 'grib'); amb('power', 300, 700, 'power'); amb('oscar', 60, 180, 'oscar', CLS.id === 'imoca'); }
 function cabImpact(p) { const V = player && player.vis; if (!V || !V.cab || !cabOn()) return; V.cab.wetHit(p * 0.6); if (AUD.cab && AUD.on) AUD.cab.slam(Math.min(1.3, p)); }
 
 const AUD = { ctx: null, on: true, master: null, clickT: 0 };
@@ -3274,7 +3301,7 @@ function updateAudio(rdt) {
   // vue cabine : l'extérieur est étouffé par le rouf, l'ambiance intérieure prend le relais
   const cin = cabOn() ? 1 : 0; AUD.master.gain.setTargetAtTime(cin ? 0.32 : 1, t, 0.25); AUD.extF.frequency.setTargetAtTime(cin ? 750 : 20000, t, 0.25);
   if (AUD.cab) { if (cin !== AUD.cabWas) { AUD.cab.level(cin * live); AUD.cabWas = cin; } if (cin) { const rx = P.vis ? P.vis.root.rotation.x : 0, pv = (rx - (AUD.prx ?? rx)) / Math.max(rdt, 1e-3); AUD.prx = rx;
-    AUD.cab.update(rdt, { bsp: P.dspd || P.spd || 0, tws: P.tws || 0, sea: clamp((seaAmp + swellAmp * 0.5) / 1.6, 0, 1), rain: ENV.rain || 0, pitchV: pv, autoPilot: running && !paused, grind: SW.g, ease: SW.e }); } }
+    AUD.cab.update(rdt, { bsp: P.dspd || P.spd || 0, tws: P.tws || 0, sea: clamp((seaAmp + swellAmp * 0.5) / 1.6, 0, 1), rain: ENV.rain || 0, pitchV: pv, autoPilot: running && !paused, grind: SW.g, ease: SW.e }); } cabAlerts(rdt); }
   const a = Math.abs(P.twa || 0) * D2R, tws = P.tws || 0, aws = Math.sqrt(tws * tws + P.spd * P.spd + 2 * tws * P.spd * Math.cos(a)), near = 1 - clamp(cam.dist / 500, 0, 0.75);
   AUD.wind.fl.frequency.setTargetAtTime(220 + aws * 22, t, 0.5);
   AUD.whistle.gn.gain.setTargetAtTime(smooth(20, 40, aws) * 0.1 * live, t, 0.5); AUD.whistle.fl.frequency.setTargetAtTime(1400 + aws * 22, t, 0.6);
@@ -4102,9 +4129,9 @@ function startRouting(dest, shareWithBots) {
   Object.assign(ROUTE, { dest, busy: true, err: '', isos: st.isos, steps: 0, t0: gameT, lastAuto: gameT });
   const job = { st, onStep: s => { ROUTE.steps = s.step; }, onDone: (r, s) => {
     if (ROUTE.job !== job) return; ROUTE.job = null;
-    if (r === 'done') { Object.assign(ROUTE, { nodes: flatNodes(s.best), eta: s.best.t, busy: false, nmode: st.mode || 'normal' }); if (ROUTE.follow) toast('Routage mis à jour', 1500);
+    if (r === 'done') { Object.assign(ROUTE, { nodes: flatNodes(s.best), eta: s.best.t, busy: false, nmode: st.mode || 'normal' }); if (ROUTE.follow) toast('Routage mis à jour', 1500); cabAlert('router');
       if (shareWithBots && !st.mode) active.forEach(b => { if (!b.isPlayer && b.mi === dest.mi) b.route = { nodes: ROUTE.nodes, mi: dest.mi, t0: gameT - Math.random() * botEvery(b) * 3600 * 0.8, eta: s.best.t }; }); }
-    else Object.assign(ROUTE, { busy: false, err: 'Destination hors de portée (terre ou trop loin)', nodes: null });
+    else { Object.assign(ROUTE, { busy: false, err: 'Destination hors de portée (terre ou trop loin)', nodes: null }); cabAlert('routerWarn'); }
   } };
   ROUTE.job = job; enqueueJob(job, true);
 }
