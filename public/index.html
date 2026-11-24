@@ -2375,7 +2375,7 @@ const C40I = (() => {
   }
   return { patch, mats, attach, uIn, ZA, YF, EYE: { x: 0.5, y: EY, z: 2.95 + DZ } };
 })();
-const IMI_ON = false; // vue cabine IMOCA (prototype)
+const IMI_ON = true; // vue cabine IMOCA (prototype)
 /* ===== IMOCA : cockpit fermé de dernière génération (vue « Cabine ») =====
    Inspiré des IMOCA 2023-2024 (MACIF Santé Prévoyance, Paprec Arkéa, Malizia, Charal) : cockpit entièrement fermé et intégré à la
    cellule de vie, skipper au centre dans un baquet carbone moulé à son corps, monté sur amortisseur, en « mission control » :
@@ -3103,10 +3103,15 @@ function cabAudio(ctx, out, rnd = Math.random) {
   const pawl = t => { const s1 = ctx.createBufferSource(), f1 = filt('bandpass', 2900 + rnd() * 900, 3), g1 = ctx.createGain(); s1.buffer = white; s1.connect(f1); f1.connect(g1);
     g1.gain.setValueAtTime(1.3, t); g1.gain.exponentialRampToValueAtTime(0.0004, t + 0.014); send(g1, 0.1, 0.3); s1.start(t, rnd() * 2); s1.stop(t + 0.03);
     const s2 = ctx.createBufferSource(), f2 = filt('bandpass', 850, 3), g2 = ctx.createGain(); s2.buffer = white; s2.connect(f2); f2.connect(g2); g2.gain.setValueAtTime(0.6, t); g2.gain.exponentialRampToValueAtTime(0.0004, t + 0.025); send(g2, 0.1, 0.3); s2.start(t, rnd() * 2); s2.stop(t + 0.04); };
+  // hydrogénérateurs (IMOCA) : sifflement tonal qui monte avec la vitesse
+  const hyG = ctx.createGain(); hyG.gain.value = 0; const hy = ctx.createOscillator(), hy2 = ctx.createOscillator(), hyBP = filt('bandpass', 1000, 4); hy.type = 'sawtooth'; hy2.type = 'sine';
+  hy.connect(hyBP); hy2.connect(hyBP); hyBP.connect(hyG); send(hyG, 0.4, 0.3); hy.start(); hy2.start();
+  const PROF = { c40: { hum: 1, rush: 1, res: 1, hydro: 0 }, imoca: { hum: 2.2, rush: 1.25, res: 0.82, hydro: 1 } }; let pf = PROF.c40;
   // ---------- état lent (houle, rafales) ----------
   const st = { ph: 0, gust: 0, gv: 0, swell: 0, sv: 0, nextPilot: 0.8, pilotDir: 1, lvl: 1, lastKind: '', wph: 0 };
   const set = (p, v, tc = 0.08) => p.setTargetAtTime(v, T(), tc);
   const A = {
+    profile(id) { pf = PROF[id] || PROF.c40; },
     level(v) { st.lvl = v; set(bus.gain, v, 0.3); set(wet.gain, 0.22 * v, 0.3); },
     update(dt, s) {
       const bsp = s.bsp || 0, tws = s.tws || 0, sea = s.sea ?? Math.min(1, tws / 35);
@@ -3114,14 +3119,14 @@ function cabAudio(ctx, out, rnd = Math.random) {
       st.ph += dt * 2 * Math.PI / (6 - 3 * sea); st.sv += (rnd() - 0.5) * dt * 3 - st.sv * dt * 0.8; st.swell = Math.max(-1, Math.min(1, st.swell + st.sv * dt));
       const wave = 0.5 + 0.5 * Math.sin(st.ph) * (0.6 + 0.4 * sea) + 0.25 * st.swell + Math.min(0.6, Math.abs(s.pitchV || 0) * 1.5);
       st.gv += (rnd() - 0.5) * dt * 4 - st.gv * dt * 1.2; st.gust = Math.max(-1, Math.min(1, st.gust + st.gv * dt));
-      const v = Math.min(1.4, bsp / 16), bg = s.bg ?? 1;
+      const v = Math.min(1.4, bsp / 16), bg = (s.bg ?? 1) * pf.rush;
       set(rushL.g.gain, bg * (0.05 + 0.22 * v) * (0.55 + 0.6 * wave), 0.12); set(rushR.g.gain, bg * (0.05 + 0.22 * v) * (0.55 + 0.6 * (1 - wave * 0.6)), 0.12);
       set(wash.g.gain, bg * (0.02 + 0.14 * v * v) * (0.4 + 0.9 * wave), 0.1); set(wash.f[0].frequency, 600 + 400 * v + 300 * wave, 0.2);
       set(fizz.g.gain, bg * (0.012 + 0.05 * v * v * (0.3 + wave)), 0.1); set(wash.pan, Math.sin(st.ph * 0.5) * 0.4, 0.3);
       const w = Math.max(0, tws * (1 + 0.25 * st.gust)) / 30;
       set(windIn.g.gain, (s.bgw ?? bg) * 0.08 * w * w, 0.25); set(whistle.g.gain, Math.max(0, w - 0.6) * 0.035 * (0.6 + 0.4 * st.gust), 0.25); set(whistle.f[0].frequency, 1050 + 250 * w + 120 * st.gust, 0.3);
       const hf = 230 + 15 * bsp, hk = Math.pow(Math.max(0, Math.min(1, (bsp - 13) / 9)), 1.5) * (0.75 + 0.25 * Math.sin(st.ph * 1.7));
-      set(h1.frequency, hf, 0.4); set(h2.frequency, hf + 1.6, 0.4); set(h3.frequency, hf * 2.01, 0.4); set(humBP.frequency, hf, 0.4); set(humG.gain, 0.09 * hk, 0.3);
+      set(h1.frequency, hf, 0.4); set(h2.frequency, hf + 1.6, 0.4); set(h3.frequency, hf * 2.01, 0.4); set(humBP.frequency, hf, 0.4); set(humG.gain, 0.09 * hk * pf.hum, 0.3); const hf2 = 700 + 32 * bsp; set(hy.frequency, hf2, 0.4); set(hy2.frequency, hf2 * 2, 0.4); set(hyBP.frequency, hf2, 0.4); set(hyG.gain, pf.hydro * 0.012 * Math.min(1, bsp / 12), 0.5);
       // winchs : la vitesse de la manivelle (≈ 1,5 tr/s à fond) fait le régime des engrenages et la cadence des cliquets
       const gr = Math.max(0, Math.min(1, s.grind || 0)), ez = Math.max(0, Math.min(1, s.ease || 0));
       set(wG.gain, 0.02 * Math.pow(gr, 0.7), 0.06); set(wO.frequency, 55 + 70 * gr, 0.1); set(wO2.frequency, 380 + 420 * gr, 0.1); set(zip.g.gain, 0.09 * ez, 0.05); set(zip.f[0].frequency, 1100 + 900 * ez, 0.1);
@@ -3143,7 +3148,7 @@ function cabAudio(ctx, out, rnd = Math.random) {
       const whump = (a, t0 = t) => nb(brown, [filt('bandpass', 300 + rnd() * 120, 0.8)], a, 0.03, 0.22 + rnd() * 0.1, 0, 0.3, 1, t0 + 0.02);
       if (!kind) { const r = rnd(), K = p < 0.55 ? (r < 0.6 ? 'sec' : 'flanc') : p < 0.95 ? (r < 0.35 ? 'sec' : r < 0.6 ? 'flanc' : r < 0.85 ? 'lourd' : 'double') : (r < 0.35 ? 'lourd' : r < 0.6 ? 'vibre' : r < 0.82 ? 'double' : 'sec');
         kind = K === st.lastKind && rnd() < 0.6 ? (K === 'sec' ? 'flanc' : 'sec') : K; } st.lastKind = kind;
-      const sc = 0.85 + rnd() * 0.3; // « taille » du panneau qui sonne : décale toutes les résonances d'un choc à l'autre
+      const sc = (0.85 + rnd() * 0.3) * pf.res; // « taille » du panneau qui sonne : décale toutes les résonances d'un choc à l'autre
       if (kind === 'sec') {          // coup sec d'étrave : claque d'eau nette + coup sourd court + carbone qui sonne brièvement
         nb(white, [filt('bandpass', 800 + rnd() * 400, 0.7), filt('lowpass', 3500)], 0.45 * p, 0.003, 0.07);
         nb(brown, [filt('lowpass', 200, 0.8)], 0.9 * p, 0.004, 0.16); modes([92, 147, 231, 368].map(f => f * sc), 0.32 * p, 0.32); knocks(2 + Math.floor(rnd() * 2), 0.09 * p); whump(0.12 * p);
@@ -3300,7 +3305,7 @@ function updateAudio(rdt) {
   if (!AUD.ctx) return; const t = AUD.ctx.currentTime, P = player, live = running && !paused ? 1 : 0.25;
   // vue cabine : l'extérieur est étouffé par le rouf, l'ambiance intérieure prend le relais
   const cin = cabOn() ? 1 : 0; AUD.master.gain.setTargetAtTime(cin ? 0.32 : 1, t, 0.25); AUD.extF.frequency.setTargetAtTime(cin ? 750 : 20000, t, 0.25);
-  if (AUD.cab) { if (cin !== AUD.cabWas) { AUD.cab.level(cin * live); AUD.cabWas = cin; } if (cin) { const rx = P.vis ? P.vis.root.rotation.x : 0, pv = (rx - (AUD.prx ?? rx)) / Math.max(rdt, 1e-3); AUD.prx = rx;
+  if (AUD.cab) { if (AUD.cabCls !== CLS.id) { AUD.cab.profile(CLS.id); AUD.cabCls = CLS.id; } if (cin !== AUD.cabWas) { AUD.cab.level(cin * live); AUD.cabWas = cin; } if (cin) { const rx = P.vis ? P.vis.root.rotation.x : 0, pv = (rx - (AUD.prx ?? rx)) / Math.max(rdt, 1e-3); AUD.prx = rx;
     AUD.cab.update(rdt, { bsp: P.dspd || P.spd || 0, tws: P.tws || 0, sea: clamp((seaAmp + swellAmp * 0.5) / 1.6, 0, 1), rain: ENV.rain || 0, pitchV: pv, autoPilot: running && !paused, grind: SW.g, ease: SW.e }); } cabAlerts(rdt); }
   const a = Math.abs(P.twa || 0) * D2R, tws = P.tws || 0, aws = Math.sqrt(tws * tws + P.spd * P.spd + 2 * tws * P.spd * Math.cos(a)), near = 1 - clamp(cam.dist / 500, 0, 0.75);
   AUD.wind.fl.frequency.setTargetAtTime(220 + aws * 22, t, 0.5);
