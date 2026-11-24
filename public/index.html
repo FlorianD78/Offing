@@ -1060,7 +1060,7 @@ const UL = { value: 1 };
    avec la précédente en 1,5 s. Purement visuelle : n'entre ni dans le vent ni dans le moteur. */
 const CM = { N: 32, R: 518000, tex: [], c: [{ lat: 0, lon: 0 }, { lat: 0, lon: 0 }], cur: 1, buf: null, row: -1, nc: null, t: 0, mix: 1, last: -99, ready: false };
 for (let k = 0; k < 2; k++) { const d = new Uint8Array(CM.N * CM.N * 4), tx = new THREE.DataTexture(d, CM.N, CM.N, THREE.RGBAFormat); tx.magFilter = tx.minFilter = THREE.LinearFilter; tx.wrapS = tx.wrapT = THREE.ClampToEdgeWrapping; tx.generateMipmaps = false; tx.needsUpdate = true; CM.tex.push(tx); }
-const CLOUDU = { uCM0: { value: CM.tex[0] }, uCM1: { value: CM.tex[1] }, uCMO: { value: new THREE.Vector4() }, uCMix: { value: 1 }, uCMR: { value: CM.R }, uNzS: { value: NOISE_TEX.tex }, uFogC: { value: 0.00003 }, uCQ: { value: 1 }, uWD: { value: new THREE.Vector2(1, 0) } };
+const CLOUDU = { uCM0: { value: CM.tex[0] }, uCM1: { value: CM.tex[1] }, uCMO: { value: new THREE.Vector4() }, uCMix: { value: 1 }, uCMR: { value: CM.R }, uNzS: { value: NOISE_TEX.tex }, uFogC: { value: 0.00003 }, uCQ: { value: 1 }, uCS: { value: 9 }, uWD: { value: new THREE.Vector2(1, 0) } };
 const ENV = { cycle: true, sunVis: 1, hum: 1, cloud: 0.25, rain: 0, flash: 0, night: 0, sunUp: 1, dayF: 1, local: 14, fd0: 0.000095, nextThunder: [] };
 try { ENV.cycle = localStorage.getItem('gl3d_dn') !== '0'; } catch (e) {}
 const SKY_FN = NOISE_GLSL + `
@@ -1072,11 +1072,33 @@ vec3 sky(vec3 r){ float e = clamp(r.y,0.0,1.0); vec3 c = mix(uHorizon,uZenith,po
   float maria = 0.72 + 0.28 * smoothstep(0.35, 0.75, sin(mp.x * 0.9 + 1.3) * sin(mp.y * 1.1 - 0.4) * 0.5 + 0.5 + 0.25 * sin(mp.x * 2.3 + mp.y * 1.7));
   c += vec3(0.82,0.86,0.95) * (disk * 2.6 * maria + pow(m,900.0)*0.6 + pow(m,60.0)*0.09 + pow(m,8.0)*0.035) * (1.0-uDay) * (1.0 - 0.85 * uCloud) * smoothstep(-0.04, 0.04, uMoon.y);
   return c + vec3(0.55,0.6,0.75)*uFlash; }`;
-const sky = new THREE.Mesh(new THREE.SphereGeometry(50000, 48, 24), new THREE.ShaderMaterial({
-  side: THREE.BackSide, depthWrite: false, fog: false, uniforms: Object.assign(SKYU, CLOUDU),
-  vertexShader: `varying vec3 vDir; void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vDir = wp.xyz - cameraPosition; gl_Position = projectionMatrix*viewMatrix*wp; }`,
-  fragmentShader: TM(SKY_FN + `uniform vec2 uCloudOff; uniform float uEnv; varying vec3 vDir;
-    uniform sampler2D uCM0; uniform sampler2D uCM1; uniform vec4 uCMO; uniform float uCMix; uniform float uCMR; uniform sampler2D uNzS; uniform float uFogC; uniform float uCQ; uniform vec2 uWD;
+/* Ciel en deux passes : les nuages (cirrus, couche stratiforme, cumulus en volume) sont calculés à demi-résolution dans une texture
+   (couleur accumulée + transmission), puis le ciel pleine résolution (dégradé, soleil, lune, étoiles) les compose : la passe coûteuse
+   ne touche qu'un pixel sur quatre et les détails fins du ciel restent nets. La carte d'environnement (reflets) utilise la version
+   en une passe, avec moins de pas. */
+const N3 = { tex: null };
+// bruit 3D pavable 64³ (Worley inversé = bourgeons ronds, mêlé à un bruit de valeur) : choux-fleurs des cumulus. Calculé à la première image.
+function makeNoise3D() {
+  const S = 64, D = new Uint8Array(S * S * S), hsh = (i, j, k, s) => { let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(k, 1440662683) ^ Math.imul(s, 2147483647); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const W = (C, s) => { const cs = S / C, F = new Float32Array(C * C * C * 3); for (let k = 0; k < C; k++) for (let j = 0; j < C; j++) for (let i = 0; i < C; i++) { const o = ((k * C + j) * C + i) * 3; F[o] = (i + hsh(i, j, k, s)) * cs; F[o + 1] = (j + hsh(i, j, k, s + 1)) * cs; F[o + 2] = (k + hsh(i, j, k, s + 2)) * cs; }
+    return (x, y, z) => { const ci = Math.floor(x / cs), cj = Math.floor(y / cs), ck = Math.floor(z / cs); let m = 1e9;
+      for (let dk = -1; dk <= 1; dk++) for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const ii = ci + di, jj = cj + dj, kk = ck + dk, mi = (ii + C) % C, mj = (jj + C) % C, mk = (kk + C) % C, o = ((mk * C + mj) * C + mi) * 3;
+        const dx = F[o] + (ii - mi) * cs - x, dy = F[o + 1] + (jj - mj) * cs - y, dz = F[o + 2] + (kk - mk) * cs - z, dd = dx * dx + dy * dy + dz * dz; if (dd < m) m = dd; }
+      return Math.min(1, Math.sqrt(m) / cs); }; };
+  const vn = (x, y, z, P, s) => { const i = Math.floor(x), j = Math.floor(y), k = Math.floor(z), fx = x - i, fy = y - j, fz = z - k, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz), m = a => ((a % P) + P) % P;
+    const g = (a, b, c) => hsh(m(a), m(b), m(c), s), l = (a, b, t) => a + (b - a) * t;
+    return l(l(l(g(i, j, k), g(i + 1, j, k), u), l(g(i, j + 1, k), g(i + 1, j + 1, k), u), v), l(l(g(i, j, k + 1), g(i + 1, j, k + 1), u), l(g(i, j + 1, k + 1), g(i + 1, j + 1, k + 1), u), v), w); };
+  const w1 = W(4, 11), w2 = W(8, 23), w3 = W(16, 37);
+  for (let k = 0; k < S; k++) for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const x = i + 0.5, y = j + 0.5, z = k + 0.5;
+    const wor = (1 - w1(x, y, z)) * 0.55 + (1 - w2(x, y, z)) * 0.3 + (1 - w3(x, y, z)) * 0.15, val = vn(x / 8, y / 8, z / 8, 8, 5) * 0.6 + vn(x / 4, y / 4, z / 4, 16, 6) * 0.4;
+    D[(k * S + j) * S + i] = Math.max(0, Math.min(255, Math.round((wor * 0.75 + val * 0.25) * 255))); }
+  const t = new THREE.Data3DTexture(D, S, S, S); t.format = THREE.RedFormat; t.type = THREE.UnsignedByteType; t.minFilter = t.magFilter = THREE.LinearFilter;
+  t.wrapS = t.wrapT = t.wrapR = THREE.RepeatWrapping; t.unpackAlignment = 1; t.needsUpdate = true; return t;
+}
+CLOUDU.uN3 = { value: null }; CLOUDU.uCS = CLOUDU.uCS || { value: 28 };
+const SKY_CLOUDS = `uniform vec2 uCloudOff; uniform float uEnv; varying vec3 vDir; varying vec4 vClip;
+    uniform sampler2D uCM0; uniform sampler2D uCM1; uniform vec4 uCMO; uniform float uCMix; uniform float uCMR; uniform sampler2D uNzS; uniform float uFogC; uniform float uCQ; uniform vec2 uWD; uniform float uCS;
+    uniform highp sampler3D uN3;
     // distance (m) jusqu'à une couche de nuages d'altitude H, Terre ronde : au ras de l'horizon la couche file vers l'horizon au lieu de l'infini
     float layerD(float e, float H){ const float RT = 6.371e6; return -RT * e + sqrt(RT * RT * e * e + 2.0 * RT * H + H * H); }
     // carte de nébulosité autour du bateau (R : couche stratiforme, G : cirrus, B : cumulus, A : convection / pluie), 2 cartes en fondu
@@ -1085,17 +1107,22 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(50000, 48, 24), new THREE.Sh
     // bruit égalisé (≈ uniforme sur 0..1) : le seuil 1 − couverture donne bien la couverture demandée
     float eq(float n){ return smoothstep(-2.1, 2.1, (n - 0.5) / mix(0.095, 0.078, uCQ)); }
     vec3 hzc(vec3 d){ vec3 h = normalize(vec3(d.x, 0.0, d.z) + 1e-5); return uHorizon + uSunCol * (pow(max(dot(h, uSun), 0.0), 8.0) * 0.3) * smoothstep(-0.05, 0.05, uSun.y) * uDay; }
-    void main(){ vec3 d = normalize(vDir); if (d.y < 0.0) { gl_FragColor = vec4(mix(uHorizon * 0.9, uHorizon * vec3(0.2, 0.32, 0.42), uEnv * smoothstep(0.0, -0.3, d.y)), 1.0); return; }
-      vec3 c = sky(d);
-      if (uDay < 0.6) { float nf = (1.0 - uDay / 0.6) * smoothstep(0.0, 0.22, d.y) * (1.0 - 0.55 * uMoonUp * pow(max(dot(d, uMoon), 0.0), 3.0));
-        vec2 sp = vec2(atan(d.z, d.x) * 380.0, d.y * 600.0); vec2 sf = fract(sp) - 0.5; float sh = hash12(floor(sp));
-        float tw = 0.75 + 0.25 * sin(uSkyT * (3.0 + 6.0 * fract(sh * 31.0)) + sh * 40.0) * (1.0 - smoothstep(0.1, 0.5, d.y) * 0.7);
-        float st = step(0.9915, sh) * smoothstep(0.36, 0.0, length(sf)) * (0.7 + 1.5 * pow(fract(sh * 97.0), 3.0)) * tw;
-        vec3 scol = mix(vec3(0.8, 0.87, 1.0), vec3(1.0, 0.86, 0.7), step(0.7, fract(sh * 53.0)));
-        vec2 sp2 = sp * 2.3; float sh2 = hash12(floor(sp2) + 17.0); float st2 = step(0.985, sh2) * smoothstep(0.3, 0.0, length(fract(sp2) - 0.5)) * 0.45;
-        vec3 gal = normalize(vec3(0.35, 0.55, -0.76)); float mw = exp(-pow(dot(d, gal) / 0.16, 2.0)) * (0.55 + 0.45 * fbm(vec2(atan(d.z, d.x), d.y) * 6.0));
-        c += (scol * st + vec3(0.8, 0.85, 1.0) * st2 * (0.6 + 1.2 * mw) + vec3(0.12, 0.13, 0.17) * mw * 0.35) * nf; }
-      // ---- nuages pilotés par la météo : chaque couche est lue là où le rayon la traverse (cirrus 9 km, couche 2,5 km, cumulus 1,2 km)
+    void ov(inout vec3 acc, inout float T, vec3 X, float a){ acc = acc * (1.0 - a) + X * a; T *= 1.0 - a; }
+    // cumulus : dôme 2D (couverture exacte de la carte : plus le bruit dépasse le seuil, plus la tour est haute), base plate,
+    // bords érodés par le bruit 3D (bourgeons en choux-fleurs qui changent avec la hauteur)
+    const float HB = 800.0;
+    float cuDen(vec2 p, float y, float cv, float thk, bool det){
+      float yf = (y - HB) / thk; if (yf <= 0.0 || yf >= 1.0) return 0.0;
+      // forme au sol lissée (pas de détail fin étiré sur toute la hauteur) : le relief fin vient du bruit 3D
+      vec2 q = (p + uCloudOff * 1.3) / 90000.0; float n = smoothstep(-2.1, 2.1, (texture2D(uNzS, q * 0.75).r - 0.5) / 0.115);
+      float x = clamp((n - 1.0 + cv) / max(cv, 0.05), 0.0, 1.0), h = x * (1.35 - 0.45 * x), dd = h - yf; // tour d'autant plus haute que le cœur est dense, sommet sous le haut de la tranche
+      if (dd < -0.35) return 0.0;
+      float den = smoothstep(0.0, 0.3, dd) * smoothstep(0.0, 0.06, yf);
+      if (det) { vec3 P3 = vec3(p.x + uCloudOff.x * 1.3, y * 1.15, p.y + uCloudOff.y * 1.3); float w = smoothstep(0.3, 0.68, texture(uN3, P3 / 3200.0).r * 0.68 + texture(uN3, P3 / 1150.0 + 0.37).r * 0.32);
+        den = clamp((smoothstep(-0.4, 0.3, dd) * smoothstep(0.0, 0.06, yf) - (1.0 - w) * (0.55 + 0.3 * yf)) / 0.3, 0.0, 1.0); }
+      return den; }
+    vec4 clouds(vec3 d){
+      vec3 acc = vec3(0.0); float T = 1.0;
       float e = max(d.y, 0.0); vec2 hd = normalize(d.xz + 1e-6) * vec2(1.0, -1.0); // (est, nord)
       float low = smoothstep(0.3, -0.02, uSun.y) * step(-0.08, uSun.y), sunUp = smoothstep(-0.05, 0.05, uSun.y);
       vec3 amb = mix(vec3(0.05, 0.06, 0.09) + vec3(0.1, 0.11, 0.14) * uMoonUp * (0.5 + 0.9 * pow(max(dot(d, uMoon), 0.0), 6.0)), mix(uZenith * 0.35 + vec3(0.62), vec3(0.98, 0.72, 0.55), low * 0.8 * (0.2 + 0.8 * uSunVis)), uDay);
@@ -1108,32 +1135,104 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(50000, 48, 24), new THREE.Sh
           float a = mix(smoothstep(1.0 - cv - 0.05, 1.0 - cv + 0.3, n), cv * 0.7, far) * (0.35 + 0.4 * cv) * smoothstep(0.0, 0.03, e);
           float lowH = smoothstep(0.14, -0.06, uSun.y) * step(-0.14, uSun.y); // rose seulement au coucher (les cirrus restent éclairés après la couche basse)
           vec3 lc = mix(vec3(0.05, 0.06, 0.09), mix(vec3(1.0), vec3(1.0, 0.62, 0.55), lowH), smoothstep(-0.14, 0.02, uSun.y)) + uSunCol * fwd * 0.6 * sunUp;
-          c = mix(c, mix(lc, hzc(d), 1.0 - exp(-D * uFogC * 0.25)), a); } }
-      // couche stratiforme (altostratus, nimbostratus, stratocumulus) : grise et uniforme quand elle couvre tout, sombre sous la pluie
+          ov(acc, T, mix(lc, hzc(d), 1.0 - exp(-D * uFogC * 0.25)), a); } }
+      // couche stratiforme (altostratus, nimbostratus, stratocumulus) : grise et uniforme quand elle couvre tout, sombre sous la pluie,
+      // bourrelets éclairés côté soleil quand elle se morcelle
       { float D = layerD(e, 2500.0); vec2 p = hd * D; vec4 m = cmap(p); float cv = m.r, rn = m.a;
-        if (cv > 0.02) { vec2 q = (p + uCloudOff) / 230000.0; float n = eq(fb(q) * 0.75 + fb(q * 3.3 + 0.5) * 0.25 * uCQ + 0.125 * (1.0 - uCQ)), far = smoothstep(25000.0, 140000.0, D);
+        if (cv > 0.02) { vec2 q = (p + uCloudOff) / 230000.0; float f0 = fb(q), n = eq(f0 * 0.75 + fb(q * 3.3 + 0.5) * 0.25 * uCQ + 0.125 * (1.0 - uCQ)), far = smoothstep(25000.0, 140000.0, D);
           float a = mix(smoothstep(1.0 - cv - 0.06, 1.0 - cv + 0.14, n), smoothstep(0.0, 0.9, cv), far) * smoothstep(0.0, 0.02, e);
           float th = smoothstep(0.35, 1.0, cv) * (0.55 + 0.45 * n);
-          vec3 lc = amb * mix(1.0, 0.42, th) * (0.86 + 0.28 * n) * (1.0 - 0.45 * rn) + uSunCol * fwd * uDay * (1.0 - th) * 0.5;
-          c = mix(c, mix(lc, hzc(d), 1.0 - exp(-D * uFogC)), a); } }
-      // cumulus de beau temps / averses, cumulonimbus sombres dans les grains
+          float rel = clamp(1.0 + (f0 - fb(q + vec2(uSun.x, -uSun.z) * 0.005)) * 2.4 * sunUp * uDay * uCQ * (1.0 - 0.6 * th), 0.76, 1.24);
+          vec3 lc = amb * mix(1.0, 0.42, th) * (0.86 + 0.28 * n) * rel * (1.0 - 0.45 * rn) + uSunCol * fwd * uDay * (1.0 - th) * 0.5;
+          ov(acc, T, mix(lc, hzc(d), 1.0 - exp(-D * uFogC)), a); } }
+      if (uCQ > 0.5) {
+        // cumulus en volume : le rayon traverse la tranche base (800 m) - sommet (0,7 à 2 km, cumulonimbus jusqu'à 7 km dans les grains)
+        // en 10 à 40 pas ; à chaque point nuageux, 3 échantillons vers le soleil donnent l'ombre propre (sommets et flancs au soleil
+        // éclatants, faces à l'ombre gris bleuté, bases plates sombres) ; liseré argenté à contre-jour
+        const float RT = 6.371e6;
+        float t0 = layerD(e, HB); vec4 mA = cmap(hd * t0); float cvA = max(mA.b, mA.a * 0.9);
+        float thk = 700.0 + 1300.0 * smoothstep(0.1, 0.7, cvA) + 6000.0 * smoothstep(0.15, 0.7, mA.a);
+        float tf = layerD(e, HB + thk), t1 = min(tf, t0 + 15000.0); vec4 mB = cmap(hd * t1); float cvB = max(mB.b, mB.a * 0.9);
+        if (max(cvA, cvB) > 0.02 && e > 0.003) {
+          int NS = uEnv > 0.5 ? 10 : int(uCS); float ds = (t1 - t0) / float(NS);
+          float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); // bruit à gradient entrelacé
+          vec2 sH = vec2(uSun.x, -uSun.z); float sunK = uDay * sunUp * (0.2 + 0.8 * uSunVis), ph = 0.8 + fwd * 1.4;
+          vec3 cacc = vec3(0.0); float cT = 1.0;
+          // pas longs dans le vide, pas 3 fois plus fins dès que le rayon touche un nuage
+          float t = t0 + jit * ds, dsc = ds;
+          for (int i = 0; i < 128; i++) { if (t > t1 || i >= NS * 4) break;
+            float f = (t - t0) / max(t1 - t0, 1.0), y = t * e + t * t / (2.0 * RT), cv = mix(cvA, cvB, f);
+            vec2 p = hd * t; float den = cv < 0.02 ? 0.0 : cuDen(p, y, cv, thk, true);
+            if (den < 0.003) { t += dsc; dsc = ds; continue; }
+            dsc = ds * 0.25;
+            float od = 0.0; for (int k = 1; k <= 3; k++) { float l = thk * 0.07 * float(k * k); od += cuDen(p + sH * l, y + uSun.y * l, cv, thk, false) * thk * 0.07 * float(2 * k - 1); }
+            float cb = mix(mA.a, mB.a, f), yf = (y - HB) / thk;
+            float sunT = exp(-od * 0.006) * (1.0 - 0.65 * cb) * (1.0 - exp(-den * 3.0) * 0.35 * (1.0 - fwd));
+            float ambF = mix(0.42, 1.05, smoothstep(0.0, 0.7, yf)) * (1.0 - 0.5 * cb);
+            vec3 L = amb * 0.78 * ambF + uSunCol * sunK * sunT * ph;
+            L = mix(L, hzc(d), 1.0 - exp(-t * uFogC));
+            float a = 1.0 - exp(-den * 0.02 * dsc); cacc += cT * a * L; cT *= 1.0 - a; if (cT < 0.02) break; t += dsc; }
+          // au-delà de 15 km le long du rayon (ras de l'horizon) : couverture moyenne, déjà noyée dans la brume
+          if (tf > t1) { float a = cvB * 0.7 * smoothstep(0.0, 0.015, e); cacc += cT * a * mix(amb * 0.75, hzc(d), 1.0 - exp(-t1 * uFogC)); cT *= 1.0 - a; }
+          acc = acc * cT + cacc; T *= cT; } }
+      else
+      // qualité basse : cumulus en couche plate (2D)
       { float D = layerD(e, 1200.0); vec2 p = hd * D; vec4 m = cmap(p); float cv = max(m.b, m.a * 0.9), cb = m.a;
         if (cv > 0.02) { vec2 q = (p + uCloudOff * 1.3) / 90000.0; float nr = fb(q) * 0.7 + fb(q * 2.9 + 0.13) * 0.3 * uCQ + 0.15 * (1.0 - uCQ), n = eq(nr), far = smoothstep(15000.0, 90000.0, D);
           float n2 = fb(q + vec2(dot(uSun.xz, vec2(1.0, 0.0)), -uSun.z) * 0.004);
           float a = mix(smoothstep(1.0 - cv - 0.02, 1.0 - cv + 0.07, n), cv * 0.8, far) * smoothstep(0.0, 0.015, e);
           float sh = clamp(0.74 + (nr - n2 * 0.7 - 0.15) * 3.0, 0.55, 1.1) * (1.0 - 0.55 * cb);
           vec3 lc = amb * sh + uSunCol * fwd * uDay * 0.7 * (1.0 - cb);
-          c = mix(c, mix(lc, hzc(d), 1.0 - exp(-D * uFogC)), a * (0.92 + 0.08 * cb)); } }
-      c += vec3(0.7, 0.72, 0.85) * uFlash * 0.4;
+          ov(acc, T, mix(lc, hzc(d), 1.0 - exp(-D * uFogC)), a * (0.92 + 0.08 * cb)); } }
+      return vec4(acc, T); }
+    vec3 skyBase(vec3 d){ vec3 c = sky(d);
+      if (uDay < 0.6) { float nf = (1.0 - uDay / 0.6) * smoothstep(0.0, 0.22, d.y) * (1.0 - 0.55 * uMoonUp * pow(max(dot(d, uMoon), 0.0), 3.0));
+        vec2 sp = vec2(atan(d.z, d.x) * 380.0, d.y * 600.0); vec2 sf = fract(sp) - 0.5; float sh = hash12(floor(sp));
+        float tw = 0.75 + 0.25 * sin(uSkyT * (3.0 + 6.0 * fract(sh * 31.0)) + sh * 40.0) * (1.0 - smoothstep(0.1, 0.5, d.y) * 0.7);
+        float st = step(0.9915, sh) * smoothstep(0.36, 0.0, length(sf)) * (0.7 + 1.5 * pow(fract(sh * 97.0), 3.0)) * tw;
+        vec3 scol = mix(vec3(0.8, 0.87, 1.0), vec3(1.0, 0.86, 0.7), step(0.7, fract(sh * 53.0)));
+        vec2 sp2 = sp * 2.3; float sh2 = hash12(floor(sp2) + 17.0); float st2 = step(0.985, sh2) * smoothstep(0.3, 0.0, length(fract(sp2) - 0.5)) * 0.45;
+        vec3 gal = normalize(vec3(0.35, 0.55, -0.76)); float mw = exp(-pow(dot(d, gal) / 0.16, 2.0)) * (0.55 + 0.45 * fbm(vec2(atan(d.z, d.x), d.y) * 6.0));
+        c += (scol * st + vec3(0.8, 0.85, 1.0) * st2 * (0.6 + 1.2 * mw) + vec3(0.12, 0.13, 0.17) * mw * 0.35) * nf; }
+      return c; }
+    vec3 below(vec3 d){ return mix(uHorizon * 0.9, uHorizon * vec3(0.2, 0.32, 0.42), uEnv * smoothstep(0.0, -0.3, d.y)); }`;
+const SKY_VS = `varying vec3 vDir; varying vec4 vClip; void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vDir = wp.xyz - cameraPosition; gl_Position = projectionMatrix*viewMatrix*wp; vClip = gl_Position; }`;
+// une passe complète (carte d'environnement)
+const skyFullMat = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false, uniforms: Object.assign(SKYU, CLOUDU), vertexShader: SKY_VS,
+  fragmentShader: TM(SKY_FN + SKY_CLOUDS + `
+    void main(){ vec3 d = normalize(vDir); if (d.y < 0.0) { gl_FragColor = vec4(below(d), 1.0); return; }
+      vec4 k = clouds(d); vec3 c = skyBase(d) * k.a + k.rgb + vec3(0.7, 0.72, 0.85) * uFlash * 0.4;
       if (uEnv > 0.5) c = min(c, vec3(1.0)) * 0.85; // passe de reflet : pas de disque solaire HDR (le soleil a déjà sa lumière directe)
-      gl_FragColor = vec4(c, 1.0); }`),
+      gl_FragColor = vec4(c, 1.0); }`) });
+// passe nuages (demi-résolution) : couleur des nuages et transmission
+const skyCloudMat = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, toneMapped: false, uniforms: SKYU, vertexShader: SKY_VS,
+  fragmentShader: SKY_FN + SKY_CLOUDS + `
+    void main(){ vec3 d = normalize(vDir); gl_FragColor = d.y < 0.0 ? vec4(0.0, 0.0, 0.0, 1.0) : clouds(d); }` });
+const CLP = { rt: null, sc: new THREE.Scene(), w: 0, h: 0, on: false, sz: new THREE.Vector2() };
+const SKYC = { uCT: { value: null }, uCOn: { value: 0 }, uCTs: { value: new THREE.Vector2(1 / 512, 1 / 512) } };
+const sky = new THREE.Mesh(new THREE.SphereGeometry(50000, 48, 24), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false, uniforms: Object.assign({}, SKYU, SKYC), vertexShader: SKY_VS,
+  fragmentShader: TM(SKY_FN + SKY_CLOUDS + `uniform sampler2D uCT; uniform float uCOn; uniform vec2 uCTs;
+    void main(){ vec3 d = normalize(vDir); if (d.y < 0.0) { gl_FragColor = vec4(below(d), 1.0); return; }
+      vec2 uv = vClip.xy / vClip.w * 0.5 + 0.5, o = uCTs * 0.7; // agrandissement adouci (4 échantillons) : efface la trame des pas
+      vec4 k = uCOn > 0.5 ? (texture2D(uCT, uv + o) + texture2D(uCT, uv - o) + texture2D(uCT, uv + vec2(o.x, -o.y)) + texture2D(uCT, uv + vec2(-o.x, o.y))) * 0.25 : clouds(d);
+      gl_FragColor = vec4(skyBase(d) * k.a + k.rgb + vec3(0.7, 0.72, 0.85) * uFlash * 0.4, 1.0); }`),
 }));
+{ const m = new THREE.Mesh(sky.geometry, skyCloudMat); m.frustumCulled = false; CLP.sc.add(m); CLP.mesh = m; }
+// passe nuages : avant le rendu principal, même caméra, demi-résolution (texture en demi-flottants : couleurs au-delà de 1 conservées)
+function renderClouds() {
+  if (!N3.tex) { N3.tex = makeNoise3D(); CLOUDU.uN3.value = N3.tex; }
+  renderer.getDrawingBufferSize(CLP.sz); const w = Math.max(64, Math.round(CLP.sz.x * 0.5)), h = Math.max(64, Math.round(CLP.sz.y * 0.5));
+  if (!CLP.rt || CLP.w !== w || CLP.h !== h) { if (CLP.rt) CLP.rt.dispose(); CLP.rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter }); CLP.w = w; CLP.h = h; SKYC.uCT.value = CLP.rt.texture; SKYC.uCTs.value.set(1 / w, 1 / h); }
+  CLP.mesh.position.copy(camera.position); const rt0 = renderer.getRenderTarget(), sh = renderer.shadowMap.autoUpdate; renderer.shadowMap.autoUpdate = false;
+  renderer.setRenderTarget(CLP.rt); renderer.render(CLP.sc, camera); renderer.setRenderTarget(rt0); renderer.shadowMap.autoUpdate = sh; SKYC.uCOn.value = 1;
+}
 sky.renderOrder = -1; sky.frustumCulled = false; scene.add(sky);
 /* Reflets d'environnement : le ciel courant (soleil, nuages, mer sombre sous l'horizon) est cuit en carte PMREM et sert de lumière
    d'ambiance et de reflet à tous les matériaux standard (coques, foils, accastillage). Recalculé seulement quand le ciel change
    (soleil > 1°, nuages, pluie), au plus une fois toutes les 2 s ; coupé en qualité basse. */
 const ENVMAP = { pm: null, rt: null, sc: new THREE.Scene(), st: null, t: -99, on: false };
-{ const m = new THREE.Mesh(sky.geometry, sky.material); m.frustumCulled = false; ENVMAP.sc.add(m); }
+{ const m = new THREE.Mesh(sky.geometry, skyFullMat); m.frustumCulled = false; ENVMAP.sc.add(m); }
 function updateEnvMap(force) {
   const want = GFX.level !== 'low'; if (!want) { if (ENVMAP.on) { scene.environment = null; ENVMAP.on = false; } return; }
   const st = [SUN.x, SUN.y, SUN.z, ENV.cloud, ENV.rain, ENV.dayF, CM.last], o = ENVMAP.st;
@@ -5062,7 +5161,7 @@ function updateEnv(rdt) {
   ENV.flash *= Math.exp(-rdt * 10); if (ENV.flash < 0.01) ENV.flash = 0;
   ENV.nextThunder = ENV.nextThunder.filter(th => { if (realT >= th.t) { sfxThunder(th.p); return false; } return true; });
   const fl = ENV.flash, light = (0.16 + 0.84 * dayF + 0.1 * moonUp0) * (1 - 0.3 * cl) * (0.85 + 0.15 * ENV.sunVis);
-  SKYU.uDay.value = dayF; SKYU.uCloud.value = cl; SKYU.uSunVis.value = ENV.sunVis; CLOUDU.uCQ.value = GFX.level === 'low' ? 0 : 1; SKYU.uFlash.value = fl * 0.6; SKYU.uMoonUp.value = moonUp0; SKYU.uSkyT.value = realT;
+  SKYU.uDay.value = dayF; SKYU.uCloud.value = cl; SKYU.uSunVis.value = ENV.sunVis; CLOUDU.uCQ.value = GFX.level === 'low' ? 0 : 1; CLOUDU.uCS.value = GFX.level === 'high' ? 40 : 26; SKYU.uFlash.value = fl * 0.6; SKYU.uMoonUp.value = moonUp0; SKYU.uSkyT.value = realT;
   // dérive des nuages avec le vent (m), accélérée avec le temps de jeu mais plafonnée (sinon le ciel défile en accéléré)
   const wa = ((player.twd || 0) + 180) * D2R, cs = (player.tws || 10) * KN * 1.6 * rdt * Math.min(MODE === 'race' ? accel : 1, 40); SKYU.uCloudOff.value.x -= Math.sin(wa) * cs; SKYU.uCloudOff.value.y -= Math.cos(wa) * cs;
   CLOUDU.uWD.value.set(Math.sin(wa + 0.35), Math.cos(wa + 0.35));
@@ -5364,6 +5463,7 @@ function frame(now) {
   if (hudAcc > 0.1) { tutoTick(hudAcc); hudAcc = 0; updateHUD(); }
   if (mapAcc > 0.1) { mapAcc = 0; drawMap(); }
   if (polAcc > 0.2) { polAcc = 0; drawPolar(); }
+  renderClouds();
   renderer.render(scene, camera);
   rwPoll();
   if (JOBS.length) { const idle = !running || paused || MENU_CINE, used = performance.now() - now; runJobs(idle ? 12 : clamp(11 - used, 2.5, 8), idle ? 12 : 3); }
