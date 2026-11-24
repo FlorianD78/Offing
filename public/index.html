@@ -1053,7 +1053,7 @@ const NOISE_TEX = (() => {
   return { tex, d }; 
 })();
 const MOON = new THREE.Vector3(0.3, 0.5, 0.8).normalize(), SUNCOL = new THREE.Color(1, 0.93, 0.8);
-const SKYU = { uSun: { value: SUN }, uMoon: { value: MOON }, uSunCol: { value: SUNCOL }, uHorizon: { value: HORIZON }, uZenith: { value: ZENITH }, uDay: { value: 1 }, uCloud: { value: 0.3 }, uFlash: { value: 0 }, uCloudOff: { value: new THREE.Vector2() }, uEnv: { value: 0 }, uMoonUp: { value: 0 }, uSkyT: { value: 0 }, uSunVis: { value: 1 } };
+const SKYU = { uSun: { value: SUN }, uMoon: { value: MOON }, uSunCol: { value: SUNCOL }, uHorizon: { value: HORIZON }, uZenith: { value: ZENITH }, uDay: { value: 1 }, uCloud: { value: 0.3 }, uFlash: { value: 0 }, uCloudOff: { value: new THREE.Vector2() }, uBoatOff: { value: new THREE.Vector2() }, uEnv: { value: 0 }, uMoonUp: { value: 0 }, uSkyT: { value: 0 }, uSunVis: { value: 1 } };
 const UL = { value: 1 };
 /* Ciel météo : carte de nébulosité 32 × 32 sur ± 280 nm autour du bateau, calculée par morceaux (4 lignes par image) à partir des systèmes
    météo de la course (dépressions, fronts chaud et froid, secteur chaud, dorsales, anticyclone, alizés, pot-au-noir, grains), puis fondue
@@ -1096,7 +1096,7 @@ function makeNoise3D() {
   t.wrapS = t.wrapT = t.wrapR = THREE.RepeatWrapping; t.unpackAlignment = 1; t.needsUpdate = true; return t;
 }
 CLOUDU.uN3 = { value: null }; CLOUDU.uCS = CLOUDU.uCS || { value: 28 };
-const SKY_CLOUDS = `uniform vec2 uCloudOff; uniform float uEnv; varying vec3 vDir; varying vec4 vClip;
+const SKY_CLOUDS = `uniform vec2 uCloudOff; uniform vec2 uBoatOff; uniform float uEnv; varying vec3 vDir; varying vec4 vClip;
     uniform sampler2D uCM0; uniform sampler2D uCM1; uniform vec4 uCMO; uniform float uCMix; uniform float uCMR; uniform sampler2D uNzS; uniform float uFogC; uniform float uCQ; uniform vec2 uWD; uniform float uCS;
     uniform highp sampler3D uN3;
     // distance (m) jusqu'à une couche de nuages d'altitude H, Terre ronde : au ras de l'horizon la couche file vers l'horizon au lieu de l'infini
@@ -1114,11 +1114,11 @@ const SKY_CLOUDS = `uniform vec2 uCloudOff; uniform float uEnv; varying vec3 vDi
     float cuDen(vec2 p, float y, float cv, float thk, bool det){
       float yf = (y - HB) / thk; if (yf <= 0.0 || yf >= 1.0) return 0.0;
       // forme au sol lissée (pas de détail fin étiré sur toute la hauteur) : le relief fin vient du bruit 3D
-      vec2 q = (p + uCloudOff * 1.3) / 90000.0; float n = smoothstep(-2.1, 2.1, (texture2D(uNzS, q * 0.75).r - 0.5) / 0.115);
+      vec2 q = (p + uBoatOff + uCloudOff * 1.3) / 90000.0; float n = smoothstep(-2.1, 2.1, (texture2D(uNzS, q * 0.75).r - 0.5) / 0.115);
       float x = clamp((n - 1.0 + cv) / max(cv, 0.05), 0.0, 1.0), h = x * (1.35 - 0.45 * x), dd = h - yf; // tour d'autant plus haute que le cœur est dense, sommet sous le haut de la tranche
       if (dd < -0.35) return 0.0;
       float den = smoothstep(0.0, 0.3, dd) * smoothstep(0.0, 0.06, yf);
-      if (det) { vec3 P3 = vec3(p.x + uCloudOff.x * 1.3, y * 1.15, p.y + uCloudOff.y * 1.3); float w = smoothstep(0.3, 0.68, texture(uN3, P3 / 3200.0).r * 0.68 + texture(uN3, P3 / 1150.0 + 0.37).r * 0.32);
+      if (det) { vec3 P3 = vec3(p.x + uBoatOff.x + uCloudOff.x * 1.3, y * 1.15, p.y + uBoatOff.y + uCloudOff.y * 1.3); float w = smoothstep(0.3, 0.68, texture(uN3, P3 / 3200.0).r * 0.68 + texture(uN3, P3 / 1150.0 + 0.37).r * 0.32);
         den = clamp((smoothstep(-0.4, 0.3, dd) * smoothstep(0.0, 0.06, yf) - (1.0 - w) * (0.55 + 0.3 * yf)) / 0.3, 0.0, 1.0); }
       return den; }
     vec4 clouds(vec3 d){
@@ -1130,7 +1130,7 @@ const SKY_CLOUDS = `uniform vec2 uCloudOff; uniform float uEnv; varying vec3 vDi
       vec2 wd = uWD, wn = vec2(-wd.y, wd.x);
       // cirrus : voiles fibreux étirés par le vent d'altitude, éclairés en rose après le coucher du soleil
       { float D = layerD(e, 9000.0); vec2 p = hd * D; vec4 m = cmap(p); float cv = m.g;
-        if (cv > 0.02) { vec2 q = vec2(dot(p, wd) * 0.12, dot(p, wn) * 0.6) / 260000.0 + uCloudOff * 1.5 / 230000.0;
+        if (cv > 0.02) { vec2 pb = p + uBoatOff, q = vec2(dot(pb, wd) * 0.12, dot(pb, wn) * 0.6) / 260000.0 + uCloudOff * 1.5 / 230000.0;
           float n = eq(fb(q) * 0.7 + fb(q * vec2(3.0, 0.6) + 0.21) * 0.3), far = smoothstep(60000.0, 260000.0, D);
           float a = mix(smoothstep(1.0 - cv - 0.05, 1.0 - cv + 0.3, n), cv * 0.7, far) * (0.35 + 0.4 * cv) * smoothstep(0.0, 0.03, e);
           float lowH = smoothstep(0.14, -0.06, uSun.y) * step(-0.14, uSun.y); // rose seulement au coucher (les cirrus restent éclairés après la couche basse)
@@ -1139,7 +1139,7 @@ const SKY_CLOUDS = `uniform vec2 uCloudOff; uniform float uEnv; varying vec3 vDi
       // couche stratiforme (altostratus, nimbostratus, stratocumulus) : grise et uniforme quand elle couvre tout, sombre sous la pluie,
       // bourrelets éclairés côté soleil quand elle se morcelle
       { float D = layerD(e, 2500.0); vec2 p = hd * D; vec4 m = cmap(p); float cv = m.r, rn = m.a;
-        if (cv > 0.02) { vec2 q = (p + uCloudOff) / 230000.0; float f0 = fb(q), n = eq(f0 * 0.75 + fb(q * 3.3 + 0.5) * 0.25 * uCQ + 0.125 * (1.0 - uCQ)), far = smoothstep(25000.0, 140000.0, D);
+        if (cv > 0.02) { vec2 q = (p + uBoatOff + uCloudOff * 1.4) / 230000.0; float f0 = fb(q), n = eq(f0 * 0.75 + fb(q * 3.3 + 0.5) * 0.25 * uCQ + 0.125 * (1.0 - uCQ)), far = smoothstep(25000.0, 140000.0, D);
           float a = mix(smoothstep(1.0 - cv - 0.06, 1.0 - cv + 0.14, n), smoothstep(0.0, 0.9, cv), far) * smoothstep(0.0, 0.02, e);
           float th = smoothstep(0.35, 1.0, cv) * (0.55 + 0.45 * n);
           float rel = clamp(1.0 + (f0 - fb(q + vec2(uSun.x, -uSun.z) * 0.005)) * 2.4 * sunUp * uDay * uCQ * (1.0 - 0.6 * th), 0.76, 1.24);
@@ -1178,7 +1178,7 @@ const SKY_CLOUDS = `uniform vec2 uCloudOff; uniform float uEnv; varying vec3 vDi
       else
       // qualité basse : cumulus en couche plate (2D)
       { float D = layerD(e, 1200.0); vec2 p = hd * D; vec4 m = cmap(p); float cv = max(m.b, m.a * 0.9), cb = m.a;
-        if (cv > 0.02) { vec2 q = (p + uCloudOff * 1.3) / 90000.0; float nr = fb(q) * 0.7 + fb(q * 2.9 + 0.13) * 0.3 * uCQ + 0.15 * (1.0 - uCQ), n = eq(nr), far = smoothstep(15000.0, 90000.0, D);
+        if (cv > 0.02) { vec2 q = (p + uBoatOff + uCloudOff * 1.3) / 90000.0; float nr = fb(q) * 0.7 + fb(q * 2.9 + 0.13) * 0.3 * uCQ + 0.15 * (1.0 - uCQ), n = eq(nr), far = smoothstep(15000.0, 90000.0, D);
           float n2 = fb(q + vec2(dot(uSun.xz, vec2(1.0, 0.0)), -uSun.z) * 0.004);
           float a = mix(smoothstep(1.0 - cv - 0.02, 1.0 - cv + 0.07, n), cv * 0.8, far) * smoothstep(0.0, 0.015, e);
           float sh = clamp(0.74 + (nr - n2 * 0.7 - 0.15) * 3.0, 0.55, 1.1) * (1.0 - 0.55 * cb);
@@ -5193,7 +5193,13 @@ function updateEnv(rdt) {
   const fl = ENV.flash, light = (0.16 + 0.84 * dayF + 0.1 * moonUp0) * (1 - 0.3 * cl) * (0.85 + 0.15 * ENV.sunVis);
   SKYU.uDay.value = dayF; SKYU.uCloud.value = cl; SKYU.uSunVis.value = ENV.sunVis; CLOUDU.uCQ.value = GFX.level === 'low' ? 0 : 1; CLOUDU.uCS.value = GFX.level === 'high' ? 40 : 26; SKYU.uFlash.value = fl * 0.6; SKYU.uMoonUp.value = moonUp0; SKYU.uSkyT.value = realT;
   // dérive des nuages avec le vent (m), accélérée avec le temps de jeu mais plafonnée (sinon le ciel défile en accéléré)
-  const wa = ((player.twd || 0) + 180) * D2R, cs = (player.tws || 10) * KN * 1.6 * rdt * Math.min(MODE === 'race' ? accel : 1, 40); SKYU.uCloudOff.value.x -= Math.sin(wa) * cs; SKYU.uCloudOff.value.y -= Math.cos(wa) * cs;
+  // nuages : défilement en temps réel (comme la mer), quelle que soit l'accélération du temps. Ils avancent avec le vent de leur altitude
+  // (≈ vent de surface pour la couche à 2,5 km ×1,4, cumulus ×1,3, cirrus ×1,5) et défilent en sens inverse du bateau : au portant ils
+  // semblent presque immobiles, au près ils arrivent plus vite. L'arrivée des fronts et dépressions suit, elle, le temps simulé (carte de nébulosité).
+  const wa = ((player.twd || 0) + 180) * D2R;
+  { const cs = (player.tws || 10) * KN * rdt, bh = (player.dispHdg || 0) * D2R, bs = (player.dspd || 0) * KN * rdt;
+    SKYU.uCloudOff.value.x -= Math.sin(wa) * cs; SKYU.uCloudOff.value.y -= Math.cos(wa) * cs;
+    SKYU.uBoatOff.value.x += Math.sin(bh) * bs; SKYU.uBoatOff.value.y += Math.cos(bh) * bs; }
   CLOUDU.uWD.value.set(Math.sin(wa + 0.35), Math.cos(wa + 0.35));
   oceanU.uRain.value = rn; oceanU.uGustT.value += (player.tws || 10) * KN * 0.55 * rdt;
   UL.value = light + fl * 0.5;
