@@ -2823,19 +2823,20 @@ function updateSpray(rdt, sceneVx, sceneVz) {
 
 /* ----- Sons (synthèse Web Audio, aucun fichier) ----- */
 /* Ambiance sonore de la vue intérieure (sous la casquette) — synthèse Web Audio pure, aucun fichier.
-   cabAudio(ctx, out) -> { update(dt, s), slam(p), spray(p), creak(p), pilot(len, dir), beep(kind), level(v) }
-   s = { bsp (nd), tws (nd), sea (0..1 état de mer), rain (0..1), pitchV (vitesse de tangage, rad/s) }
+   cabAudio(ctx, out) -> { update(dt, s), slam(p, t, kind), pilot(len, dir), beep(kind), level(v) }
+   s = { bsp (nd), tws (nd), sea (0..1 état de mer), pitchV (vitesse de tangage, rad/s) }
    Idée générale : à l'intérieur on n'entend presque plus le vent ; on entend la coque. L'eau gronde dans les fonds (grave, étouffé),
    le chuintement d'écume passe à travers le bordé, chaque vague qui tape résonne dans la structure carbone, le vérin du pilote
-   travaille sans arrêt, les appendices chantent au-delà de ~14 nd, la pluie et les paquets de mer tambourinent sur la casquette. */
+   travaille sans arrêt, les appendices chantent au-delà de ~14 nd. Les chocs sont synthétisés par modes de résonance (panneaux carbone),
+   jamais deux fois identiques : 5 familles (coup sec d'étrave, chute lourde, claque sur le flanc, double impact, choc qui fait vibrer la coque). */
 function cabAudio(ctx, out, rnd = Math.random) {
   const sr = ctx.sampleRate, T = () => ctx.currentTime;
   const mkBuf = (sec, fill) => { const b = ctx.createBuffer(1, Math.floor(sr * sec), sr), d = b.getChannelData(0); fill(d); return b; };
   const white = mkBuf(3, d => { for (let i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1; });
   const brown = mkBuf(4, d => { let b = 0, m = 0; for (let i = 0; i < d.length; i++) { b = 0.996 * b + 0.04 * (rnd() * 2 - 1); m = 0.9995 * m + 0.0005 * b; d[i] = (b - m) * 1.2; } }); // brun sans continu
-  // pluie sur la casquette : gouttes (sinusoïdes amorties aiguës) + petit choc sourd du panneau composite
-  const drops = mkBuf(3, d => { const n = 3 * 900; for (let k = 0; k < n; k++) { const i0 = Math.floor(rnd() * d.length), a = Math.pow(rnd(), 3), f = 1800 + rnd() * 2800, tau = (1.5 + rnd() * 2.5) * sr / 1000, f2 = 700 + rnd() * 400;
-      for (let j = 0; j < tau * 5 && i0 + j < d.length; j++) d[i0 + j] += a * (0.5 * Math.sin(2 * Math.PI * f * j / sr) * Math.exp(-j / tau) + 0.35 * Math.sin(2 * Math.PI * f2 * j / sr) * Math.exp(-j / (tau * 2.5))); } });
+  // bulles : petites résonances qui montent en fréquence (bulles d'air qui éclatent le long du bordé) -> donne de l'« eau » au souffle
+  const bubbles = mkBuf(4, d => { const n = 4 * 55; for (let k = 0; k < n; k++) { const i0 = Math.floor(rnd() * d.length), a = Math.pow(rnd(), 2.5) * 1.2, f0 = 300 * Math.pow(4.5, rnd()), tau = (6 + rnd() * 20) * sr / 1000;
+      let ph = 0; for (let j = 0; j < tau * 5 && i0 + j < d.length; j++) { const f = f0 * (1 + 0.7 * j / (tau * 5)); ph += 2 * Math.PI * f / sr; d[i0 + j] += a * Math.sin(ph) * Math.exp(-j / tau) * Math.min(1, j / 40); } } });
   // petite pièce : réflexions courtes du cockpit (0,35 s)
   const room = ctx.createConvolver(); room.buffer = (() => { const L = Math.floor(sr * 0.35), b = ctx.createBuffer(2, L, sr); for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < L; i++) d[i] = (rnd() * 2 - 1) * Math.pow(1 - i / L, 4); } return b; })();
   const bus = ctx.createGain(); bus.gain.value = 1; bus.connect(out); const wet = ctx.createGain(); wet.gain.value = 0.22; room.connect(wet); wet.connect(out);
@@ -2849,19 +2850,19 @@ function cabAudio(ctx, out, rnd = Math.random) {
   const fizz = loop(white, 1, [filt('highpass', 3200, 0.5), filt('lowpass', 6500)], 0, 0.1);       // écume, à travers la coque
   const windIn = loop(brown, 1.3, [filt('lowpass', 300, 0.5)], 0, 0.1);                             // vent sur la casquette, très étouffé
   const whistle = loop(white, 1, [filt('bandpass', 1150, 18)], 0.2, 0.15);                         // gréement qui siffle au loin
-  const rain = loop(drops, 1, [filt('highpass', 500), filt('lowpass', 7000)], 0, 0.3);
+  const gurgle = loop(bubbles, 1, [filt('lowpass', 950, 0.6)], 0, 0.25);                       // gargouillis le long de la coque
   // appendices qui chantent : sinusoïde instable + battement
   const humG = ctx.createGain(); humG.gain.value = 0; const humBP = filt('bandpass', 400, 6); humBP.connect(humG); send(humG, 0, 0.4);
   const h1 = ctx.createOscillator(), h2 = ctx.createOscillator(), h3 = ctx.createOscillator(), lfo = ctx.createOscillator(), lfoG = ctx.createGain(), h3g = ctx.createGain();
   h1.type = h2.type = 'sine'; h3.type = 'triangle'; h3g.gain.value = 0.18; lfo.frequency.value = 0.31; lfoG.gain.value = 5; lfo.connect(lfoG); [h1, h2, h3].forEach(o => lfoG.connect(o.frequency));
   h1.connect(humBP); h2.connect(humBP); h3.connect(h3g); h3g.connect(humBP); [h1, h2, h3, lfo].forEach(o => o.start());
   // ---------- état lent (houle, rafales) ----------
-  const st = { ph: 0, gust: 0, gv: 0, swell: 0, sv: 0, nextCreak: 1.5, nextPilot: 0.8, pilotDir: 1, lvl: 1 };
+  const st = { ph: 0, gust: 0, gv: 0, swell: 0, sv: 0, nextPilot: 0.8, pilotDir: 1, lvl: 1, lastKind: '' };
   const set = (p, v, tc = 0.08) => p.setTargetAtTime(v, T(), tc);
   const A = {
     level(v) { st.lvl = v; set(bus.gain, v, 0.3); set(wet.gain, 0.22 * v, 0.3); },
     update(dt, s) {
-      const bsp = s.bsp || 0, tws = s.tws || 0, sea = s.sea ?? Math.min(1, tws / 35), rn = s.rain || 0;
+      const bsp = s.bsp || 0, tws = s.tws || 0, sea = s.sea ?? Math.min(1, tws / 35);
       // houle : passage des vagues le long de la coque (période ~ 3 à 6 s), plus un bruit lent
       st.ph += dt * 2 * Math.PI / (6 - 3 * sea); st.sv += (rnd() - 0.5) * dt * 3 - st.sv * dt * 0.8; st.swell = Math.max(-1, Math.min(1, st.swell + st.sv * dt));
       const wave = 0.5 + 0.5 * Math.sin(st.ph) * (0.6 + 0.4 * sea) + 0.25 * st.swell + Math.min(0.6, Math.abs(s.pitchV || 0) * 1.5);
@@ -2872,38 +2873,48 @@ function cabAudio(ctx, out, rnd = Math.random) {
       set(fizz.g.gain, bg * (0.012 + 0.05 * v * v * (0.3 + wave)), 0.1); set(wash.pan, Math.sin(st.ph * 0.5) * 0.4, 0.3);
       const w = Math.max(0, tws * (1 + 0.25 * st.gust)) / 30;
       set(windIn.g.gain, (s.bgw ?? bg) * 0.08 * w * w, 0.25); set(whistle.g.gain, Math.max(0, w - 0.6) * 0.035 * (0.6 + 0.4 * st.gust), 0.25); set(whistle.f[0].frequency, 1050 + 250 * w + 120 * st.gust, 0.3);
-      set(rain.g.gain, 0.5 * rn, 0.5);
+      set(gurgle.g.gain, bg * (0.06 + 0.22 * v) * (0.2 + 0.9 * wave), 0.15); set(gurgle.src.playbackRate, 0.85 + 0.3 * v, 0.5);
       const hf = 230 + 15 * bsp, hk = Math.pow(Math.max(0, Math.min(1, (bsp - 13) / 9)), 1.5) * (0.75 + 0.25 * Math.sin(st.ph * 1.7));
       set(h1.frequency, hf, 0.4); set(h2.frequency, hf + 1.6, 0.4); set(h3.frequency, hf * 2.01, 0.4); set(humBP.frequency, hf, 0.4); set(humG.gain, 0.09 * hk, 0.3);
       // événements spontanés : craquements de structure, corrections du pilote
-      st.nextCreak -= dt * (0.3 + 1.6 * sea); if (st.nextCreak <= 0) { A.creak(0.35 + 0.6 * sea * rnd()); st.nextCreak = 1 + rnd() * 3; }
       if (s.autoPilot !== false) { st.nextPilot -= dt * (0.5 + 1.0 * sea); if (st.nextPilot <= 0) { A.pilot(0.25 + rnd() * (0.4 + 0.9 * sea), st.pilotDir); st.pilotDir *= -1; st.nextPilot = 1.5 + rnd() * 3.5; } }
     },
-    // ---------- vague qui tape : coup sourd dans la coque, résonance du carbone, cliquetis, puis l'eau sur la casquette ----------
-    slam(p, t = T()) {
-      const g = ctx.createGain(), o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(92, t); o.frequency.exponentialRampToValueAtTime(36, t + 0.28);
-      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.95 * p, t + 0.006); g.gain.exponentialRampToValueAtTime(0.001, t + 0.9); o.connect(g); send(g, 0, 0.6); o.start(t); o.stop(t + 1);
-      const nb = (buf, type, f, q, a, dec, rate = 1, at = 0.004, pan = 0, w = 0.6) => { const s = ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate; const fl = filt(type, f, q), gg = ctx.createGain();
-        s.connect(fl); fl.connect(gg); gg.gain.setValueAtTime(0.0001, t); gg.gain.linearRampToValueAtTime(a, t + at); gg.gain.exponentialRampToValueAtTime(0.0005, t + dec); send(gg, pan, w); s.start(t, rnd() * 2); s.stop(t + dec + 0.05); };
-      nb(brown, 'lowpass', 260, 0.8, 0.9 * p, 0.45, 0.8); nb(white, 'bandpass', 150, 3, 0.8 * p, 0.75); nb(white, 'bandpass', 1100, 1, 0.22 * p, 0.14);
-      const n = 4 + Math.floor(rnd() * 7 * p); for (let i = 0; i < n; i++) { const tt = t + 0.03 + rnd() * 0.45, s = ctx.createBufferSource(), fl = filt('bandpass', 2500 + rnd() * 3000, 7), gg = ctx.createGain(); s.buffer = white; s.connect(fl); fl.connect(gg);
-        gg.gain.setValueAtTime(0.0001, tt); gg.gain.linearRampToValueAtTime(0.12 * p * rnd(), tt + 0.002); gg.gain.exponentialRampToValueAtTime(0.0003, tt + 0.03); send(gg, (rnd() - 0.5) * 1.2, 0.4); s.start(tt, rnd() * 2); s.stop(tt + 0.05); }
-      if (p > 0.45) A.spray(p * 0.85, t + 0.22 + rnd() * 0.3); A.creak(0.5 + 0.4 * p, t + 0.3 + rnd() * 0.3);
+    // ---------- vague qui tape ----------
+    // Briques : bruit filtré (claque d'eau, coup sourd) + modes de résonance (sinusoïdes amorties, fréquences inharmoniques d'un panneau
+    // carbone, légèrement tirées au hasard) + petits chocs mats du matériel qui bouge. Pas de queue : tout est éteint en moins d'une seconde.
+    slam(p, t = T(), kind) {
+      p = Math.min(1.4, Math.max(0.2, p));
+      const nb = (buf, chain, a, at, dec, pan = 0, w = 0.5, rate = 1, t0 = t) => { const s = ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate; let n = s; chain.forEach(f => { n.connect(f); n = f; }); const g = ctx.createGain(); n.connect(g);
+        g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(a, t0 + at); g.gain.exponentialRampToValueAtTime(0.0003, t0 + at + dec); send(g, pan, w); s.start(t0, rnd() * 2); s.stop(t0 + at + dec + 0.05); };
+      const modes = (fs, a, dec, pan = 0, t0 = t) => fs.forEach((f, i) => { const o = ctx.createOscillator(), g = ctx.createGain(), ff = f * (0.94 + rnd() * 0.12), d = dec * (0.7 + rnd() * 0.6) / (1 + i * 0.35);
+        o.frequency.setValueAtTime(ff * 1.015, t0); o.frequency.exponentialRampToValueAtTime(ff, t0 + 0.08); g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(a / (1 + i * 0.5), t0 + 0.004 + i * 0.002); g.gain.exponentialRampToValueAtTime(0.0003, t0 + d);
+        o.connect(g); send(g, pan, 0.6); o.start(t0); o.stop(t0 + d + 0.05); });
+      const knocks = (n, a, t0 = t) => { for (let i = 0; i < n; i++) nb(white, [filt('bandpass', 220 + rnd() * 500, 2.5)], a * (0.4 + 0.6 * rnd()), 0.002, 0.025 + rnd() * 0.03, (rnd() - 0.5) * 1.4, 0.4, 1, t0 + 0.06 + rnd() * 0.4); };
+      const whump = (a, t0 = t) => nb(brown, [filt('bandpass', 300 + rnd() * 120, 0.8)], a, 0.03, 0.22 + rnd() * 0.1, 0, 0.3, 1, t0 + 0.02);
+      if (!kind) { const r = rnd(), K = p < 0.55 ? (r < 0.6 ? 'sec' : 'flanc') : p < 0.95 ? (r < 0.35 ? 'sec' : r < 0.6 ? 'flanc' : r < 0.85 ? 'lourd' : 'double') : (r < 0.35 ? 'lourd' : r < 0.6 ? 'vibre' : r < 0.82 ? 'double' : 'sec');
+        kind = K === st.lastKind && rnd() < 0.6 ? (K === 'sec' ? 'flanc' : 'sec') : K; } st.lastKind = kind;
+      const sc = 0.85 + rnd() * 0.3; // « taille » du panneau qui sonne : décale toutes les résonances d'un choc à l'autre
+      if (kind === 'sec') {          // coup sec d'étrave : claque d'eau nette + coup sourd court + carbone qui sonne brièvement
+        nb(white, [filt('bandpass', 800 + rnd() * 400, 0.7), filt('lowpass', 3500)], 0.45 * p, 0.003, 0.07);
+        nb(brown, [filt('lowpass', 200, 0.8)], 0.9 * p, 0.004, 0.16); modes([92, 147, 231, 368].map(f => f * sc), 0.32 * p, 0.32); knocks(2 + Math.floor(rnd() * 2), 0.09 * p); whump(0.12 * p);
+      } else if (kind === 'lourd') {  // chute d'une vague : gros boum grave, la coque résonne longtemps, le matériel bouge
+        nb(brown, [filt('lowpass', 130, 0.9)], 1.1 * p, 0.006, 0.42); nb(white, [filt('bandpass', 480, 0.9)], 0.3 * p, 0.005, 0.12);
+        modes([47, 70, 111, 164, 241].map(f => f * sc), 0.42 * p, 0.85); knocks(4 + Math.floor(rnd() * 4), 0.12 * p); whump(0.2 * p);
+      } else if (kind === 'flanc') {  // claque sur le flanc : plus clair, latéralisé, peu de grave
+        const pan = (rnd() < 0.5 ? -1 : 1) * (0.45 + rnd() * 0.3);
+        nb(white, [filt('bandpass', 1300 + rnd() * 500, 0.8)], 0.6 * p, 0.002, 0.05, pan); nb(white, [filt('bandpass', 2200, 0.6), filt('lowpass', 4000)], 0.18 * p, 0.01, 0.18, pan);
+        nb(brown, [filt('lowpass', 320, 0.8)], 0.8 * p, 0.003, 0.11, pan); modes([176, 287, 455].map(f => f * sc), 0.3 * p, 0.2, pan * 0.6); knocks(1 + Math.floor(rnd() * 2), 0.06 * p);
+      } else if (kind === 'double') { // l'étrave tape puis l'arrière retombe
+        const dt = 0.12 + rnd() * 0.14;
+        nb(white, [filt('bandpass', 900, 0.7), filt('lowpass', 3000)], 0.35 * p, 0.003, 0.06); nb(brown, [filt('lowpass', 180, 0.8)], 0.75 * p, 0.004, 0.15); modes([88, 140, 222].map(f => f * sc), 0.25 * p, 0.28);
+        nb(brown, [filt('lowpass', 140, 0.9)], 0.95 * p, 0.006, 0.3, 0, 0.5, 1, t + dt); modes([55, 83, 130, 196].map(f => f * sc), 0.33 * p, 0.6, 0, t + dt); knocks(3, 0.1 * p, t + dt); whump(0.15 * p, t + dt);
+      } else {                        // choc qui fait vibrer toute la coque : boum puis frémissement grave qui s'éteint (~0,8 s)
+        nb(white, [filt('bandpass', 700, 0.8)], 0.35 * p, 0.003, 0.08); nb(brown, [filt('lowpass', 150, 0.9)], 1.0 * p, 0.005, 0.3); modes([52, 79, 123, 188].map(f => f * sc), 0.35 * p, 0.7);
+        const o = ctx.createOscillator(), am = ctx.createGain(), lf = ctx.createOscillator(), lg = ctx.createGain(), g = ctx.createGain(); o.frequency.value = 58 * sc; lf.frequency.value = 13 + rnd() * 5; lg.gain.value = 0.5; am.gain.value = 0.5;
+        lf.connect(lg); lg.connect(am.gain); o.connect(am); am.connect(g); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.32 * p, t + 0.05); g.gain.exponentialRampToValueAtTime(0.0003, t + 0.85); send(g, 0, 0.4);
+        o.start(t); lf.start(t); o.stop(t + 0.9); lf.stop(t + 0.9); knocks(3 + Math.floor(rnd() * 3), 0.1 * p);
+      }
     },
-    // ---------- paquet de mer / embruns qui frappent la casquette ----------
-    spray(p, t = T()) {
-      const env = (g, a, at, dec) => { g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(a, t + at); g.gain.setTargetAtTime(0.0001, t + at, dec); };
-      const mk = (buf, chain, a, at, dec, pan, rate = 1) => { const s = ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = rate; let n = s; chain.forEach(f => { n.connect(f); n = f; }); const g = ctx.createGain(); n.connect(g); env(g, a, at, dec); send(g, pan, 0.5); s.start(t, rnd() * 2); s.stop(t + dec * 6); };
-      mk(white, [filt('bandpass', 2600, 0.6)], 0.2 * p, 0.04, 0.35, (rnd() - 0.5) * 0.6);   // nappe d'eau sur le toit
-      mk(brown, [filt('bandpass', 520, 0.7)], 0.3 * p, 0.03, 0.25, 0);                       // poids de l'eau sur le panneau
-      mk(drops, [filt('highpass', 700)], 0.6 * p, 0.12, 0.6, (rnd() - 0.5) * 0.8, 1.1);       // ruissellement en gouttes
-    },
-    // ---------- craquement de structure (collé-glissé sur une cloison, un bout dans un bloqueur) ----------
-    creak(p, t = T()) {
-      const len = 0.35 + rnd() * 0.9, b = ctx.createBuffer(1, Math.floor(sr * len), sr), d = b.getChannelData(0), r0 = 35 + rnd() * 60, r1 = r0 * (1.4 + rnd());
-      let x = 0; while (x < len) { const u = x / len, rate = r0 + (r1 - r0) * Math.sin(Math.PI * u); const i = Math.floor(x * sr); if (i < d.length) d[i] = (0.4 + 0.6 * rnd()) * Math.sin(Math.PI * u); x += (1 / rate) * (0.8 + 0.4 * rnd()); }
-      const s = ctx.createBufferSource(); s.buffer = b; const f1 = 220 + rnd() * 260, a = filt('bandpass', f1, 14), c = filt('bandpass', f1 * (2.2 + rnd() * 0.5), 10), lp = filt('lowpass', 2200), g = ctx.createGain();
-      s.connect(a); s.connect(c); a.connect(lp); c.connect(lp); lp.connect(g); g.gain.value = 16 * p; send(g, (rnd() - 0.5) * 1.4, 0.5); s.start(t); },
     // ---------- vérin électrique du pilote : déclic du relais, moteur qui monte en régime, vis à billes, butée ----------
     pilot(len, dir = 1, t = T()) {
       const f0 = dir > 0 ? 148 : 162, o = ctx.createOscillator(), o2 = ctx.createOscillator(), lp = filt('lowpass', 520, 0.9), g = ctx.createGain(), gw = ctx.createGain();
@@ -2922,7 +2933,7 @@ function cabAudio(ctx, out, rnd = Math.random) {
   return A;
 }
 const cabOn = () => cam.mode === 'cabin' && !!(player && player.vis && player.vis.cab) && !(MENU_CINE && !$('overlay').classList.contains('hide'));
-function cabImpact(p) { const V = player && player.vis; if (!V || !V.cab || !cabOn()) return; V.cab.wetHit(p * 0.6); if (AUD.cab && AUD.on) AUD.cab.slam(Math.min(1, p * 0.85)); }
+function cabImpact(p) { const V = player && player.vis; if (!V || !V.cab || !cabOn()) return; V.cab.wetHit(p * 0.6); if (AUD.cab && AUD.on) AUD.cab.slam(Math.min(1.3, p)); }
 
 const AUD = { ctx: null, on: true, master: null, clickT: 0 };
 try { AUD.on = localStorage.getItem('gl3d_snd') !== '0'; } catch (e) {}
