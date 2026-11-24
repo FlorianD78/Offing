@@ -2705,7 +2705,12 @@ const SAIL_DEFS_MINI = {
 };
 const CD_MINI = { sails: SAIL_DEFS_MINI, boomPivot: [0, 1.5, -0.45], boomEnd: [0, 1.5, 2.85], trav: [0.35, 0.6, 2.95], leads: [[0.78, 0.68, 0.2], [1.3, 0.62, 1.2], [1.25, 0.6, 3.05]], foils: false, cant: false, mastRot: 0, k: 0.36, bw: 0.55, heel: 1.15, surf: 1 };
 const CD_PROTO = { ...CD_MINI, foils: true, cant: true, mastRot: 0.6, heel: 1.0, surf: 0.6 };
-const C40S = 12.19 / 6.5, CD_C40 = { ...CD_MINI, surf: 0.7, furlers: true };
+const C40S = 12.19 / 6.5;
+// Class40 : le gréement du Mini agrandi × C40S montait à 22,9 m ; la jauge limite le tirant d'air à 19 m. On garde la bôme et le bas du gréement,
+// et on tasse tout ce qui est au-dessus de la bôme (y > 1,5 en unités Mini) : tête de mât à 19 m au-dessus de la flottaison.
+const C40_RY = y => y > 1.5 ? 1.5 + (y - 1.5) * ((19 / C40S - 1.5) / (12.22 - 1.5)) : y;
+const SAIL_DEFS_C40 = Object.fromEntries(Object.entries(SAIL_DEFS_MINI).map(([k, d]) => [k, { ...d, H: [d.H[0], C40_RY(d.H[1]), d.H[2]], ...(d.HA ? { HA: [d.HA[0], C40_RY(d.HA[1]), d.HA[2]] } : {}) }]));
+const CD_C40 = { ...CD_MINI, sails: SAIL_DEFS_C40, surf: 0.7, furlers: true };
 useHull('mini');
 function miniCoachGeo() { const sh = new THREE.Shape(); sh.moveTo(0.35, 0.6); sh.lineTo(0.35, 0.95); sh.quadraticCurveTo(-0.6, 1.0, -1.25, 0.94); sh.quadraticCurveTo(-1.65, 0.86, -1.75, 0.66); sh.lineTo(-1.75, 0.6); sh.closePath();
   const g = new THREE.ExtrudeGeometry(sh, { depth: 1.5, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 2, curveSegments: 8 }); g.rotateY(-Math.PI / 2); g.translate(0.75, 0, 0); return g; }
@@ -2716,11 +2721,12 @@ const MINI_KIT = {
   MAST: new THREE.CylinderGeometry(0.055, 0.085, 11.6, 8), BOOM: new THREE.CylinderGeometry(0.035, 0.055, 2.95, 6), SPRIT: new THREE.CylinderGeometry(0.035, 0.05, 2.1, 6),
   SPREAD: new THREE.BoxGeometry(1, 0.035, 0.1), TILLER: new THREE.BoxGeometry(0.045, 0.045, 1.25), SOLAR: new THREE.BoxGeometry(0.55, 0.02, 0.85), WINCH: new THREE.CylinderGeometry(0.07, 0.09, 0.12, 12),
   STOCK: new THREE.BoxGeometry(0.05, 0.4, 0.12), WIN: (() => { const pos = [], q = (a, b, c, d) => pos.push(...a, ...b, ...c, ...b, ...d, ...c); [1, -1].forEach(k => { const x = k * 0.815; q([x, 0.7, -1.3], [x, 0.7, -0.2], [x, 0.86, -1.3], [x, 0.86, -0.2]); }); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g; })(),
-  RIG: (() => { const MH = [0, 12.05, -0.5], pos = [], L = (a, b) => pos.push(...a, ...b);
+  RIG: miniRigGeo(y => y), RIG_C40: null,
+};
+function miniRigGeo(ry) { return (() => { const MH = [0, 12.05, -0.5], pos = [], L0 = (a, b) => pos.push(...a, ...b), L = (a, b) => L0([a[0], ry(a[1]), a[2]], [b[0], ry(b[1]), b[2]]);
     [1, -1].forEach(k => { const c = [k * 1.38, 0.62, 0.05], a = [k * 0.62, 4.6, -0.15], b = [k * 0.4, 8.4, -0.35]; L(c, a); L(a, b); L(b, [0, 10.4, -0.55]); L(a, [0, 4.6, -0.5]); L([k * 1.25, 0.56, 3.0], [0, 10.4, -0.5]); });
     L([0, 0.88, -3.2], [0, 10.4, -0.6]); L([0, 0.88, -5.3], [0, 12.0, -0.62]); L([0, 0.92, -5.3], [0, 0.35, -3.25]); L([0.9, 0.82, -3.0], [0, 0.92, -5.3]); L([-0.9, 0.82, -3.0], [0, 0.92, -5.3]);
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g; })(),
-};
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); return g; })(); }
 useHull('imoca');
 function makeMini(hull, accent, name, isPlayer, proto, c40) {
   useHull('mini');
@@ -2739,9 +2745,10 @@ function makeMini(hull, accent, name, isPlayer, proto, c40) {
   const til = add(K.TILLER, MAT.dark, 0, 0.78, 2.65);
   const keel = new THREE.Group(); keel.position.set(0, -0.24, 0.15); root.add(keel);
   const kf = new THREE.Mesh(K.KEEL, accMat); keel.add(kf); const bulb = new THREE.Mesh(K.BULB, accMat); bulb.scale.set(1, 1, 3.6); bulb.position.set(0, -1.38, 0.1); keel.add(bulb); param.push(kf, bulb);
-  const mast = add(K.MAST, MAT.dark, 0, 0.62 + 5.8, -0.5); mast.scale.set(1, 1, 1.5);
-  [[4.6, 0.62, 0.35], [8.4, 0.4, 0.2]].forEach(([y, w, sw]) => [1, -1].forEach(k => { const L = Math.hypot(w, sw), s2 = add(K.SPREAD, MAT.dark, k * w / 2, y, -0.5 + sw / 2); s2.scale.x = L; s2.rotation.y = -k * Math.atan2(sw, w); }));
-  root.add(new THREE.LineSegments(K.RIG, MAT.rig));
+  const RY = c40 ? C40_RY : y => y, mTop = RY(12.22); // Class40 : tête de mât à 19 m (jauge)
+  const mast = add(K.MAST, MAT.dark, 0, (0.62 + mTop) / 2, -0.5); mast.scale.set(1, (mTop - 0.62) / 11.6, 1.5);
+  [[4.6, 0.62, 0.35], [8.4, 0.4, 0.2]].forEach(([y, w, sw]) => [1, -1].forEach(k => { const L = Math.hypot(w, sw), s2 = add(K.SPREAD, MAT.dark, k * w / 2, RY(y), -0.5 + sw / 2); s2.scale.x = L; s2.rotation.y = -k * Math.atan2(sw, w); }));
+  root.add(new THREE.LineSegments(c40 ? (K.RIG_C40 || (K.RIG_C40 = miniRigGeo(C40_RY))) : K.RIG, MAT.rig));
   const sprit = add(K.SPRIT, accMat, 0, 0.9, -4.25); sprit.rotation.x = Math.PI / 2;
   const boomPivot = new THREE.Group(); boomPivot.position.set(0, 1.5, -0.45); root.add(boomPivot);
   const boom = new THREE.Mesh(K.BOOM, MAT.dark); boom.rotation.x = Math.PI / 2; boom.position.z = 1.5; boomPivot.add(boom);
@@ -2753,12 +2760,12 @@ function makeMini(hull, accent, name, isPlayer, proto, c40) {
   const sheets = new THREE.LineSegments(sheetGeo, MAT.sheet); sheets.frustumCulled = false; root.add(sheets);
   const bowWave = makeBowWave(); root.add(bowWave);
   const [foilS, foilP] = [1, -1].map(k => { const g = new THREE.Group(); if (proto) { const f = new THREE.Mesh(FOIL_GEO, MAT.foil); f.scale.set(0.36 * k, 0.36, 0.36); g.add(f); } root.add(g); return g; });
-  const label = makeLabel(name, hexCss(isPlayer ? accent : hull), isPlayer ? 160 : 256); label.position.set(0, 15, 0); root.add(label);
+  const label = makeLabel(name, hexCss(isPlayer ? accent : hull), isPlayer ? 160 : 256); label.position.set(0, c40 ? 12.5 : 15, 0); root.add(label);
   const navMats = [];
   const nav = (c, x, y, z, sz) => { const m = new THREE.SpriteMaterial({ map: GLOW_TEX, color: c, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 }); navMats.push(m); const sp = new THREE.Sprite(m); sp.position.set(x, y, z); sp.scale.set(sz, sz, 1); root.add(sp); };
-  nav(0xff3030, -0.08, 12.2, -0.58, 1.3); nav(0x30ff70, 0.08, 12.2, -0.58, 1.3); nav(0xffffff, 0, 12.2, -0.42, 1.2);
+  nav(0xff3030, -0.08, RY(12.2), -0.58, 1.3); nav(0x30ff70, 0.08, RY(12.2), -0.58, 1.3); nav(0xffffff, 0, RY(12.2), -0.42, 1.2);
   nav(0xff3030, -0.6, 0.95, -2.9, 0.6); nav(0x30ff70, 0.6, 0.95, -2.9, 0.6); nav(0xfff4dd, 0, 0.75, 3.28, 0.6);
-  const vane = new THREE.Group(); vane.position.set(0, 12.25, -0.5); vane.scale.setScalar(0.5); root.add(vane);
+  const vane = new THREE.Group(); vane.position.set(0, RY(12.25), -0.5); vane.scale.setScalar(0.5); root.add(vane);
   vane.add(new THREE.Mesh(VANE_GEO, MAT.dark)); const vFin = new THREE.Mesh(VANE_FIN, accMat); vFin.position.set(0, 0.18, 0.72); vane.add(vFin);
   if (isPlayer) root.traverse(o => { if (o.isMesh && o.material && o.material.isMeshStandardMaterial) { o.castShadow = true; o.receiveShadow = true; } });
   scene.add(root);
