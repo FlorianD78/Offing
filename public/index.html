@@ -650,6 +650,56 @@ function wxConv(lat, lon, t) {
   for (const W of S.waves) if (W.amp > 0.3 && Math.abs(lon - W.lon) < 6) c = Math.max(c, 0.25 * W.amp * gaussAx(lat, lon, W.lat, W.lon, W.sa, 70, W.brg));
   return c;
 }
+/* Nébulosité (visuelle seulement) en un point : [couche stratiforme, cirrus, cumulus, convection/pluie] dans 0..1.
+   Front chaud : cirrus jusqu'à ≈ 700 nm en avant, altostratus ≈ 400 nm, nimbostratus et pluie sur les 200 derniers nm ;
+   front froid : bande étroite de cumulonimbus, éclaircie et cumulus d'averses derrière ; secteur chaud gris et bas ;
+   dépression : ciel couvert près du centre ; anticyclone et dorsales : ciel dégagé, petits cumulus ; alizés : cumulus ; pot-au-noir : orages. */
+const CLD = [0, 0, 0, 0];
+function cloudAt(lat, lon, t) {
+  const o = CLD;
+  if (MODE !== 'race') { const dx = (lon - TC.lon) * 60 * Math.cos(TC.lat * D2R), dy = (lat - TC.lat) * 60, sq = TW.auto ? smooth(0.55, 0.82, squallN(dx / 4 + t / 3600 * 1.5, dy / 4)) * 0.75 : 0;
+    o[0] = 0.12 + 0.2 * sq; o[1] = 0.25; o[2] = 0.3; o[3] = sq * 0.85; return o; }
+  const S = wxSystems(t), cl = Math.cos(lat * D2R), p = pressure(lat, lon, t), hs = lat >= 0 ? 1 : -1, al = Math.abs(lat), S0 = SOUTH(), dk = S0 ? 33 : 24, h = (t + WX_OFF) / 3600;
+  let st = 0.5 * smooth(1017, 1000, p), as = 0, ci = 0.1 + 0.15 * smooth(1018, 1006, p), cu = 0.17 + 0.28 * smooth(8, 14, al) * smooth(30, 21, al), cb = 0, rn = 0;
+  const itcz = S0 ? 0 : Math.exp(-(((lat - 5) / 4.5) ** 2)); cb = 0.55 * itcz; as += 0.45 * itcz; ci += 0.5 * itcz;
+  for (const L of S.lows) { const k = L.depth / dk; if (k < 0.12) continue; const g = gq(lat, lon, cl, L.lat, L.lon, 300, 380); as += 0.95 * k * g; st += 0.35 * k * g; rn += 0.35 * k * g * g; }
+  for (let f = 0; f < S.fronts.length; f++) { const F = S.fronts[f], dy = (lat - F.lat) * 60, dx = (lon - F.lon) * 60 * cl, u = dx * F.sb + dy * F.cb, v = dx * F.cb - dy * F.sb;
+    const along = Math.exp(-u * u / (2 * (F.sa * 1.35) ** 2)); if (along < 0.01) continue; const w = v * Math.sign(F.cb - F.sb * hs || 1), k = F.k * along;
+    if (!F.cold) { const ns = smooth(-110, -30, w) * smooth(230, 80, w); as += 0.95 * k * smooth(-60, 30, w) * smooth(430, 220, w); st += 0.45 * k * ns; rn += 0.85 * k * ns; ci += 0.85 * k * smooth(30, 170, w) * smooth(760, 480, w); }
+    else { cb += 0.85 * k * Math.exp(-((w / 50) ** 2)); as += 0.45 * k * smooth(-50, 0, w) * smooth(170, 40, w); st += 0.4 * k * smooth(10, 70, w) * smooth(430, 240, w);
+      cu += 0.45 * k * smooth(-40, -110, w) * smooth(-480, -220, w); rn += 0.5 * k * Math.exp(-((w / 40) ** 2)); } }
+  for (const Rg of S.ridges) { const g = Math.min(1, Rg.amp / 8 * gqAx(lat, lon, cl, Rg)), f = 1 - 0.85 * g; st *= f; as *= f; ci *= 1 - 0.6 * g; cb *= f; rn *= f; cu *= 1 - 0.35 * g; }
+  { const hc = S.hc, g = gq(lat, lon, cl, hc[0], hc[1], 430, 720) * smooth(1014, 1024, p); st *= 1 - 0.75 * g; as *= 1 - 0.85 * g; ci *= 1 - 0.6 * g; cb *= 1 - 0.9 * g; rn *= 1 - 0.9 * g; cu = Math.max(cu * (1 - 0.3 * g), 0.16); } // petits cumulus de beau temps
+  if (S.cut) { const g = gq(lat, lon, cl, S.cut.lat, S.cut.lon, 190, 230) * S.cut.amp / 10; as += 0.7 * g; cb += 0.45 * g; rn += 0.3 * g; }
+  for (const W of S.waves) if (W.amp > 0.3) { const g = W.amp / 2.8 * gqAx(lat, lon, cl, W); cb += 0.5 * g; as += 0.3 * g; ci += 0.3 * g; }
+  // grains : même champ que le vent (mêmes zones, même bruit)
+  const zone = Math.max(smooth(6, 13, lat) * smooth(28, 20, lat), smooth(S0 ? 990 : 1008, S0 ? 970 : 994, p) * 0.9, wxConv(lat, lon, t), S0 ? 0.3 : 0.12);
+  cb = Math.max(cb, smooth(0.55, 0.82, squallN((lon + h * 0.25) * 4, lat * 4 + h * 0.03)) * zone * 0.95);
+  if (COURSE.coastal && COURSE.clim) { const f = 1 - 0.45 * COURSE.clim.k; st *= f; as *= f; }
+  o[0] = clamp(1 - (1 - clamp(st, 0, 1)) * (1 - clamp(as, 0, 1)), 0, 1); o[1] = clamp(ci, 0, 1); o[2] = clamp(cu, 0, 1); o[3] = clamp(Math.max(cb, rn), 0, 1); return o;
+}
+// carte de nébulosité : 4 lignes par image, puis fondu avec la carte précédente
+function cloudMapStep(rdt) {
+  const N = CM.N, M = 60 * 1852;
+  if (CM.row < 0 && (realT - CM.last > 2.5 || !CM.ready) && CM.mix >= 1) { CM.nc = { lat: player.lat, lon: player.lon }; CM.t = MODE === 'race' ? gameT : realT; CM.row = 0; CM.buf = CM.buf || new Uint8Array(N * N * 4); }
+  if (CM.row >= 0) { const c = CM.nc, k = Math.cos(c.lat * D2R), n = CM.ready ? 4 : N;
+    for (let r = 0; r < n && CM.row < N; r++, CM.row++) { const j = CM.row, la = c.lat + ((j + 0.5) / N * 2 - 1) * CM.R / M;
+      for (let i = 0; i < N; i++) { const lo = c.lon + ((i + 0.5) / N * 2 - 1) * CM.R / (M * k), v = cloudAt(la, lo, CM.t), q = (j * N + i) * 4;
+        CM.buf[q] = Math.round(v[0] * 255); CM.buf[q + 1] = Math.round(v[1] * 255); CM.buf[q + 2] = Math.round(v[2] * 255); CM.buf[q + 3] = Math.round(v[3] * 255); } }
+    if (CM.row >= N) { CM.row = -1; const nx = 1 - CM.cur; CM.tex[nx].image.data.set(CM.buf); CM.tex[nx].needsUpdate = true; CM.c[nx] = CM.nc; CM.cur = nx; CM.mix = CM.ready ? 0 : 1; CM.ready = true; CM.last = realT; } }
+  if (CM.mix < 1) CM.mix = Math.min(1, CM.mix + rdt / 1.5);
+  // uniformes : la carte courante est toujours uCM1 (fondu de l'autre vers elle)
+  const a = 1 - CM.cur, b = CM.cur, off = (cc, o) => { const k = Math.cos(player.lat * D2R); return [(player.lon - cc.lon) * M * k, (player.lat - cc.lat) * M]; };
+  CLOUDU.uCM0.value = CM.tex[a]; CLOUDU.uCM1.value = CM.tex[b]; const o0 = off(CM.c[a]), o1 = off(CM.c[b]); CLOUDU.uCMO.value.set(o0[0], o0[1], o1[0], o1[1]); CLOUDU.uCMix.value = CM.mix;
+}
+// nébulosité lue sur la carte (bilinéaire, les deux cartes en fondu) à un décalage (est, nord) en mètres du bateau
+function cmapAt(e, nn, out) { const N = CM.N, M = 60 * 1852, res = out || [0, 0, 0, 0]; res.fill(0);
+  for (let s2 = 0; s2 < 2; s2++) { const ti = s2 ? CM.cur : 1 - CM.cur, w = s2 ? CM.mix : 1 - CM.mix; if (w <= 0) continue; const cc = CM.c[ti], k = Math.cos(player.lat * D2R), d = CM.tex[ti].image.data;
+    const x = clamp(((player.lon - cc.lon) * M * k + e) / (2 * CM.R) * N + N / 2 - 0.5, 0, N - 1.001), y = clamp(((player.lat - cc.lat) * M + nn) / (2 * CM.R) * N + N / 2 - 0.5, 0, N - 1.001), i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j;
+    for (let c = 0; c < 4; c++) { const g = (ii, jj) => d[(jj * N + ii) * 4 + c] / 255; res[c] += w * ((g(i, j) * (1 - fx) + g(i + 1, j) * fx) * (1 - fy) + (g(i, j + 1) * (1 - fx) + g(i + 1, j + 1) * fx) * fy); } }
+  return res; }
+const layerDist = (e, H) => { const RT = 6.371e6; return -RT * e + Math.sqrt(RT * RT * e * e + 2 * RT * H + H * H); };
+const CMV = [0, 0, 0, 0], CMS = [0, 0, 0, 0];
 let WIND_K = 4.6;
 function hash2(x, y) { const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return v - Math.floor(v); }
 function vnoise2(x, y) { const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy, ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), a = hash2(ix, iy), b = hash2(ix + 1, iy), c = hash2(ix, iy + 1), d = hash2(ix + 1, iy + 1); return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy; }
@@ -927,6 +977,23 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace('vec3 CustomToneMapping( vec3 color ) { return color; }',
   'vec3 CustomToneMapping( vec3 c ) { c = max(c, 0.0); vec3 k = vec3(0.85); vec3 sh = k + 0.15 * (1.0 - exp(-(c - k) / 0.15)); return mix(c, sh, step(k, c)); }');
 renderer.toneMapping = THREE.CustomToneMapping;
+/* Perspective aérienne : brouillard exponentiel en distance (comme la mer), teinté vers le soleil (diffusion de Mie). Partagé par tous
+   les matériaux standard : fogSun / fogSunCol sont des objets simples, donc partagés par référence par toutes les copies d'uniformes. */
+const FOGSUN = { x: 0, y: 1, z: 0 }, FOGSC = { x: 0, y: 0, z: 0 };
+for (const k in THREE.ShaderLib) { const u = THREE.ShaderLib[k].uniforms; if (u && u.fogColor) { u.fogSun = { value: FOGSUN }; u.fogSunCol = { value: FOGSC }; } }
+THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n varying float fogDepth; varying vec3 vFogV;\n#endif';
+THREE.ShaderChunk.fog_vertex = '#ifdef USE_FOG\n fogDepth = length(mvPosition.xyz); vFogV = mvPosition.xyz;\n#endif';
+THREE.ShaderChunk.fog_pars_fragment = '#ifdef USE_FOG\n uniform vec3 fogColor; uniform vec3 fogSun; uniform vec3 fogSunCol; varying float fogDepth; varying vec3 vFogV;\n #ifdef FOG_EXP2\n uniform float fogDensity;\n #else\n uniform float fogNear; uniform float fogFar;\n #endif\n#endif';
+THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
+  mat3 fvm = mat3(viewMatrix); vec3 fw = normalize(vec3(dot(fvm[0], vFogV), dot(fvm[1], vFogV), dot(fvm[2], vFogV))); float fmu = max(dot(fw, fogSun), 0.0);
+  vec3 fcol = fogColor + fogSunCol * (0.3 * pow(fmu, 8.0) + 0.07 * fmu * fmu);
+  #ifdef FOG_EXP2
+  float fogFactor = 1.0 - exp(-fogDensity * fogDepth);
+  #else
+  float fogFactor = smoothstep(fogNear, fogFar, fogDepth);
+  #endif
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, fcol, fogFactor);
+#endif`;
 const TM = src => src.replace(/void main\(\)\s*\{/, 'void main0(){') + '\nvoid main(){ main0();\n#include <tonemapping_fragment>\n#include <encodings_fragment>\n}';
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 const scene = new THREE.Scene();
@@ -972,26 +1039,41 @@ const NOISE_TEX = (() => {
   return { tex, d }; 
 })();
 const MOON = new THREE.Vector3(0.3, 0.5, 0.8).normalize(), SUNCOL = new THREE.Color(1, 0.93, 0.8);
-const SKYU = { uSun: { value: SUN }, uMoon: { value: MOON }, uSunCol: { value: SUNCOL }, uHorizon: { value: HORIZON }, uZenith: { value: ZENITH }, uDay: { value: 1 }, uCloud: { value: 0.3 }, uFlash: { value: 0 }, uCloudOff: { value: new THREE.Vector2() }, uEnv: { value: 0 }, uMoonUp: { value: 0 }, uSkyT: { value: 0 } };
+const SKYU = { uSun: { value: SUN }, uMoon: { value: MOON }, uSunCol: { value: SUNCOL }, uHorizon: { value: HORIZON }, uZenith: { value: ZENITH }, uDay: { value: 1 }, uCloud: { value: 0.3 }, uFlash: { value: 0 }, uCloudOff: { value: new THREE.Vector2() }, uEnv: { value: 0 }, uMoonUp: { value: 0 }, uSkyT: { value: 0 }, uSunVis: { value: 1 } };
 const UL = { value: 1 };
-const ENV = { cycle: true, cloud: 0.25, rain: 0, flash: 0, night: 0, sunUp: 1, dayF: 1, local: 14, fd0: 0.000095, nextThunder: [] };
+/* Ciel météo : carte de nébulosité 32 × 32 sur ± 280 nm autour du bateau, calculée par morceaux (4 lignes par image) à partir des systèmes
+   météo de la course (dépressions, fronts chaud et froid, secteur chaud, dorsales, anticyclone, alizés, pot-au-noir, grains), puis fondue
+   avec la précédente en 1,5 s. Purement visuelle : n'entre ni dans le vent ni dans le moteur. */
+const CM = { N: 32, R: 518000, tex: [], c: [{ lat: 0, lon: 0 }, { lat: 0, lon: 0 }], cur: 1, buf: null, row: -1, nc: null, t: 0, mix: 1, last: -99, ready: false };
+for (let k = 0; k < 2; k++) { const d = new Uint8Array(CM.N * CM.N * 4), tx = new THREE.DataTexture(d, CM.N, CM.N, THREE.RGBAFormat); tx.magFilter = tx.minFilter = THREE.LinearFilter; tx.wrapS = tx.wrapT = THREE.ClampToEdgeWrapping; tx.generateMipmaps = false; tx.needsUpdate = true; CM.tex.push(tx); }
+const CLOUDU = { uCM0: { value: CM.tex[0] }, uCM1: { value: CM.tex[1] }, uCMO: { value: new THREE.Vector4() }, uCMix: { value: 1 }, uCMR: { value: CM.R }, uNzS: { value: NOISE_TEX.tex }, uFogC: { value: 0.00003 }, uCQ: { value: 1 }, uWD: { value: new THREE.Vector2(1, 0) } };
+const ENV = { cycle: true, sunVis: 1, hum: 1, cloud: 0.25, rain: 0, flash: 0, night: 0, sunUp: 1, dayF: 1, local: 14, fd0: 0.000095, nextThunder: [] };
 try { ENV.cycle = localStorage.getItem('gl3d_dn') !== '0'; } catch (e) {}
 const SKY_FN = NOISE_GLSL + `
-uniform vec3 uSun; uniform vec3 uMoon; uniform vec3 uSunCol; uniform vec3 uHorizon; uniform vec3 uZenith; uniform float uDay; uniform float uCloud; uniform float uFlash; uniform float uMoonUp; uniform float uSkyT;
-vec3 sky(vec3 r){ float e = clamp(r.y,0.0,1.0); vec3 c = mix(uHorizon,uZenith,pow(e,0.55)); float s = max(dot(r,uSun),0.0), cl = 1.0 - uCloud*0.85;
+uniform vec3 uSun; uniform vec3 uMoon; uniform vec3 uSunCol; uniform vec3 uHorizon; uniform vec3 uZenith; uniform float uDay; uniform float uCloud; uniform float uFlash; uniform float uMoonUp; uniform float uSkyT; uniform float uSunVis;
+vec3 sky(vec3 r){ float e = clamp(r.y,0.0,1.0); vec3 c = mix(uHorizon,uZenith,pow(e,0.55)); float s = max(dot(r,uSun),0.0), cl = uSunVis;
   c += uSunCol*(pow(s,900.0)*6.0*cl + pow(s,10.0)*0.22*(0.4+0.6*cl)) * smoothstep(-0.05, 0.05, uSun.y);
   float m = max(dot(r,uMoon),0.0), disk = smoothstep(0.99985, 0.99993, m);
   vec3 mt = normalize(cross(uMoon, vec3(0.0, 1.0, 0.0)) + 1e-4), mb = cross(mt, uMoon); vec2 mp = vec2(dot(r - uMoon, mt), dot(r - uMoon, mb)) * 900.0;
   float maria = 0.72 + 0.28 * smoothstep(0.35, 0.75, sin(mp.x * 0.9 + 1.3) * sin(mp.y * 1.1 - 0.4) * 0.5 + 0.5 + 0.25 * sin(mp.x * 2.3 + mp.y * 1.7));
-  c += vec3(0.82,0.86,0.95) * (disk * 2.6 * maria + pow(m,900.0)*0.6 + pow(m,60.0)*0.09 + pow(m,8.0)*0.035) * (1.0-uDay) * cl * smoothstep(-0.04, 0.04, uMoon.y);
+  c += vec3(0.82,0.86,0.95) * (disk * 2.6 * maria + pow(m,900.0)*0.6 + pow(m,60.0)*0.09 + pow(m,8.0)*0.035) * (1.0-uDay) * (1.0 - 0.85 * uCloud) * smoothstep(-0.04, 0.04, uMoon.y);
   return c + vec3(0.55,0.6,0.75)*uFlash; }`;
 const sky = new THREE.Mesh(new THREE.SphereGeometry(50000, 48, 24), new THREE.ShaderMaterial({
-  side: THREE.BackSide, depthWrite: false, fog: false, uniforms: SKYU,
+  side: THREE.BackSide, depthWrite: false, fog: false, uniforms: Object.assign(SKYU, CLOUDU),
   vertexShader: `varying vec3 vDir; void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vDir = wp.xyz - cameraPosition; gl_Position = projectionMatrix*viewMatrix*wp; }`,
   fragmentShader: TM(SKY_FN + `uniform vec2 uCloudOff; uniform float uEnv; varying vec3 vDir;
+    uniform sampler2D uCM0; uniform sampler2D uCM1; uniform vec4 uCMO; uniform float uCMix; uniform float uCMR; uniform sampler2D uNzS; uniform float uFogC; uniform float uCQ; uniform vec2 uWD;
+    // distance (m) jusqu'à une couche de nuages d'altitude H, Terre ronde : au ras de l'horizon la couche file vers l'horizon au lieu de l'infini
+    float layerD(float e, float H){ const float RT = 6.371e6; return -RT * e + sqrt(RT * RT * e * e + 2.0 * RT * H + H * H); }
+    // carte de nébulosité autour du bateau (R : couche stratiforme, G : cirrus, B : cumulus, A : convection / pluie), 2 cartes en fondu
+    vec4 cmap(vec2 p){ vec4 a = texture2D(uCM0, (p + uCMO.xy) / (2.0 * uCMR) + 0.5), b = texture2D(uCM1, (p + uCMO.zw) / (2.0 * uCMR) + 0.5); return mix(a, b, uCMix); }
+    float fb(vec2 q){ return texture2D(uNzS, q).r * 0.62 + texture2D(uNzS, q * 2.7 + 0.37).r * 0.38; }
+    // bruit égalisé (≈ uniforme sur 0..1) : le seuil 1 − couverture donne bien la couverture demandée
+    float eq(float n){ return smoothstep(-2.1, 2.1, (n - 0.5) / mix(0.095, 0.078, uCQ)); }
+    vec3 hzc(vec3 d){ vec3 h = normalize(vec3(d.x, 0.0, d.z) + 1e-5); return uHorizon + uSunCol * (pow(max(dot(h, uSun), 0.0), 8.0) * 0.3) * smoothstep(-0.05, 0.05, uSun.y) * uDay; }
     void main(){ vec3 d = normalize(vDir); if (d.y < 0.0) { gl_FragColor = vec4(mix(uHorizon * 0.9, uHorizon * vec3(0.2, 0.32, 0.42), uEnv * smoothstep(0.0, -0.3, d.y)), 1.0); return; }
       vec3 c = sky(d);
-      if (uDay < 0.6) { float nf = (1.0 - uDay / 0.6) * (1.0 - uCloud) * smoothstep(0.0, 0.22, d.y) * (1.0 - 0.55 * uMoonUp * pow(max(dot(d, uMoon), 0.0), 3.0));
+      if (uDay < 0.6) { float nf = (1.0 - uDay / 0.6) * smoothstep(0.0, 0.22, d.y) * (1.0 - 0.55 * uMoonUp * pow(max(dot(d, uMoon), 0.0), 3.0));
         vec2 sp = vec2(atan(d.z, d.x) * 380.0, d.y * 600.0); vec2 sf = fract(sp) - 0.5; float sh = hash12(floor(sp));
         float tw = 0.75 + 0.25 * sin(uSkyT * (3.0 + 6.0 * fract(sh * 31.0)) + sh * 40.0) * (1.0 - smoothstep(0.1, 0.5, d.y) * 0.7);
         float st = step(0.9915, sh) * smoothstep(0.36, 0.0, length(sf)) * (0.7 + 1.5 * pow(fract(sh * 97.0), 3.0)) * tw;
@@ -999,13 +1081,36 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(50000, 48, 24), new THREE.Sh
         vec2 sp2 = sp * 2.3; float sh2 = hash12(floor(sp2) + 17.0); float st2 = step(0.985, sh2) * smoothstep(0.3, 0.0, length(fract(sp2) - 0.5)) * 0.45;
         vec3 gal = normalize(vec3(0.35, 0.55, -0.76)); float mw = exp(-pow(dot(d, gal) / 0.16, 2.0)) * (0.55 + 0.45 * fbm(vec2(atan(d.z, d.x), d.y) * 6.0));
         c += (scol * st + vec3(0.8, 0.85, 1.0) * st2 * (0.6 + 1.2 * mw) + vec3(0.12, 0.13, 0.17) * mw * 0.35) * nf; }
-      vec2 uv = d.xz / (d.y + 0.07) * 0.32 + uCloudOff;
-      float n = fbm(uv * 1.3) * 0.7 + fbm(uv * 3.6 + 11.0) * 0.3;
-      float cov = smoothstep(1.0 - uCloud - 0.1, 1.0 - uCloud + 0.3, n) * smoothstep(0.0, 0.16, d.y);
-      float thick = smoothstep(0.45, 1.0, n), low = smoothstep(0.3, -0.02, uSun.y) * step(-0.08, uSun.y);
-      vec3 lit = mix(vec3(0.05, 0.06, 0.09) + vec3(0.1, 0.11, 0.14) * uMoonUp * (0.5 + 0.9 * pow(max(dot(d, uMoon), 0.0), 6.0)), mix(vec3(0.97, 0.97, 0.99), vec3(1.0, 0.68, 0.48), low), uDay);
-      vec3 cc = mix(lit, lit * 0.42, thick * (0.4 + 0.6 * uCloud)) + uSunCol * pow(max(dot(d, uSun), 0.0), 7.0) * 0.4 * uDay * (1.0 - thick);
-      c = mix(c, cc + vec3(0.7, 0.72, 0.85) * uFlash, cov * 0.96);
+      // ---- nuages pilotés par la météo : chaque couche est lue là où le rayon la traverse (cirrus 9 km, couche 2,5 km, cumulus 1,2 km)
+      float e = max(d.y, 0.0); vec2 hd = normalize(d.xz + 1e-6) * vec2(1.0, -1.0); // (est, nord)
+      float low = smoothstep(0.3, -0.02, uSun.y) * step(-0.08, uSun.y), sunUp = smoothstep(-0.05, 0.05, uSun.y);
+      vec3 amb = mix(vec3(0.05, 0.06, 0.09) + vec3(0.1, 0.11, 0.14) * uMoonUp * (0.5 + 0.9 * pow(max(dot(d, uMoon), 0.0), 6.0)), mix(uZenith * 0.35 + vec3(0.62), vec3(0.98, 0.72, 0.55), low * 0.8 * (0.2 + 0.8 * uSunVis)), uDay);
+      float mu = max(dot(d, uSun), 0.0), fwd = pow(mu, 6.0) * 0.45 + pow(mu, 30.0) * 0.6;
+      vec2 wd = uWD, wn = vec2(-wd.y, wd.x);
+      // cirrus : voiles fibreux étirés par le vent d'altitude, éclairés en rose après le coucher du soleil
+      { float D = layerD(e, 9000.0); vec2 p = hd * D; vec4 m = cmap(p); float cv = m.g;
+        if (cv > 0.02) { vec2 q = vec2(dot(p, wd) * 0.12, dot(p, wn) * 0.6) / 260000.0 + uCloudOff * 1.5 / 230000.0;
+          float n = eq(fb(q) * 0.7 + fb(q * vec2(3.0, 0.6) + 0.21) * 0.3), far = smoothstep(60000.0, 260000.0, D);
+          float a = mix(smoothstep(1.0 - cv - 0.05, 1.0 - cv + 0.3, n), cv * 0.7, far) * (0.35 + 0.4 * cv) * smoothstep(0.0, 0.03, e);
+          float lowH = smoothstep(0.14, -0.06, uSun.y) * step(-0.14, uSun.y); // rose seulement au coucher (les cirrus restent éclairés après la couche basse)
+          vec3 lc = mix(vec3(0.05, 0.06, 0.09), mix(vec3(1.0), vec3(1.0, 0.62, 0.55), lowH), smoothstep(-0.14, 0.02, uSun.y)) + uSunCol * fwd * 0.6 * sunUp;
+          c = mix(c, mix(lc, hzc(d), 1.0 - exp(-D * uFogC * 0.25)), a); } }
+      // couche stratiforme (altostratus, nimbostratus, stratocumulus) : grise et uniforme quand elle couvre tout, sombre sous la pluie
+      { float D = layerD(e, 2500.0); vec2 p = hd * D; vec4 m = cmap(p); float cv = m.r, rn = m.a;
+        if (cv > 0.02) { vec2 q = (p + uCloudOff) / 230000.0; float n = eq(fb(q) * 0.75 + fb(q * 3.3 + 0.5) * 0.25 * uCQ + 0.125 * (1.0 - uCQ)), far = smoothstep(25000.0, 140000.0, D);
+          float a = mix(smoothstep(1.0 - cv - 0.06, 1.0 - cv + 0.14, n), smoothstep(0.0, 0.9, cv), far) * smoothstep(0.0, 0.02, e);
+          float th = smoothstep(0.35, 1.0, cv) * (0.55 + 0.45 * n);
+          vec3 lc = amb * mix(1.0, 0.42, th) * (0.86 + 0.28 * n) * (1.0 - 0.45 * rn) + uSunCol * fwd * uDay * (1.0 - th) * 0.5;
+          c = mix(c, mix(lc, hzc(d), 1.0 - exp(-D * uFogC)), a); } }
+      // cumulus de beau temps / averses, cumulonimbus sombres dans les grains
+      { float D = layerD(e, 1200.0); vec2 p = hd * D; vec4 m = cmap(p); float cv = max(m.b, m.a * 0.9), cb = m.a;
+        if (cv > 0.02) { vec2 q = (p + uCloudOff * 1.3) / 90000.0; float nr = fb(q) * 0.7 + fb(q * 2.9 + 0.13) * 0.3 * uCQ + 0.15 * (1.0 - uCQ), n = eq(nr), far = smoothstep(15000.0, 90000.0, D);
+          float n2 = fb(q + vec2(dot(uSun.xz, vec2(1.0, 0.0)), -uSun.z) * 0.004);
+          float a = mix(smoothstep(1.0 - cv - 0.02, 1.0 - cv + 0.07, n), cv * 0.8, far) * smoothstep(0.0, 0.015, e);
+          float sh = clamp(0.74 + (nr - n2 * 0.7 - 0.15) * 3.0, 0.55, 1.1) * (1.0 - 0.55 * cb);
+          vec3 lc = amb * sh + uSunCol * fwd * uDay * 0.7 * (1.0 - cb);
+          c = mix(c, mix(lc, hzc(d), 1.0 - exp(-D * uFogC)), a * (0.92 + 0.08 * cb)); } }
+      c += vec3(0.7, 0.72, 0.85) * uFlash * 0.4;
       if (uEnv > 0.5) c = min(c, vec3(1.0)) * 0.85; // passe de reflet : pas de disque solaire HDR (le soleil a déjà sa lumière directe)
       gl_FragColor = vec4(c, 1.0); }`),
 }));
@@ -1017,9 +1122,9 @@ const ENVMAP = { pm: null, rt: null, sc: new THREE.Scene(), st: null, t: -99, on
 { const m = new THREE.Mesh(sky.geometry, sky.material); m.frustumCulled = false; ENVMAP.sc.add(m); }
 function updateEnvMap(force) {
   const want = GFX.level !== 'low'; if (!want) { if (ENVMAP.on) { scene.environment = null; ENVMAP.on = false; } return; }
-  const st = [SUN.x, SUN.y, SUN.z, ENV.cloud, ENV.rain, ENV.dayF], o = ENVMAP.st;
+  const st = [SUN.x, SUN.y, SUN.z, ENV.cloud, ENV.rain, ENV.dayF, CM.last], o = ENVMAP.st;
   if (!force && o && realT - ENVMAP.t < 2) return;
-  if (!force && o && Math.abs(st[0] - o[0]) + Math.abs(st[1] - o[1]) + Math.abs(st[2] - o[2]) < 0.017 && Math.abs(st[3] - o[3]) < 0.05 && Math.abs(st[4] - o[4]) < 0.08 && Math.abs(st[5] - o[5]) < 0.05) return;
+  if (!force && o && Math.abs(st[0] - o[0]) + Math.abs(st[1] - o[1]) + Math.abs(st[2] - o[2]) < 0.017 && Math.abs(st[3] - o[3]) < 0.05 && Math.abs(st[4] - o[4]) < 0.08 && Math.abs(st[5] - o[5]) < 0.05 && (st[6] === o[6] || CM.mix < 1)) return;
   if (!ENVMAP.pm) ENVMAP.pm = new THREE.PMREMGenerator(renderer);
   SKYU.uEnv.value = 1; const fl = SKYU.uFlash.value; SKYU.uFlash.value = 0;
   const rt = ENVMAP.pm.fromScene(ENVMAP.sc, 0, 1, 100000); SKYU.uEnv.value = 0; SKYU.uFlash.value = fl;
@@ -1380,7 +1485,7 @@ const oceanMat = new THREE.ShaderMaterial({
       // eau aérée du sillage : bulles en suspension, turquoise laiteux
       water = mix(water, vec3(0.1, 0.42, 0.45) * light * (0.6 + 0.4 * nl), aer * 0.55);
       vec3 col = mix(water, sky(r), fres);
-      float clr = 1.0 - 0.85 * uCloud;
+      float clr = uSunVis;
       // soleil : distribution de Beckmann sur la rugosité restante (au lieu d'un exposant fixe)
       vec3 hv = normalize(v + uSun); float nh = max(dot(n, hv), 0.02), nh2 = nh * nh, Dsun = exp((nh2 - 1.0) / (nh2 * sig2)) / (3.14159 * sig2 * nh2 * nh2);
       float Fh = 0.02 + 0.98 * pow(1.0 - max(dot(v, hv), 0.0), 5.0), sd = max(dot(r, uSun), 0.0);
@@ -1422,7 +1527,8 @@ const oceanMat = new THREE.ShaderMaterial({
           col = mix(col, vec3(0.93, 0.97, 1.0) * (light * 0.9 + 0.1), clamp(surf, 0.0, 1.0) * 0.9);
         }
       }
-      col = mix(col, uHorizon, 1.0 - exp(-camD * uFog));
+      vec3 fdw = normalize(vec3(vWorld.x, 0.0, vWorld.z) - vec3(cameraPosition.x, 0.0, cameraPosition.z) + 1e-4);
+      col = mix(col, uHorizon + uSunCol * (0.3 * pow(max(dot(fdw, uSun), 0.0), 8.0)) * smoothstep(-0.05, 0.08, uSun.y) * uSunVis * (1.0 - uRain * 0.5) * uDay, 1.0 - exp(-camD * uFog));
       gl_FragColor = vec4(col, 1.0);
     }`),
 });
@@ -4838,8 +4944,13 @@ function updateEnv(rdt) {
   else { ENV.local = 15; SUN.set(-0.45, 0.42, -0.79).normalize(); MOON.set(0.3, 0.5, 0.8).normalize(); }
   const el = SUN.y, sq = player.sq || 0, pr = player.pres || 1013;
   const dayF = smooth(-0.1, 0.12, el), low = smooth(0.32, 0.0, el) * smooth(-0.14, 0.0, el), sunUp = smooth(-0.03, 0.06, el);
-  let cT = MODE === 'race' ? 0.2 + 0.55 * smooth(1016, 996, pr) + 0.55 * sq + (lat < 26 ? 0.1 : 0) : (TW.auto ? 0.2 + 0.7 * sq : 0.22);
-  const rT = clamp(smooth(0.35, 0.8, sq) + (MODE === 'race' ? 0.45 * smooth(1000, 984, pr) : 0), 0, 1);
+  cloudMapStep(rdt);
+  // ciel au-dessus du bateau et devant le soleil, lus sur la carte de nébulosité
+  const ov = CM.ready ? cmapAt(0, 0, CMV) : [0.2, 0.2, 0.2, 0], sE = Math.max(SUN.y, 0.02), sh = Math.hypot(SUN.x, SUN.z) || 1;
+  const sv = CM.ready ? cmapAt(SUN.x / sh * layerDist(sE, 2500), -SUN.z / sh * layerDist(sE, 2500), CMS) : ov;
+  let cT = 1 - (1 - ov[0]) * (1 - 0.55 * ov[2]) * (1 - 0.8 * ov[3]) * (1 - 0.15 * ov[1]); cT = Math.max(cT, 0.85 * sq);
+  ENV.sunVis += (clamp((1 - 0.97 * sv[0]) * (1 - 0.45 * sv[2]) * (1 - 0.85 * sv[3]) * (1 - 0.25 * sv[1]), 0.04, 1) - ENV.sunVis) * Math.min(1, rdt * 0.6);
+  const rT = clamp(smooth(0.35, 0.8, sq) + (MODE === 'race' ? 0.4 * smooth(1000, 984, pr) + 0.7 * smooth(0.45, 0.85, ov[3]) * ov[0] : 0), 0, 1);
   ENV.cloud += (clamp(cT, 0.06, 0.95) - ENV.cloud) * Math.min(1, rdt * 0.4); ENV.rain += (rT - ENV.rain) * Math.min(1, rdt * 0.5);
   const cl = ENV.cloud, rn = ENV.rain; ENV.dayF = dayF; ENV.sunUp = sunUp; ENV.night = 1 - smooth(-0.06, 0.08, el);
   const moonUp0 = smooth(-0.02, 0.15, MOON.y) * (1 - dayF) * (1 - 0.7 * cl);
@@ -4851,14 +4962,19 @@ function updateEnv(rdt) {
   else if (ENV.flash > 0.25 && Math.random() < rdt * 6) ENV.flash = Math.max(ENV.flash, 0.6);
   ENV.flash *= Math.exp(-rdt * 10); if (ENV.flash < 0.01) ENV.flash = 0;
   ENV.nextThunder = ENV.nextThunder.filter(th => { if (realT >= th.t) { sfxThunder(th.p); return false; } return true; });
-  const fl = ENV.flash, light = (0.16 + 0.84 * dayF + 0.1 * moonUp0) * (1 - 0.35 * cl);
-  SKYU.uDay.value = dayF; SKYU.uCloud.value = cl; SKYU.uFlash.value = fl * 0.6; SKYU.uMoonUp.value = moonUp0; SKYU.uSkyT.value = realT;
-  const wa = ((player.twd || 0) + 180) * D2R; SKYU.uCloudOff.value.x += Math.sin(wa) * (player.tws || 10) * 0.00012 * rdt; SKYU.uCloudOff.value.y += -Math.cos(wa) * (player.tws || 10) * 0.00012 * rdt;
+  const fl = ENV.flash, light = (0.16 + 0.84 * dayF + 0.1 * moonUp0) * (1 - 0.3 * cl) * (0.85 + 0.15 * ENV.sunVis);
+  SKYU.uDay.value = dayF; SKYU.uCloud.value = cl; SKYU.uSunVis.value = ENV.sunVis; CLOUDU.uCQ.value = GFX.level === 'low' ? 0 : 1; SKYU.uFlash.value = fl * 0.6; SKYU.uMoonUp.value = moonUp0; SKYU.uSkyT.value = realT;
+  // dérive des nuages avec le vent (m), accélérée avec le temps de jeu mais plafonnée (sinon le ciel défile en accéléré)
+  const wa = ((player.twd || 0) + 180) * D2R, cs = (player.tws || 10) * KN * 1.6 * rdt * Math.min(MODE === 'race' ? accel : 1, 40); SKYU.uCloudOff.value.x -= Math.sin(wa) * cs; SKYU.uCloudOff.value.y -= Math.cos(wa) * cs;
+  CLOUDU.uWD.value.set(Math.sin(wa + 0.35), Math.cos(wa + 0.35));
   oceanU.uRain.value = rn; oceanU.uGustT.value += (player.tws || 10) * KN * 0.55 * rdt;
   UL.value = light + fl * 0.5;
-  const fd = ENV.fd0 * (1 + 0.8 * cl + 3.2 * rn) * (GFX.fogK || 1); scene.fog.density = fd; oceanU.uFog.value = fd; scene.fog.color.copy(HORIZON);
+  // humidité : air sec et visibilité de 40 km sous l'anticyclone, brume du secteur chaud et des alizés, pluie qui bouche l'horizon
+  ENV.hum += ((MODE === 'race' ? 0.55 + 0.55 * ov[0] + 0.25 * smooth(1014, 1002, pr) + 0.15 * smooth(28, 12, Math.abs(lat)) : 0.8) - ENV.hum) * Math.min(1, rdt * 0.3);
+  const fd = ENV.fd0 * (ENV.hum + 0.4 * cl + 3.2 * rn) * (GFX.fogK || 1); scene.fog.density = fd; oceanU.uFog.value = fd; scene.fog.color.copy(HORIZON); CLOUDU.uFogC.value = fd * 0.3;
+  FOGSUN.x = SUN.x; FOGSUN.y = SUN.y; FOGSUN.z = SUN.z; const fs = smooth(-0.05, 0.08, SUN.y) * ENV.sunVis * (1 - 0.5 * rn); FOGSC.x = SUNCOL.r * fs; FOGSC.y = SUNCOL.g * fs; FOGSC.z = SUNCOL.b * fs;
   const moonUp = smooth(-0.02, 0.1, MOON.y) * (1 - dayF);
-  sunLight.color.copy(sunUp > 0.02 ? SUNCOL : MOONC); sunLight.intensity = 1.1 * sunUp * (1 - 0.62 * cl) + 0.72 * moonUp * (1 - 0.6 * cl) + fl * 0.6;
+  sunLight.color.copy(sunUp > 0.02 ? SUNCOL : MOONC); sunLight.intensity = 1.1 * sunUp * (0.12 + 0.88 * ENV.sunVis) + 0.72 * moonUp * (1 - 0.6 * cl) + fl * 0.6;
   sunLight.position.copy(sunUp > 0.02 ? SUN : MOON).multiplyScalar(60); sunLight.target.position.set(0, 0, 0);
   const wantSh = !isMobile() && (sunUp > 0.02 || moonUp > 0.2); if (sunLight.castShadow !== wantSh) sunLight.castShadow = wantSh;
   hemi.color.copy(HEMI_N).lerp(HEMI_D, dayF); hemi.groundColor.setRGB(0.11, 0.23, 0.32).multiplyScalar(0.25 + 0.75 * dayF);
