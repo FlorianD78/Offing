@@ -6396,8 +6396,10 @@ function portSelect(id) {
 function updatePortCam(rdt) {
   PORT.t += rdt;
   if (camera.fov !== 48) { camera.fov = 48; camera.updateProjectionMatrix(); }
-  camera.position.set(PORT_CX + Math.sin(PORT.t * 0.045) * 3, 8 + Math.sin(PORT.t * 0.11) * 0.25, 84);
-  camera.lookAt(PORT_CX + Math.sin(PORT.t * 0.045) * 3, -14.5, PORT_Z);
+  // vue 3/4 haute : caméra au-dessus du quai, décalée côté large, regard sur la flotte
+  const sw = Math.sin(PORT.t * 0.045) * 3;
+  camera.position.set(PORT_CX + 52 + sw, 60 + Math.sin(PORT.t * 0.11) * 0.5, 104);
+  camera.lookAt(PORT_CX + 5 + sw * 0.5, 0, PORT_Z);
   if (PORT.sel && PORT.lbl) {
     const p = new THREE.Vector3(PORT.vis[PORT.sel].root.position.x, 6.5, PORT_Z).project(camera), r = renderer.domElement.getBoundingClientRect();
     PORT.lbl.style.left = (r.left + (p.x + 1) / 2 * r.width) + 'px'; PORT.lbl.style.top = (r.top + (1 - p.y) / 2 * r.height) + 'px';
