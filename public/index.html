@@ -2539,7 +2539,11 @@ const IMI = (() => {
     const YM = 1.28, ZM = 3.9, YR = 1.86;
     [-0.42, 0.42].forEach(x => tube([[x, YR, ZM - 0.1], [x, 1.55, ZM - 0.04], [x * 0.9, YM, ZM - 0.02]], 0.016, m.carbon, 8)); box(0.84, 0.03, 0.03, m.carbon, 0, YR, ZM - 0.1);
     const mainT = mkDisp(0.66, 0.4, 768, 466, 0, YM, ZM, -0.12, 0, 'main');
-    mkDisp(0.42, 0.27, 512, 330, -0.62, YM - 0.03, ZM + 0.14, -0.14, 0.42, 'oscar'); mkDisp(0.42, 0.27, 512, 330, 0.62, YM - 0.03, ZM + 0.14, -0.14, -0.42, 'foils');
+    // caméra de mât (mi-hauteur) qui filme l'étrave et devant : rendu réel de la scène dans une texture, ~10 images/s quand on est en cabine
+    const camRT = new THREE.WebGLRenderTarget(400, 256, { type: THREE.HalfFloatType }), mastCam = new THREE.PerspectiveCamera(80, 400 / 256, 0.3, 3000);
+    { const fr = box(0.45, 0.3, 0.025, m.black, -0.62, YM - 0.03, ZM + 0.14, -0.14, 0.42, 0); const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.27), new THREE.MeshBasicMaterial({ map: camRT.texture })); scr.position.z = 0.0135; fr.add(scr);
+      const oc = document.createElement('canvas'); oc.width = 400; oc.height = 256; const ot = new THREE.CanvasTexture(oc), ov = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.27), new THREE.MeshBasicMaterial({ map: ot, transparent: true, toneMapped: false, depthWrite: false })); ov.position.z = 0.015; fr.add(ov); noM(fr);
+      disp.push({ c: oc, g: oc.getContext('2d'), t: ot, kind: 'mastcam' }); } mkDisp(0.42, 0.27, 512, 330, 0.62, YM - 0.03, ZM + 0.14, -0.14, -0.42, 'foils');
     [['BSP', -0.66], ['TWS', -0.33], ['TWA', 0], ['AWA', 0.33], ['POL', 0.66]].forEach(([k, x]) => mkDisp(0.28, 0.09, 320, 103, x, 1.74, 3.55 + Math.abs(x) * 0.08, 0.35, -x * 0.15, 'bar:' + k));
     box(1.62, 0.02, 0.06, m.carbon, 0, 1.8, 3.53);
     mkDisp(0.34, 0.21, 0, 0, 1.0, YK + 0.2, ZK + 0.08, -0.4, -0.3, 'mainRep', G, mainT); // écran répété (table à cartes sur la console)
@@ -2575,6 +2579,8 @@ const IMI = (() => {
         g.font = 'bold 22px Arial'; g.fillStyle = fg; const it = [['SOG', s.bsp.toFixed(1)], ['COG', String(Math.round(s.hdg) % 360).padStart(3, '0') + '°'], ['TWS', s.tws.toFixed(1)], ['TWA', Math.round(s.twa) + '°'], ['VMG', s.vmg.toFixed(1)], ['POL', Math.round(s.pol) + '%']];
         it.forEach(([a, b], i) => { const x = 14 + i * (w - 20) / it.length; g.fillStyle = dim; g.font = 'bold 15px Arial'; g.fillText(a, x, 17); g.fillStyle = fg; g.font = 'bold 22px Arial'; g.fillText(b, x, 38); });
         g.fillStyle = dim; g.font = '16px Arial'; g.fillText(T('ROUTAGE · isochrones · grib ECMWF 0,25°', 'ROUTING · isochrones · ECMWF 0.25° grib'), 14, h - 14); g.textAlign = 'right'; g.fillStyle = acc; g.fillText(T('pilote : ', 'pilot: ') + (s.mode === 'twa' ? 'TWA ' + Math.abs(Math.round(s.lock || 0)) + '°' : T('CAP', 'HDG')), w - 14, h - 14); }
+      else if (d.kind === 'mastcam') { g.clearRect(0, 0, w, h); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(0, 0, w, 26); g.fillStyle = '#eaf6ff'; g.font = 'bold 15px Arial'; g.fillText(T('CAM MÂT · AVANT', 'MAST CAM · FORWARD'), 8, 18);
+        g.textAlign = 'right'; g.fillStyle = (Date.now() >> 9) & 1 ? '#ff3b30' : 'rgba(255,59,48,0.25)'; g.fillText('● REC', w - 8, 18); g.textAlign = 'left'; g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1; g.strokeRect(w / 2 - 18, h / 2 - 12, 36, 24); }
       else if (d.kind === 'oscar') { // caméra anticollision : vue thermique, horizon qui suit gîte et tangage, détections
         const hy = h * 0.46 + s.pitch * 6, rot = -s.heel * Math.PI / 180 * 0.9; g.save(); g.translate(w / 2, hy); g.rotate(rot);
         let gr = g.createLinearGradient(0, -h, 0, 0); gr.addColorStop(0, night ? '#100' : '#1a1e26'); gr.addColorStop(1, night ? '#300' : '#4a5260'); g.fillStyle = gr; g.fillRect(-w, -h, 2 * w, h);
@@ -2587,7 +2593,7 @@ const IMI = (() => {
         g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, w, 30); g.fillStyle = fg; g.font = 'bold 17px Arial'; g.fillText('OSCAR · CAM 1 ' + T('THERMIQUE', 'THERMAL'), 10, 21); g.textAlign = 'right'; g.fillStyle = det ? '#ffcc22' : (night ? fg : '#5cff9a'); g.fillText(det ? T('DÉTECTION', 'DETECTION') : T('RAS', 'CLEAR'), w - 10, 21); }
       else if (d.kind === 'foils') { // schéma vu de l'arrière : quille basculante, foils sortis / rentrés, gîte ; jauges
         g.fillStyle = dim; g.font = 'bold 18px Arial'; g.fillText(T('QUILLE · FOILS · GÎTE', 'KEEL · FOILS · HEEL'), 12, 24); const cx = w * 0.36, cy = h * 0.42;
-        g.save(); g.translate(cx, cy); g.rotate(s.heel * Math.PI / 180); g.strokeStyle = fg; g.lineWidth = 3; g.beginPath(); g.moveTo(-95, -10); g.quadraticCurveTo(0, 40, 95, -10); g.lineTo(80, -30); g.lineTo(-80, -30); g.closePath(); g.stroke();
+        g.save(); g.translate(cx, cy); g.rotate(-s.heel * Math.PI / 180); // vu de l'arrière : gîte positive = bâbord (rotation.z > 0) g.strokeStyle = fg; g.lineWidth = 3; g.beginPath(); g.moveTo(-95, -10); g.quadraticCurveTo(0, 40, 95, -10); g.lineTo(80, -30); g.lineTo(-80, -30); g.closePath(); g.stroke();
         g.save(); g.rotate(-s.cant * Math.PI / 180); g.strokeStyle = acc; g.lineWidth = 5; g.beginPath(); g.moveTo(0, 18); g.lineTo(0, 120); g.stroke(); g.fillStyle = acc; g.beginPath(); g.ellipse(0, 124, 16, 9, 0, 0, 7); g.fill(); g.restore();
         [[1, s.fS], [-1, s.fP]].forEach(([k, f]) => { g.strokeStyle = f > 0.5 ? acc : dim; g.lineWidth = 4; g.beginPath(); g.moveTo(k * 70, 0); g.lineTo(k * (70 + 40 * f), 30 + 25 * f); g.lineTo(k * (95 + 40 * f), 22 + 20 * f); g.stroke(); });
         g.restore(); const bar = (y, lab, v, max, txt) => { g.fillStyle = dim; g.font = 'bold 15px Arial'; g.fillText(lab, w * 0.66, y); g.fillStyle = '#1b2733'; g.fillRect(w * 0.66, y + 6, w * 0.3, 12); g.fillStyle = acc; g.fillRect(w * 0.66, y + 6, w * 0.3 * Math.max(0, Math.min(1, v / max)), 12); g.fillStyle = fg; g.textAlign = 'right'; g.fillText(txt, w - 12, y); g.textAlign = 'left'; };
@@ -2596,9 +2602,13 @@ const IMI = (() => {
       d.t.needsUpdate = true; };
     const drawPad = (p, night) => { const g = p.g, w = p.c.width, h = p.c.height; g.fillStyle = '#050607'; g.fillRect(0, 0, w, h); const lab = p.k > 0 ? [T('QUILLE ◀', 'KEEL ◀'), T('QUILLE ▶', 'KEEL ▶'), 'FOIL ▲', 'FOIL ▼'] : ['AUTO', 'TWA', T('CAP', 'HDG'), '-1° / +1°'];
       lab.forEach((t, i) => { const y = 14 + i * 60; g.strokeStyle = night ? '#a01' : '#2ab6d6'; g.lineWidth = 3; g.strokeRect(10, y, w - 20, 48); g.fillStyle = night ? '#f43' : '#bff2ff'; g.font = 'bold 20px Arial'; g.textAlign = 'center'; g.fillText(t, w / 2, y + 32); }); p.t.needsUpdate = true; };
-    let acc = 1, wet = 0, padDone = -1;
+    let acc = 1, wet = 0, padDone = -1, camAcc = 1; const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler();
     return { eye: () => new THREE.Vector3(EYE.x, EYE.y, EYE.z), wetHit(p) { wet = Math.min(1, wet + p); },
-      update(dt, night, active) { acc += dt; if (!active || acc < 0.25) return; acc = 0; const s = data(); disp.forEach(d => draw(d, s, night)); if (padDone !== +night) { pads.forEach(p => drawPad(p, night)); padDone = +night; }
+      update(dt, night, active) { camAcc += dt;
+        if (active && camAcc > 0.1 && typeof renderer !== 'undefined') { camAcc = 0; const R = V.root; R.updateMatrixWorld(); mastCam.position.set(0, 13.5, -0.85).applyMatrix4(R.matrixWorld);
+          mastCam.quaternion.copy(R.getWorldQuaternion(_q)).multiply(_q2.setFromEuler(_e.set(-0.6, 0, 0))); mastCam.updateMatrixWorld();
+          const t0 = renderer.getRenderTarget(), cOn = SKYC.uCOn.value, vis = G.visible; SKYC.uCOn.value = 0; G.visible = false; renderer.setRenderTarget(camRT); renderer.render(scene, mastCam); renderer.setRenderTarget(t0); SKYC.uCOn.value = cOn; G.visible = vis; }
+        acc += dt; if (!active || acc < 0.25) return; acc = 0; const s = data(); disp.forEach(d => draw(d, s, night)); if (padDone !== +night) { pads.forEach(p => drawPad(p, night)); padDone = +night; }
         led.color.setHex(night ? 0xff2200 : 0x9fe8ff); },
       look(az) { seat.visible = Math.abs(az) < 100; },
       anim(dt, grind, ease) { const w = dt * (grind * 7 - ease * 4); rots.forEach((r, i) => r.rotation.y -= w * (i % 2 ? -1 : 1)); crank.rotation.x += dt * grind * 9; } };
@@ -2821,19 +2831,28 @@ const O50I = (() => {
   function patchKit(K) {
     // bulle rehaussée (0,78 -> 0,98 de hauteur) : le dôme est une demi-sphère étirée, on recalcule ses sommets
     { const P = K.dome.attributes.position.array; for (let i = 0; i < P.length; i += 3) P[i + 1] = 1.48 + (P[i + 1] - 1.48) * (0.98 / 0.78); K.dome.attributes.position.needsUpdate = true; K.dome.computeVertexNormals(); K.dome.computeBoundingSphere(); }
-    // texture : hublots du damier vitrés (fumés, translucides), arrière ouvert en arche, hublot latéral de chaque bord
-    const c = K.domeTex.image, g = c.getContext('2d'); g.save(); g.globalCompositeOperation = 'destination-out';
-    for (let r = 0; r < 3; r++) for (let k = 0; k < 8; k++) { g.beginPath(); g.roundRect ? g.roundRect(14 + k * 64, 30 + r * 34, 34, 22, 5) : g.rect(14 + k * 64, 30 + r * 34, 34, 22); g.fill(); }
-    g.beginPath(); g.moveTo(128 - 74, 256); g.lineTo(128 - 74, 150); g.quadraticCurveTo(128, 96, 128 + 74, 150); g.lineTo(128 + 74, 256); g.closePath(); g.fill(); // arrière ouvert
-    g.globalCompositeOperation = 'source-over'; g.fillStyle = 'rgba(12,18,24,0.34)';
-    for (let k = 0; k < 8; k++) { const x = 32 + k * 64; if (x > 60 && x < 200) continue; g.beginPath(); g.ellipse(x, 168, 20, 24, 0, 0, 7); g.fill(); } // découpes du pourtour : vitrées (sauf à l'arrière, ouvert)
-    for (let r = 0; r < 3; r++) for (let k = 0; k < 8; k++) { const x = 14 + k * 64; if (x > 50 && x < 200 && r > 1) continue; g.beginPath(); g.roundRect ? g.roundRect(x, 30 + r * 34, 34, 22, 5) : g.rect(x, 30 + r * 34, 34, 22); g.fill(); }
-    [0, 256, 512].forEach(x => { g.beginPath(); g.ellipse(x, 128, 30, 20, 0, 0, 7); g.globalCompositeOperation = 'destination-out'; g.fill(); g.globalCompositeOperation = 'source-over'; g.fill(); }); // hublots latéraux (u = 0 et 0,5 : bâbord, tribord)
-    // grand pare-brise à l'avant de la bulle (u ≈ 0,75) : vitrage fumé en un seul tenant, montants fins
-    g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.roundRect ? g.roundRect(384 - 104, 6, 208, 238, 18) : g.rect(384 - 104, 6, 208, 238); g.fill();
-    g.globalCompositeOperation = 'source-over'; g.fillStyle = 'rgba(12,18,24,0.13)'; g.beginPath(); g.roundRect ? g.roundRect(384 - 104, 6, 208, 238, 18) : g.rect(384 - 104, 6, 208, 238); g.fill();
-    g.fillStyle = '#f3f4f6'; [384 - 52, 384 + 52].forEach(x => g.fillRect(x - 3, 6, 6, 238)); g.fillRect(384 - 104, 150, 208, 5);
-    g.restore(); K.domeTex.needsUpdate = true;
+    // texture refaite entièrement, comme les casquettes d'Ocean Fifty : coque de bulle pleine (blanc), vitrages en PMMA fumé dans des cadres
+    // noirs — pare-brise enveloppant en 3 panneaux à l'avant, une longue vitre latérale de chaque bord, une vigie de toit — et arrière ouvert.
+    // Repère de la texture (demi-sphère) : u = 0 bâbord, 0,25 arrière, 0,5 tribord, 0,75 avant ; v (canvas y) = 0 au sommet, 256 au pied.
+    const c = K.domeTex.image, g = c.getContext('2d'), W = c.width, H = c.height, sx = W / 512, sy = H / 256;
+    g.setTransform(sx, 0, 0, sy, 0, 0); g.clearRect(0, 0, 512, 256);
+    const gr = g.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, '#f4f5f6'); gr.addColorStop(1, '#e2e5e8'); g.fillStyle = gr; g.fillRect(0, 0, 512, 256);
+    g.strokeStyle = 'rgba(120,128,136,0.35)'; g.lineWidth = 1.2; [244, 250].forEach(y => { g.beginPath(); g.moveTo(0, y); g.lineTo(512, y); g.stroke(); }); // liseré de pied
+    const rr = (x, y, w, h, r) => { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); };
+    const pane = (x, y, w, h, r, wrap) => [0].concat(wrap ? [-512, 512] : []).forEach(o => { // vitrage = trou dans la peau + verre fumé + cadre noir
+      g.save(); g.globalCompositeOperation = 'destination-out'; rr(x + o, y, w, h, r); g.fill(); g.restore();
+      g.fillStyle = 'rgba(14,20,26,0.1)'; rr(x + o, y, w, h, r); g.fill(); g.strokeStyle = '#16191c'; g.lineWidth = 4; rr(x + o, y, w, h, r); g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,0.25)'; g.lineWidth = 1; rr(x + o + 4, y + 4, w - 8, h - 8, Math.max(1, r - 3)); g.stroke(); });
+    // pare-brise enveloppant : panneau central + deux panneaux d'angle (montants noirs entre eux)
+    pane(384 - 34, 58, 68, 176, 10); pane(384 - 34 - 62 - 6, 70, 62, 160, 12); pane(384 + 34 + 6, 70, 62, 160, 12);
+    // longues vitres latérales, basses (on voit flotteurs et bras), de chaque bord
+    pane(256 - 66, 150, 132, 62, 16); pane(-66, 150, 132, 62, 16, true);
+    // vigie de toit, à l'avant du dessus
+    pane(384 - 40, 8, 80, 38, 10);
+    // arrière ouvert en arche, bord renforcé
+    g.save(); g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.moveTo(128 - 78, 256); g.lineTo(128 - 78, 168); g.quadraticCurveTo(128, 92, 128 + 78, 168); g.lineTo(128 + 78, 256); g.closePath(); g.fill(); g.restore();
+    g.strokeStyle = '#c9ced3'; g.lineWidth = 6; g.beginPath(); g.moveTo(128 - 78, 256); g.lineTo(128 - 78, 168); g.quadraticCurveTo(128, 92, 128 + 78, 168); g.lineTo(128 + 78, 256); g.stroke();
+    g.setTransform(1, 0, 0, 1, 0, 0); K.domeTex.needsUpdate = true;
     // bras arrière : ajouré sous la bulle (le cockpit de la coque centrale passe dessous)
     const B = K.BEAM_A, P = B.attributes.position.array, I = B.index.array, keep = [];
     for (let t = 0; t < I.length; t += 3) { let cx = 0, cz = 0; for (let j = 0; j < 3; j++) { cx += P[I[t + j] * 3]; cz += P[I[t + j] * 3 + 2]; } cx /= 3; cz /= 3; if (!(Math.abs(cx) < XC + 0.25 && cz > ZC0 && cz < ZC1)) keep.push(I[t], I[t + 1], I[t + 2]); }
@@ -2910,7 +2929,7 @@ const O50I = (() => {
       else if (d.kind === 'nav') { const map = document.getElementById('map'); if (map && map.width) { try { g.globalAlpha = night ? 0.45 : 1; const r = Math.max(w / map.width, (h - 34) / map.height); g.drawImage(map, (w - map.width * r) / 2, 34, map.width * r, map.height * r); g.globalAlpha = 1; } catch (e) {} }
         g.fillStyle = night ? '#200' : '#14212e'; g.fillRect(0, 0, w, 32); g.fillStyle = night ? '#f44' : '#cfe3f2'; g.font = 'bold 20px Arial'; g.fillText(`SOG ${s.bsp.toFixed(1)} · COG ${String(Math.round(s.hdg) % 360).padStart(3, '0')}° · TWS ${s.tws.toFixed(0)}`, 10, 23); }
       else if (d.kind === 'float') { // vue de l'arrière du trimaran : flotteur sous le vent qui porte, foil, gîte ; jauges vol et charge
-        g.fillStyle = dim; g.font = 'bold 18px Arial'; g.fillText(T('FLOTTEURS · FOILS · GÎTE', 'FLOATS · FOILS · HEEL'), 10, 24); g.save(); g.translate(w * 0.4, h * 0.5); g.rotate(s.heel * Math.PI / 180);
+        g.fillStyle = dim; g.font = 'bold 18px Arial'; g.fillText(T('FLOTTEURS · FOILS · GÎTE', 'FLOATS · FOILS · HEEL'), 10, 24); g.save(); g.translate(w * 0.4, h * 0.5); g.rotate(-s.heel * Math.PI / 180);
         g.strokeStyle = fg; g.lineWidth = 3; g.strokeRect(-14, -12, 28, 26); [1, -1].forEach(k => { g.beginPath(); g.moveTo(k * 14, -6); g.lineTo(k * 120, -14); g.stroke(); g.strokeRect(k * 120 - 10, -18, 20, 18);
           const f = k > 0 ? s.fS : s.fP; g.strokeStyle = f > 0.5 ? acc : dim; g.beginPath(); g.moveTo(k * 112, 0); g.lineTo(k * 112, 30 + 20 * f); g.lineTo(k * (112 - 30 * f), 44 + 20 * f); g.stroke(); g.strokeStyle = fg; }); g.restore();
         const bar = (y, lab, v, txt) => { g.fillStyle = dim; g.font = 'bold 15px Arial'; g.fillText(lab, w * 0.72, y); g.fillStyle = '#222'; g.fillRect(w * 0.72, y + 6, w * 0.25, 12); g.fillStyle = acc; g.fillRect(w * 0.72, y + 6, w * 0.25 * Math.max(0, Math.min(1, v)), 12); g.fillStyle = fg; g.textAlign = 'right'; g.fillText(txt, w - 8, y); g.textAlign = 'left'; };
@@ -3349,7 +3368,7 @@ function cabAlerts(rdt) { const P = player, c = CAL, now = realT; if (!P) return
   if ((dd > 12 || ds > 5) && now > (c.t.alarm || 0)) { cabAlert('alarm'); c.t.alarm = now + 60; c.twd = P.twd || 0; c.tws = P.tws || 0; }
   const k = Math.min(1, rdt / 40); c.twd += norm180((P.twd || 0) - c.twd) * k; c.tws += ((P.tws || 0) - c.tws) * k;
   const amb = (key, lo, hi, kind, cond = true) => { if (c.t[key] == null) c.t[key] = now + lo * (0.3 + Math.random()); if (now > c.t[key]) { if (cond) cabAlert(kind); c.t[key] = now + lo + Math.random() * (hi - lo); } };
-  amb('ais', 70, 200, 'ais'); amb('msg', 90, 260, 'msg'); amb('grib', 150, 400, 'grib'); amb('power', 300, 700, 'power'); amb('oscar', 60, 180, 'oscar', CLS.id === 'imoca'); }
+  amb('ais', 70, 200, 'ais'); amb('msg', 90, 260, 'msg'); amb('grib', 150, 400, 'grib'); amb('power', 300, 700, 'power'); }
 function cabImpact(p) { const V = player && player.vis; if (!V || !V.cab || !cabOn()) return; V.cab.wetHit(p * 0.6); if (AUD.cab && AUD.on) AUD.cab.slam(Math.min(1.3, p)); }
 
 const AUD = { ctx: null, on: true, master: null, clickT: 0 };
