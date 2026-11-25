@@ -1898,16 +1898,19 @@ function windowsGeo() { // hublots du rouf (bande sombre sur les côtés et deva
 }
 // livrée de coque (motif original) : bande courbe, filet blanc, numéro à l'avant
 /* ===== Livrée du joueur : traits dessinés à la main sur la bande de coque (pas d'import d'image) ===== */
-const LIV_KEY = 'gl3d_livery', LIV_W = 1024, LIV_H = 128, LIV_CLASSES = ['imoca', 'o50', 'c40', 'mini'];
+const LIV_KEY = 'gl3d_livery', LIV_W = 2048, LIV_H = 256, LIV_CLASSES = ['imoca', 'o50', 'c40', 'mini'];
 let LIV = {}; try { LIV = JSON.parse(localStorage.getItem(LIV_KEY) || '{}') || {}; } catch (e) { LIV = {}; }
 let PORT_BUILD = false; const PORT_DIRTY = new Set(); // port : visuels à refaire (livrée changée)
 const LTEX = {}, playerHull = () => BOAT_DEFS.find(d => d.player).hull;
 const hexOf = n => '#' + n.toString(16).padStart(6, '0');
 function liveryStroke(g, s) { // s = { c, w (fraction de la hauteur), p: [[x, y] en fractions] }
-  const W = g.canvas.width, H = g.canvas.height, r = s.w * H / 2; g.strokeStyle = g.fillStyle = s.c; g.lineWidth = s.w * H; g.lineCap = g.lineJoin = 'round';
-  g.beginPath(); g.moveTo(s.p[0][0] * W, s.p[0][1] * H);
-  if (s.p.length < 2) { g.arc(s.p[0][0] * W, s.p[0][1] * H, r, 0, Math.PI * 2); g.fill(); return; }
-  s.p.forEach(q => g.lineTo(q[0] * W, q[1] * H)); g.stroke();
+  const W = g.canvas.width, H = g.canvas.height, r = s.w * H / 2, P = s.p.map(q => [q[0] * W, q[1] * H]), n = P.length;
+  g.strokeStyle = g.fillStyle = s.c; g.lineWidth = s.w * H; g.lineCap = g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(P[0][0], P[0][1]);
+  if (n < 2) { g.arc(P[0][0], P[0][1], r, 0, Math.PI * 2); g.fill(); return; }
+  // passage par les milieux : trait lisse qui passe exactement par chaque point saisi
+  for (let i = 1; i < n - 1; i++) g.quadraticCurveTo(P[i][0], P[i][1], (P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2);
+  g.lineTo(P[n - 1][0], P[n - 1][1]); g.stroke();
 }
 function liveryPaint(g, cls) { // fond = couleur de coque du joueur, puis les traits de la classe
   g.fillStyle = hexOf(playerHull()); g.fillRect(0, 0, g.canvas.width, g.canvas.height);
@@ -5160,9 +5163,9 @@ const sailLabels = () => { try { [msailBtns, sailBtns].forEach(L => L.forEach((b
 function refreshSailBtns() { sailLabels(); }
 function setLang(l) { LANG = l === 'en' ? 'en' : 'fr'; SETTINGS.lang = LANG; saveSettings(); applyStaticLang(); sailLabels(); if (MODE === 'race') buildMarkVis(); document.documentElement.lang = LANG; }
 /* ===== Éditeur de livrée (menu « Livrée ») ===== */
-let LIV_SEL = 'imoca', LIV_COL = '#ffffff', LIV_BRUSH = 0.09;
+let LIV_SEL = 'imoca', LIV_COL = '#ffffff', LIV_BRUSH = 0.04;
 const LIV_PAL = ['#ffffff', '#111418', '#d62839', '#f4a261', '#ffd60a', '#2a9d8f', '#1d3557', '#4ea8de', '#8ac926', '#8e44ad'];
-const LIV_BRUSHES = [['S', 0.04], ['M', 0.09], ['L', 0.16]];
+const LIV_BRUSHES = [['XS', 0.015], ['S', 0.04], ['M', 0.09], ['L', 0.16]];
 function livSave() {
   try { localStorage.setItem(LIV_KEY, JSON.stringify(LIV)); } catch (e) { /* stockage plein : le dessin reste pour la session */ }
   PORT_DIRTY.add(LIV_SEL); if (CLS.id === LIV_SEL) PORT_DIRTY.add('player');
@@ -5193,9 +5196,14 @@ function initLivery() {
   let cur = null;
   cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); cur = { c: LIV_COL, w: LIV_BRUSH, p: [pt(e)] }; (LIV[LIV_SEL] ||= []).push(cur); liveryStroke(g, cur); };
   cv.onpointermove = e => {
-    if (!cur) return; const q = pt(e), l = cur.p[cur.p.length - 1];
-    if (Math.abs(q[0] - l[0]) + Math.abs(q[1] - l[1]) < 0.0015) return;
-    cur.p.push(q); liveryStroke(g, { c: cur.c, w: cur.w, p: [l, q] });
+    if (!cur) return;
+    // tous les points intermédiaires du pointeur (pas seulement ceux de l'image) : trait plus fidèle
+    const co = e.getCoalescedEvents ? e.getCoalescedEvents() : [], evs = co.length ? co : [e];
+    for (const ev of evs) {
+      const q = pt(ev), l = cur.p[cur.p.length - 1];
+      if (Math.abs(q[0] - l[0]) + Math.abs(q[1] - l[1]) < 0.0004) continue;
+      cur.p.push(q); liveryStroke(g, { c: cur.c, w: cur.w, p: [l, q] });
+    }
   };
   const end = () => { if (!cur) return; cur = null; livSave(); liveryRefresh(LIV_SEL); note(); };
   cv.onpointerup = end; cv.onpointercancel = end;
