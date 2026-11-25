@@ -6253,7 +6253,7 @@ for (let i = 0; i < RN_N; i++) { rnD[i * 3] = (Math.random() * 2 - 1) * RN_R; rn
 rnGeo.setAttribute('position', new THREE.BufferAttribute(rnPos, 3));
 const rainLines = new THREE.LineSegments(rnGeo, new THREE.LineBasicMaterial({ color: 0xb8c8d6, transparent: true, opacity: 0, depthWrite: false })); rainLines.frustumCulled = false; rainLines.visible = false; scene.add(rainLines);
 function updateRain(rdt, rn) {
-  rainLines.visible = rn > 0.02; if (!rainLines.visible) return;
+  rainLines.visible = rn > 0.02 && !PORT.on; if (!rainLines.visible) return;
   rainLines.material.opacity = 0.12 + 0.4 * rn; rainLines.material.color.setScalar(0.25 + 0.6 * UL.value).multiply(tc.setRGB(0.85, 0.9, 1));
   const wa = ((player.twd || 0) + 180) * D2R, ws = (player.tws || 10) * KN * 0.55, h = player.dispHdg * D2R, bs = (player.dspd || player.spd) * KN * VF;
   const vx = Math.sin(wa) * ws - Math.sin(h) * bs, vz = -Math.cos(wa) * ws + Math.cos(h) * bs, vy = -11, cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
@@ -6319,7 +6319,95 @@ function onboardCamera(rdt) {
   camera.rotation.x += Math.sin(t * 23.1) * Math.sin(t * 7.3) * shake * 0.02; camera.rotation.z += Math.sin(t * 29.7 + 1) * Math.sin(t * 5.1) * shake * 0.02;
   sky.position.copy(camera.position);
 }
+// ===== Menu d'accueil « port » : quatre bateaux amarrés au quai, voiles rangées, eau calme =====
+const PORT = { g: null, vis: {}, on: false, sel: null, t: 0, key: null, hi: null, lbl: null };
+const PORT_BERTHS = [{ id: 'mini', x: -27 }, { id: 'c40', x: -15 }, { id: 'imoca', x: 2 }, { id: 'o50', x: 20 }];
+const PORT_Z = -3.2, PORT_ROT = -Math.PI / 2, PORT_SKY = new THREE.Color(0xe2b58e); // fin de journée, ciel chaud
+const PORT_CX = -12.5; // cadrage : les bateaux se placent à droite, le menu occupe la gauche // axe des coques parallèle au quai
+function portStow(v) {
+  const dark = new THREE.MeshStandardMaterial({ color: 0x1d2935, roughness: 0.85 }), sack = new THREE.MeshStandardMaterial({ color: 0xe4eaef, roughness: 0.75 });
+  (v.heads || []).forEach(h => { if (h) h.visible = false; });
+  if (v.mainMesh) v.mainMesh.visible = false;
+  if (v.wake) v.wake.visible = false;
+  v.root.children.forEach(c => { if (c.isSprite) c.visible = false; }); // pas d'étiquette de nom au port
+  // housse de grand-voile enroulée sur la bôme
+  if (v.boomPivot) { const cov = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 4.4, 12), dark); cov.rotation.x = Math.PI / 2; cov.position.set(0, 0, 2.6); v.boomPivot.add(cov); }
+  // focs et spis rangés : un boudin clair à la place de chaque voile d'avant
+  v.root.updateWorldMatrix(true, true);
+  (v.heads || []).forEach(h => {
+    if (!h || h === v.mainMesh || !h.geometry) return;
+    h.geometry.computeBoundingBox(); const bb = h.geometry.boundingBox, s = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+    const md = Math.max(s.x, s.y, s.z), rr = 0.3 + md * 0.025, roll = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, Math.max(1.2, md * 0.4), 10), sack);
+    const ax = s.x >= s.y && s.x >= s.z ? 'x' : s.y >= s.z ? 'y' : 'z'; if (ax === 'x') roll.rotation.z = Math.PI / 2; else if (ax === 'z') roll.rotation.x = Math.PI / 2;
+    roll.position.copy(v.root.worldToLocal(c.applyMatrix4(h.matrixWorld))); v.root.add(roll);
+  });
+}
+function buildPort() {
+  const g = new THREE.Group(); g.visible = false; scene.add(g); PORT.g = g;
+  const stone = new THREE.MeshStandardMaterial({ color: 0x8b867b, roughness: 0.95 }), cap = new THREE.MeshStandardMaterial({ color: 0xbdb5a4, roughness: 0.8 });
+  const iron = new THREE.MeshStandardMaterial({ color: 0x20262e, roughness: 0.4, metalness: 0.6 }), lampM = new THREE.MeshBasicMaterial({ color: 0xffd89a });
+  const quay = new THREE.Mesh(new THREE.BoxGeometry(300, 3, 9), stone); quay.position.set(0, -0.3, -10.5); g.add(quay);
+  const top = new THREE.Mesh(new THREE.BoxGeometry(300, 0.3, 9.4), cap); top.position.set(0, 1.15, -10.5); g.add(top);
+  for (let x = -140; x <= 140; x += 7) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.6, 8), iron); b.position.set(x, 1.45, -6.2); g.add(b); }
+  for (let x = -120; x <= 120; x += 40) {
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 7, 6), iron); p.position.set(x, 3.5, -14.6); g.add(p);
+    const l = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 8), lampM); l.position.set(x, 7.2, -14.6); g.add(l);
+  }
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(900, 500), new THREE.MeshStandardMaterial({ color: 0x2b5f74, roughness: 0.18, metalness: 0.05 }));
+  water.rotation.x = -Math.PI / 2; water.position.set(0, -0.05, 244); g.add(water);
+  // lumière de fin de journée + halo sur le bateau sélectionné
+  const key = new THREE.PointLight(0xffc48a, 500, 0, 2); key.position.set(-20, 26, 30); g.add(key);
+  const hi = new THREE.PointLight(0x7fe0ff, 0, 40, 2); hi.position.set(0, 10, PORT_Z); g.add(hi);
+  PORT.key = key; PORT.hi = hi;
+  const base = (boats.find(b => !b.isPlayer) || boats[0]).def;
+  PORT_BERTHS.forEach(({ id, x }) => {
+    const v = makeBoatOf(id, Object.assign({}, base, { player: false })); PORT.vis[id] = v;
+    v.root.position.set(x, 0, PORT_Z); v.root.rotation.y = PORT_ROT; v.root.visible = true; g.add(v.root);
+    portStow(v);
+  });
+  const lb = document.createElement('div'); lb.id = 'portLbl';
+  lb.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;display:none;transform:translate(-50%,-115%);padding:7px 12px;border-radius:9px;background:rgba(3,12,22,.82);border:1px solid rgba(127,224,255,.55);color:#e8f6ff;font:600 13px/1.25 system-ui,sans-serif;white-space:nowrap;z-index:5;text-align:center';
+  $('overlay').appendChild(lb); PORT.lbl = lb;
+}
+function setPort(on) {
+  if (on && !PORT.g) buildPort();
+  if (!PORT.g) return;
+  PORT.on = on; PORT.g.visible = on; ocean.visible = !on; sky.visible = !on; rainLines.visible = rainLines.visible && !on;
+  scene.background = on ? PORT_SKY : null; scene.fog.color.set(on ? PORT_SKY : HORIZON);
+  boats.forEach(b => { if (b.vis && b.vis.root) b.vis.root.visible = !on; });
+  if (!on) { PORT.sel = null; PORT.hi.intensity = 0; PORT.lbl.style.display = 'none'; }
+}
+function portSync() { const want = MENU_CINE && !$('overlay').classList.contains('hide'); if (want !== PORT.on) setPort(want); return want; }
+function portPick(cx, cy) {
+  const r = renderer.domElement.getBoundingClientRect(), m = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), rc = new THREE.Raycaster();
+  rc.setFromCamera(m, camera);
+  for (const id in PORT.vis) if (rc.intersectObject(PORT.vis[id].root, true).length) return id;
+  // coque fine (Mini) : à défaut de rayon exact, le clic proche de la coque compte
+  let best = null, bd = 46;
+  for (const id in PORT.vis) { const q = new THREE.Vector3(PORT.vis[id].root.position.x, 1.5, PORT_Z).project(camera), r = renderer.domElement.getBoundingClientRect(), d = Math.hypot(r.left + (q.x + 1) / 2 * r.width - cx, r.top + (1 - q.y) / 2 * r.height - cy); if (d < bd) { bd = d; best = id; } }
+  return best;
+}
+function portSelect(id) {
+  const changed = CLS.id !== id;
+  PORT.sel = id; PORT.hi.position.set(PORT.vis[id].root.position.x, 11, PORT_Z + 2); PORT.hi.intensity = 260;
+  const c = CLASSES[id]; PORT.lbl.innerHTML = `<b>${c.name}</b><br><small style="opacity:.8">${c.long}</small>`; PORT.lbl.style.display = 'block';
+  if (changed) { setClass(id); setPort(true); if (!running) showMenu('home'); } // setClass recrée le visuel du joueur : on le recache
+}
+function updatePortCam(rdt) {
+  PORT.t += rdt;
+  if (camera.fov !== 48) { camera.fov = 48; camera.updateProjectionMatrix(); }
+  camera.position.set(PORT_CX + Math.sin(PORT.t * 0.045) * 3, 8 + Math.sin(PORT.t * 0.11) * 0.25, 84);
+  camera.lookAt(PORT_CX + Math.sin(PORT.t * 0.045) * 3, -14.5, PORT_Z);
+  if (PORT.sel && PORT.lbl) {
+    const p = new THREE.Vector3(PORT.vis[PORT.sel].root.position.x, 6.5, PORT_Z).project(camera), r = renderer.domElement.getBoundingClientRect();
+    PORT.lbl.style.left = (r.left + (p.x + 1) / 2 * r.width) + 'px'; PORT.lbl.style.top = (r.top + (1 - p.y) / 2 * r.height) + 'px';
+  }
+}
+const PORT_UI = 'button,a,input,select,textarea,label,.tutoInv,.mmnav,.c';
+$('overlay').addEventListener('pointermove', e => { if (!PORT.on || (e.target.closest && e.target.closest(PORT_UI))) return; document.body.style.cursor = portPick(e.clientX, e.clientY) ? 'pointer' : ''; });
+$('overlay').addEventListener('click', e => { if (!PORT.on || (e.target.closest && e.target.closest(PORT_UI))) return; const id = portPick(e.clientX, e.clientY); if (id) portSelect(id); });
 function updateCamera(rdt = 0.016) {
+  if (portSync()) return updatePortCam(rdt);
   if (cam.mode === 'cabin' && !hasCab()) setCamMode('onboard'); // autre classe, ou modèle pas encore chargé
   const ob = obMode() && !(MENU_CINE && !$('overlay').classList.contains('hide')) && player && player.vis;
   if (ob !== obWas) { obWas = ob; camera.near = ob ? 0.15 : 0.5; camera.updateProjectionMatrix(); if (!ob && player && player.vis) { player.vis.root.children.forEach(c => { if (c.isSprite) c.visible = true; }); if (player.vis.hd) player.vis.hd.visible = true; C40I.uIn.value = IMI.uIn.value = O50I.uIn.value = 0; } if (!ob) camera.fov = camFov; }
@@ -6389,7 +6477,7 @@ function frame(now) {
   const wa = (SS.twd + 180) * D2R; oceanU.uWind.value.set(Math.sin(wa), -Math.cos(wa), tws); updateSpindrift(rdt);
   camera.updateMatrixWorld(); _wkF.setFromProjectionMatrix(_wkM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   boats.forEach(b => { if (active.includes(b)) updateBoatVisual(b, rdt); }); updateGhost(rdt);
-  updateWorld(rdt); updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFauna(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); updateGuide(); updateCamera(rdt); updateLens(rdt); updateAudio(rdt);
+  updateWorld(rdt); if (!PORT.on) { updateParticles(rdt, bvx, bvz); updateSpray(rdt, bvx, bvz); updateFlecks(rdt, bvx, bvz); } updateFauna(rdt, bvx, bvz); updateGuide(); updateCamera(rdt); updateLens(rdt); updateAudio(rdt);
   hudAcc += rdt; mapAcc += rdt; polAcc += rdt; projAcc += rdt;
   if (projAcc > 0.5) { projAcc = 0; computeProjection(); }
   if (hudAcc > 0.1) { tutoTick(hudAcc); hudAcc = 0; updateHUD(); }
