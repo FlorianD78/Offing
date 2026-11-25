@@ -477,7 +477,7 @@ const pad = v => String(v).padStart(2, '0');
 function fmtRace(s) { s = Math.max(0, Math.floor(s)); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return `J+${d} · ${pad(h)}:${pad(m)}`; }
 function fmtDur(s) { s = Math.max(0, Math.floor(s)); const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + 'j ' : '') + `${pad(h)}h${pad(m)}`; }
 /* ===================== RÉGLAGES (langue, graphismes) ===================== */
-const SETTINGS = (() => { let o = {}; try { o = JSON.parse(localStorage.getItem('gl3d_settings')) || {}; } catch (e) {} return Object.assign({ lang: (navigator.language || 'fr').toLowerCase().startsWith('fr') ? 'fr' : 'fr', gfx: 'auto', halo: true, shore: true, fps: '60' }, o); })();
+const SETTINGS = (() => { let o = {}; try { o = JSON.parse(localStorage.getItem('gl3d_settings')) || {}; } catch (e) {} return Object.assign({ lang: (navigator.language || 'fr').toLowerCase().startsWith('fr') ? 'fr' : 'fr', gfx: 'auto', halo: true, shore: true, fps: '60', cabLight: 'blue' }, o); })();
 const saveSettings = () => { try { localStorage.setItem('gl3d_settings', JSON.stringify(SETTINGS)); } catch (e) {} };
 let LANG = SETTINGS.lang === 'en' ? 'en' : 'fr';
 const T = (fr, en) => LANG === 'en' ? en : fr, TL = T; // TL : alias pour les fonctions qui ont une variable locale T
@@ -2540,13 +2540,12 @@ const IMI = (() => {
     [-0.42, 0.42].forEach(x => tube([[x, YR, ZM - 0.1], [x, 1.55, ZM - 0.04], [x * 0.9, YM, ZM - 0.02]], 0.016, m.carbon, 8)); box(0.84, 0.03, 0.03, m.carbon, 0, YR, ZM - 0.1);
     const mainT = mkDisp(0.66, 0.4, 768, 466, 0, YM, ZM, -0.12, 0, 'main');
     // caméra de mât (mi-hauteur) qui filme l'étrave et devant : rendu réel de la scène dans une texture, ~10 images/s quand on est en cabine
-    const camRT = new THREE.WebGLRenderTarget(400, 256, { type: THREE.HalfFloatType }), mastCam = new THREE.PerspectiveCamera(80, 400 / 256, 0.3, 3000);
-    { const fr = box(0.45, 0.3, 0.025, m.black, -0.62, YM - 0.03, ZM + 0.14, -0.14, 0.42, 0); const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.27), new THREE.MeshBasicMaterial({ map: camRT.texture })); scr.position.z = 0.0135; fr.add(scr);
+    const mcam = cabMastCam(V.root, [G], () => { const k = cabWindSide(); return [k * 0.25, 13.5, -0.6, k * 0.3]; });
+    { const fr = box(0.45, 0.3, 0.025, m.black, -0.62, YM - 0.03, ZM + 0.14, -0.14, 0.42, 0); const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.27), mcam.mat); scr.position.z = 0.0135; fr.add(scr);
       const oc = document.createElement('canvas'); oc.width = 400; oc.height = 256; const ot = new THREE.CanvasTexture(oc), ov = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.27), new THREE.MeshBasicMaterial({ map: ot, transparent: true, toneMapped: false, depthWrite: false })); ov.position.z = 0.015; fr.add(ov); noM(fr);
-      disp.push({ c: oc, g: oc.getContext('2d'), t: ot, kind: 'mastcam' }); } mkDisp(0.42, 0.27, 512, 330, 0.62, YM - 0.03, ZM + 0.14, -0.14, -0.42, 'foils');
+      disp.push({ c: oc, g: oc.getContext('2d'), t: ot, kind: 'mastcam' }); } mkDisp(0.42, 0.27, 640, 412, 0.62, YM - 0.03, ZM + 0.14, -0.14, -0.42, 'perf');
     [['BSP', -0.66], ['TWS', -0.33], ['TWA', 0], ['AWA', 0.33], ['POL', 0.66]].forEach(([k, x]) => mkDisp(0.28, 0.09, 320, 103, x, 1.74, 3.55 + Math.abs(x) * 0.08, 0.35, -x * 0.15, 'bar:' + k));
     box(1.62, 0.02, 0.06, m.carbon, 0, 1.8, 3.53);
-    mkDisp(0.34, 0.21, 0, 0, 1.0, YK + 0.2, ZK + 0.08, -0.4, -0.3, 'mainRep', G, mainT); // écran répété (table à cartes sur la console)
     // --- couchette-cocon sous la console avant (fermée) : on la devine par la grille d'aération du panneau ---
     { const x = 0.55, z0 = 2.45, z1 = 3.45; box(0.6, 0.12, z1 - z0, m.foam, x, YF + 0.2, (z0 + z1) / 2); box(0.08, 0.3, z1 - z0, m.foamL, x + 0.31, YF + 0.32, (z0 + z1) / 2); quad([x - 0.33, YF + 0.5, z0], [x + 0.33, YF + 0.5, z0], [x + 0.33, YF + 0.5, z1], [x - 0.33, YF + 0.5, z1], m.net);
       for (let i = 0; i < 5; i++) box(0.4, 0.012, 0.012, m.ti2, 0.55, YF + 0.6 + i * 0.05, ZK + 0.02); }
@@ -2579,35 +2578,53 @@ const IMI = (() => {
         g.font = 'bold 22px Arial'; g.fillStyle = fg; const it = [['SOG', s.bsp.toFixed(1)], ['COG', String(Math.round(s.hdg) % 360).padStart(3, '0') + '°'], ['TWS', s.tws.toFixed(1)], ['TWA', Math.round(s.twa) + '°'], ['VMG', s.vmg.toFixed(1)], ['POL', Math.round(s.pol) + '%']];
         it.forEach(([a, b], i) => { const x = 14 + i * (w - 20) / it.length; g.fillStyle = dim; g.font = 'bold 15px Arial'; g.fillText(a, x, 17); g.fillStyle = fg; g.font = 'bold 22px Arial'; g.fillText(b, x, 38); });
         g.fillStyle = dim; g.font = '16px Arial'; g.fillText(T('ROUTAGE · isochrones · grib ECMWF 0,25°', 'ROUTING · isochrones · ECMWF 0.25° grib'), 14, h - 14); g.textAlign = 'right'; g.fillStyle = acc; g.fillText(T('pilote : ', 'pilot: ') + (s.mode === 'twa' ? 'TWA ' + Math.abs(Math.round(s.lock || 0)) + '°' : T('CAP', 'HDG')), w - 14, h - 14); }
-      else if (d.kind === 'mastcam') { g.clearRect(0, 0, w, h); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(0, 0, w, 26); g.fillStyle = '#eaf6ff'; g.font = 'bold 15px Arial'; g.fillText(T('CAM MÂT · AVANT', 'MAST CAM · FORWARD'), 8, 18);
-        g.textAlign = 'right'; g.fillStyle = (Date.now() >> 9) & 1 ? '#ff3b30' : 'rgba(255,59,48,0.25)'; g.fillText('● REC', w - 8, 18); g.textAlign = 'left'; g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1; g.strokeRect(w / 2 - 18, h / 2 - 12, 36, 24); }
-      else if (d.kind === 'oscar') { // caméra anticollision : vue thermique, horizon qui suit gîte et tangage, détections
-        const hy = h * 0.46 + s.pitch * 6, rot = -s.heel * Math.PI / 180 * 0.9; g.save(); g.translate(w / 2, hy); g.rotate(rot);
-        let gr = g.createLinearGradient(0, -h, 0, 0); gr.addColorStop(0, night ? '#100' : '#1a1e26'); gr.addColorStop(1, night ? '#300' : '#4a5260'); g.fillStyle = gr; g.fillRect(-w, -h, 2 * w, h);
-        gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, night ? '#200' : '#2b313b'); gr.addColorStop(1, night ? '#050000' : '#0c0f14'); g.fillStyle = gr; g.fillRect(-w, 0, 2 * w, h);
-        for (let i = 0; i < 60; i++) { const y = Math.pow(Math.random(), 2) * h * 0.9, x = (Math.random() - 0.5) * 2 * w; g.fillStyle = night ? 'rgba(255,80,60,0.12)' : 'rgba(220,230,240,0.10)'; g.fillRect(x, y, 6 + y * 0.3, 1.5); }
-        g.strokeStyle = night ? 'rgba(255,90,70,0.5)' : 'rgba(255,255,255,0.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(-w, 0); g.lineTo(w, 0); g.stroke(); g.restore();
-        tt += 0.25; const det = Math.sin(tt * 0.21) > 0.55; if (det) { const bx = w * (0.62 + 0.1 * Math.sin(tt * 0.05)), by = hy - 8, bw = 46, bh = 22; g.strokeStyle = '#ffcc22'; g.lineWidth = 2; g.strokeRect(bx - bw / 2, by - bh / 2, bw, bh);
-          g.fillStyle = '#ffcc22'; g.font = 'bold 15px Arial'; g.fillText(T('OBJET · 1,4 mn · faible risque', 'OBJECT · 1.4 nm · low risk'), bx - 120, by - 18); }
-        g.strokeStyle = C(night, 0.6); g.lineWidth = 1.5; g.beginPath(); g.moveTo(w / 2 - 20, h / 2); g.lineTo(w / 2 + 20, h / 2); g.moveTo(w / 2, h / 2 - 20); g.lineTo(w / 2, h / 2 + 20); g.stroke();
-        g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, w, 30); g.fillStyle = fg; g.font = 'bold 17px Arial'; g.fillText('OSCAR · CAM 1 ' + T('THERMIQUE', 'THERMAL'), 10, 21); g.textAlign = 'right'; g.fillStyle = det ? '#ffcc22' : (night ? fg : '#5cff9a'); g.fillText(det ? T('DÉTECTION', 'DETECTION') : T('RAS', 'CLEAR'), w - 10, 21); }
-      else if (d.kind === 'foils') { // schéma vu de l'arrière : quille basculante, foils sortis / rentrés, gîte ; jauges
-        g.fillStyle = dim; g.font = 'bold 18px Arial'; g.fillText(T('QUILLE · FOILS · GÎTE', 'KEEL · FOILS · HEEL'), 12, 24); const cx = w * 0.36, cy = h * 0.42;
-        g.save(); g.translate(cx, cy); g.rotate(-s.heel * Math.PI / 180); // vu de l'arrière : gîte positive = bâbord (rotation.z > 0) g.strokeStyle = fg; g.lineWidth = 3; g.beginPath(); g.moveTo(-95, -10); g.quadraticCurveTo(0, 40, 95, -10); g.lineTo(80, -30); g.lineTo(-80, -30); g.closePath(); g.stroke();
-        g.save(); g.rotate(-s.cant * Math.PI / 180); g.strokeStyle = acc; g.lineWidth = 5; g.beginPath(); g.moveTo(0, 18); g.lineTo(0, 120); g.stroke(); g.fillStyle = acc; g.beginPath(); g.ellipse(0, 124, 16, 9, 0, 0, 7); g.fill(); g.restore();
-        [[1, s.fS], [-1, s.fP]].forEach(([k, f]) => { g.strokeStyle = f > 0.5 ? acc : dim; g.lineWidth = 4; g.beginPath(); g.moveTo(k * 70, 0); g.lineTo(k * (70 + 40 * f), 30 + 25 * f); g.lineTo(k * (95 + 40 * f), 22 + 20 * f); g.stroke(); });
-        g.restore(); const bar = (y, lab, v, max, txt) => { g.fillStyle = dim; g.font = 'bold 15px Arial'; g.fillText(lab, w * 0.66, y); g.fillStyle = '#1b2733'; g.fillRect(w * 0.66, y + 6, w * 0.3, 12); g.fillStyle = acc; g.fillRect(w * 0.66, y + 6, w * 0.3 * Math.max(0, Math.min(1, v / max)), 12); g.fillStyle = fg; g.textAlign = 'right'; g.fillText(txt, w - 12, y); g.textAlign = 'left'; };
-        bar(60, T('QUILLE', 'KEEL'), Math.abs(s.cant), 40, Math.round(Math.abs(s.cant)) + '° ' + (s.cant < 0 ? T('bâb', 'port') : T('tri', 'stbd'))); bar(110, T('FOIL TRI', 'STBD FOIL'), s.fS, 1, Math.round(s.fS * 100) + '%');
-        bar(160, T('FOIL BÂB', 'PORT FOIL'), s.fP, 1, Math.round(s.fP * 100) + '%'); bar(210, T('VOL', 'LIFT'), s.lift, 1.2, Math.round(Math.min(1, s.lift / 1.2) * 100) + '%'); bar(260, T('GÎTE', 'HEEL'), Math.abs(s.heel), 30, Math.round(Math.abs(s.heel)) + '°'); }
+      else if (d.kind === 'mastcam') cabCamOverlay(g, w, h, mcam.ir, night);
+      else if (d.kind === 'perf') { // écran de performance : polaire du vent du moment (une courbe par voile, enveloppe, VMG, point actuel), voile en service, foils, quille, gîte
+        const D2 = Math.PI / 180, card = night ? 'rgba(40,0,0,0.9)' : 'rgba(18,30,42,0.95)', grid = night ? 'rgba(255,60,40,0.16)' : 'rgba(150,200,230,0.14)';
+        g.fillStyle = night ? 'rgba(20,0,0,0.95)' : 'rgba(6,14,22,0.95)'; g.fillRect(0, 0, w, 34); g.fillStyle = acc; g.fillRect(0, 34, w, 2);
+        g.fillStyle = fg; g.font = 'bold 19px Arial'; g.fillText(T('PERF · POLAIRE · VOILES · FOILS', 'PERF · POLAR · SAILS · FOILS'), 12, 24);
+        g.textAlign = 'right'; g.fillStyle = dim; g.font = 'bold 16px Arial'; g.fillText(`TWS ${s.tws.toFixed(1)} · TWA ${Math.round(Math.abs(s.twa))}°`, w - 12, 24); g.textAlign = 'left';
+        // --- polaire ---
+        const a = Math.abs(s.twa), ox = 22, oy = 46 + (h - 56) / 2, R = Math.min(w * 0.5 - 34, (h - 70) / 2); let maxS = 5, best = null, cur = 0, sl = [];
+        try { for (let x = 0; x <= 180; x += 5) maxS = Math.max(maxS, bestFull(x, s.tws)); maxS = Math.ceil(maxS / 5) * 5; best = bestSail(a, s.tws); cur = P.sail | 0; sl = SAILS; } catch (e) {}
+        const pp = (ang, v) => [ox + Math.sin(ang * D2) * v / maxS * R, oy - Math.cos(ang * D2) * v / maxS * R];
+        g.strokeStyle = grid; g.lineWidth = 1; g.fillStyle = dim; g.font = '12px Arial';
+        for (let v = 5; v <= maxS; v += 5) { g.beginPath(); g.arc(ox, oy, v / maxS * R, -Math.PI / 2, Math.PI / 2); g.stroke(); g.fillText(v, ox + 3, oy - v / maxS * R + 12); }
+        for (let ang = 0; ang <= 180; ang += 30) { const q = pp(ang, maxS); g.beginPath(); g.moveTo(ox, oy); g.lineTo(q[0], q[1]); g.stroke(); if (ang % 60 === 0 && ang) { g.fillText(ang + '°', q[0] + 3, q[1] + (ang > 90 ? 12 : -3)); } }
+        try { g.setLineDash([4, 4]); g.strokeStyle = night ? 'rgba(255,120,100,0.7)' : 'rgba(255,255,255,0.6)'; g.lineWidth = 1.5; g.beginPath(); for (let x = 0; x <= 180; x += 3) { const q = pp(x, bestFull(x, s.tws)); x ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); } g.stroke(); g.setLineDash([]);
+          sl.forEach((sv, i) => { g.strokeStyle = night ? (i === cur ? '#ff5a44' : '#a3261f') : sv.ui; g.globalAlpha = i === cur ? 1 : 0.6; g.lineWidth = i === cur ? 3 : 1.5; g.beginPath(); for (let x = 0; x <= 180; x += 3) { const q = pp(x, capV(baseSpeed(x, s.tws) * sailEff(i, x, s.tws) * Math.max(1, foilFactor(1, 0, x, s.tws)))); x ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); } g.stroke(); }); g.globalAlpha = 1;
+          [vmgOpt(s.tws, true).ang, vmgOpt(s.tws, false).ang].forEach(ang => { const q = pp(ang, maxS); g.strokeStyle = night ? 'rgba(255,90,60,0.5)' : 'rgba(127,209,255,0.6)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(ox, oy); g.lineTo(q[0], q[1]); g.stroke(); });
+          const tq = pp(a, bestFull(a, s.tws)); g.strokeStyle = fg; g.lineWidth = 1.5; g.beginPath(); g.arc(tq[0], tq[1], 7, 0, 7); g.stroke(); } catch (e) {}
+        const pc = pp(a, Math.min(maxS * 1.1, P.spd || s.bsp)); g.strokeStyle = acc; g.lineWidth = 1.2; g.beginPath(); g.moveTo(ox, oy); g.lineTo(pc[0], pc[1]); g.stroke(); g.fillStyle = acc; g.beginPath(); g.arc(pc[0], pc[1], 6, 0, 7); g.fill();
+        // --- colonne de droite : voile en service, polaire %, foils, quille ---
+        const X = w * 0.53, CW2 = w - X - 10; let y = 46;
+        const tile = (hh) => { g.fillStyle = card; g.fillRect(X, y, CW2, hh); const y0 = y; y += hh + 7; return y0; };
+        { const y0 = tile(78), sv = sl[cur] || {}, nm = sv.name ? T(sv.name, sv.en) : '—'; g.fillStyle = night ? '#ff5a44' : (sv.ui || acc); g.fillRect(X, y0, 6, 78);
+          g.fillStyle = dim; g.font = 'bold 14px Arial'; g.fillText(T('VOILE D\'AVANT', 'HEADSAIL') + (P.autoSail ? ' · AUTO' : ''), X + 14, y0 + 20); g.fillStyle = fg; g.font = 'bold 30px Arial'; g.fillText(nm, X + 14, y0 + 54);
+          const ok = best == null || best === cur, bn = !ok && sl[best] ? T(sl[best].name, sl[best].en) : ''; g.font = 'bold 15px Arial'; g.textAlign = 'right'; g.fillStyle = ok ? (night ? fg : '#5cff9a') : '#ffd23a'; g.fillText(ok ? T('✓ la bonne', '✓ right one') : '→ ' + bn, X + CW2 - 10, y0 + 54); g.textAlign = 'left';
+          if (P.man && P.man.type === 'sail') { g.fillStyle = '#ffd23a'; g.font = 'bold 13px Arial'; g.fillText(T('changement en cours…', 'sail change…'), X + 14, y0 + 72); } }
+        { const y0 = tile(60), pol = Math.max(0, Math.min(130, s.pol)); g.fillStyle = dim; g.font = 'bold 14px Arial'; g.fillText(T('POLAIRE', 'POLAR'), X + 14, y0 + 20);
+          let tgt = 0; try { tgt = bestFull(a, s.tws); } catch (e) {} g.textAlign = 'right'; g.fillStyle = dim; g.fillText(T('cible ', 'target ') + tgt.toFixed(1) + T(' nd', ' kn'), X + CW2 - 10, y0 + 20); g.textAlign = 'left';
+          g.fillStyle = night ? '#200' : '#1b2733'; g.fillRect(X + 14, y0 + 32, CW2 - 90, 16); g.fillStyle = pol >= 95 ? (night ? fg : '#5cff9a') : pol >= 85 ? '#ffd23a' : '#ff5a4a'; g.fillRect(X + 14, y0 + 32, (CW2 - 90) * Math.min(1, pol / 110), 16);
+          g.fillStyle = fg; g.font = 'bold 24px Arial'; g.textAlign = 'right'; g.fillText(Math.round(pol) + '%', X + CW2 - 10, y0 + 50); g.textAlign = 'left'; }
+        { const y0 = tile(h - y - 8); g.fillStyle = dim; g.font = 'bold 14px Arial'; g.fillText(T('FOILS · QUILLE · GÎTE', 'FOILS · KEEL · HEEL'), X + 14, y0 + 20);
+          const cx = X + 72, cy = y0 + 58; g.save(); g.translate(cx, cy); g.rotate(-s.heel * D2); // vu de l'arrière : gîte positive = bâbord
+          g.strokeStyle = fg; g.lineWidth = 2.5; g.beginPath(); g.moveTo(-48, -5); g.quadraticCurveTo(0, 20, 48, -5); g.lineTo(40, -15); g.lineTo(-40, -15); g.closePath(); g.stroke();
+          g.save(); g.rotate(-s.cant * D2); g.strokeStyle = acc; g.lineWidth = 3.5; g.beginPath(); g.moveTo(0, 9); g.lineTo(0, 60); g.stroke(); g.fillStyle = acc; g.beginPath(); g.ellipse(0, 62, 9, 5, 0, 0, 7); g.fill(); g.restore();
+          [[1, s.fS], [-1, s.fP]].forEach(([k, f]) => { g.strokeStyle = f > 0.5 ? acc : dim; g.lineWidth = 3; g.beginPath(); g.moveTo(k * 36, 0); g.lineTo(k * (36 + 20 * f), 15 + 13 * f); g.lineTo(k * (48 + 20 * f), 11 + 10 * f); g.stroke(); }); g.restore();
+          const row = (yy, lab, txt, on) => { g.fillStyle = dim; g.font = 'bold 14px Arial'; g.fillText(lab, X + 150, yy); g.fillStyle = on ? acc : fg; g.textAlign = 'right'; g.font = 'bold 17px Arial'; g.fillText(txt, X + CW2 - 10, yy); g.textAlign = 'left'; };
+          const fs = f => f > 0.5 ? T('sorti ', 'down ') + Math.round(f * 100) + '%' : f > 0.05 ? Math.round(f * 100) + '%' : T('relevé', 'up');
+          row(y0 + 44, T('FOIL BÂB', 'PORT FOIL'), fs(s.fP), s.fP > 0.5); row(y0 + 68, T('FOIL TRI', 'STBD FOIL'), fs(s.fS), s.fS > 0.5);
+          row(y0 + 92, T('QUILLE', 'KEEL'), Math.round(Math.abs(s.cant)) + '° ' + (s.cant < 0 ? T('bâb', 'port') : T('tri', 'stbd')), false);
+          row(y0 + 116, T('GÎTE · VOL', 'HEEL · LIFT'), Math.round(Math.abs(s.heel)) + '° · ' + Math.round(Math.min(1, s.lift / 1.2) * 100) + '%', s.lift > 0.6); } }
       d.t.needsUpdate = true; };
     const drawPad = (p, night) => { const g = p.g, w = p.c.width, h = p.c.height; g.fillStyle = '#050607'; g.fillRect(0, 0, w, h); const lab = p.k > 0 ? [T('QUILLE ◀', 'KEEL ◀'), T('QUILLE ▶', 'KEEL ▶'), 'FOIL ▲', 'FOIL ▼'] : ['AUTO', 'TWA', T('CAP', 'HDG'), '-1° / +1°'];
       lab.forEach((t, i) => { const y = 14 + i * 60; g.strokeStyle = night ? '#a01' : '#2ab6d6'; g.lineWidth = 3; g.strokeRect(10, y, w - 20, 48); g.fillStyle = night ? '#f43' : '#bff2ff'; g.font = 'bold 20px Arial'; g.textAlign = 'center'; g.fillText(t, w / 2, y + 32); }); p.t.needsUpdate = true; };
-    let acc = 1, wet = 0, padDone = -1, camAcc = 1; const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler();
-    return { eye: () => new THREE.Vector3(EYE.x, EYE.y, EYE.z), wetHit(p) { wet = Math.min(1, wet + p); },
-      update(dt, night, active) { camAcc += dt;
-        if (active && camAcc > 0.1 && typeof renderer !== 'undefined') { camAcc = 0; const R = V.root; R.updateMatrixWorld(); mastCam.position.set(0, 13.5, -0.85).applyMatrix4(R.matrixWorld);
-          mastCam.quaternion.copy(R.getWorldQuaternion(_q)).multiply(_q2.setFromEuler(_e.set(-0.6, 0, 0))); mastCam.updateMatrixWorld();
-          const t0 = renderer.getRenderTarget(), cOn = SKYC.uCOn.value, vis = G.visible; SKYC.uCOn.value = 0; G.visible = false; renderer.setRenderTarget(camRT); renderer.render(scene, mastCam); renderer.setRenderTarget(t0); SKYC.uCOn.value = cOn; G.visible = vis; }
+    // éclairage d'ambiance de nuit : plafonnier sous la casquette + rubans LED (sous la barre d'instruments, au pied des bancs)
+    const amb = cabAmbient(G, [[0, 1.98, 4.5, 1.5], [0, 1.7, 5.7, 0.9]], [[1.58, 0.012, 0.014, 0, 1.783, 3.56], [0.012, 0.012, 1.3, 0.74, YF + 0.03, 5.0], [0.012, 0.012, 1.3, -0.74, YF + 0.03, 5.0]]);
+    let acc = 1, wet = 0, padDone = -1;
+    return { mcam, eye: () => new THREE.Vector3(EYE.x, EYE.y, EYE.z), wetHit(p) { wet = Math.min(1, wet + p); },
+      update(dt, night, active) { mcam.update(dt, active); amb.update(dt);
         acc += dt; if (!active || acc < 0.25) return; acc = 0; const s = data(); disp.forEach(d => draw(d, s, night)); if (padDone !== +night) { pads.forEach(p => drawPad(p, night)); padDone = +night; }
         led.color.setHex(night ? 0xff2200 : 0x9fe8ff); },
       look(az) { seat.visible = Math.abs(az) < 100; },
@@ -2830,7 +2847,11 @@ const O50I = (() => {
   // ---------- appliqué une fois au kit (partagé par tous les Ocean Fifty) ----------
   function patchKit(K) {
     // bulle rehaussée (0,78 -> 0,98 de hauteur) : le dôme est une demi-sphère étirée, on recalcule ses sommets
-    { const P = K.dome.attributes.position.array; for (let i = 0; i < P.length; i += 3) P[i + 1] = 1.48 + (P[i + 1] - 1.48) * (0.98 / 0.78); K.dome.attributes.position.needsUpdate = true; K.dome.computeVertexNormals(); K.dome.computeBoundingSphere(); }
+    { const P = K.dome.attributes.position.array; for (let i = 0; i < P.length; i += 3) P[i + 1] = 1.48 + (P[i + 1] - 1.48) * (0.98 / 0.78); }
+    // la bulle déborde sur les bras arrière (Edenred 5) : le bas des flancs s'évase vers l'extérieur au droit du bras, en joue qui se fond dans l'aile
+    { const P = K.dome.attributes.position.array; for (let i = 0; i < P.length; i += 3) { const x = P[i], y = P[i + 1], z = P[i + 2], nx = x / 1.18, ny = Math.max(0, Math.min(1, (y - 1.48) / 0.98)), nz = (z - 5.0) / 2.3, rho = Math.hypot(nx, nz);
+        if (rho < 1e-4) continue; const side = Math.abs(nx) / rho, fl = 0.48 * Math.exp(-Math.pow((z - 5.35) / 0.95, 2)) * Math.pow(1 - ny, 1.7) * Math.pow(side, 1.5); P[i] = x + Math.sign(x) * fl; P[i + 1] = y - 0.06 * fl / 0.48 * (1 - ny); }
+      K.dome.attributes.position.needsUpdate = true; K.dome.computeVertexNormals(); K.dome.computeBoundingSphere(); }
     // texture refaite entièrement, comme les casquettes d'Ocean Fifty : coque de bulle pleine (blanc), vitrages en PMMA fumé dans des cadres
     // noirs — pare-brise enveloppant en 3 panneaux à l'avant, une longue vitre latérale de chaque bord, une vigie de toit — et arrière ouvert.
     // Repère de la texture (demi-sphère) : u = 0 bâbord, 0,25 arrière, 0,5 tribord, 0,75 avant ; v (canvas y) = 0 au sommet, 256 au pied.
@@ -2902,7 +2923,14 @@ const O50I = (() => {
       const fr = box(w + 0.025, h + 0.025, 0.025, m.dark, x, y, z, rx, ry, 0), scr = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, toneMapped: false })); scr.position.z = 0.0135; fr.add(scr); noM(fr); disp.push({ c, g: c.getContext('2d'), t, kind }); };
     const ZD = 3.75; box(1.2, 0.06, 0.4, m.carbon, 0, 1.36, ZD - 0.05); box(1.2, 0.76, 0.05, m.carbon, 0, 0.98, ZD - 0.25);
     [['BSP', -0.52], ['TWS', -0.18], ['TWA', 0.18], ['HDG', 0.52]].forEach(([k, x]) => mk(0.3, 0.19, 256, 160, x, 1.5, ZD, -0.6, -x * 0.12, 'big:' + k));
-    mk(0.36, 0.23, 512, 330, -0.55, 1.2, ZD + 0.2, -0.55, 0.4, 'nav'); mk(0.36, 0.23, 512, 330, 0.55, 1.2, ZD + 0.2, -0.55, -0.4, 'float');
+    mk(0.34, 0.22, 512, 330, 0, 1.17, ZD + 0.13, -0.5, 0, 'nav'); mk(0.36, 0.23, 512, 330, 0.55, 1.2, ZD + 0.2, -0.55, -0.4, 'float');
+    // caméra en tête de mât (mi-hauteur) : proue, flotteurs et plan d'eau devant ; infrarouge la nuit
+    const mcam = cabMastCam(V.root, [G], () => { const k = cabWindSide(); return [k * 1.45, 11.5, -0.35, k * 0.3]; }, -0.6, 80) /* au bout de la barre de flèche au vent : le foc ne masque pas la vue */;
+    { const fr = box(0.385, 0.255, 0.025, m.dark, -0.55, 1.2, ZD + 0.2, -0.55, 0.4, 0); const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.23), mcam.mat); scr.position.z = 0.0135; fr.add(scr);
+      const oc = document.createElement('canvas'); oc.width = 400; oc.height = 256; const ot = new THREE.CanvasTexture(oc), ov = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.23), new THREE.MeshBasicMaterial({ map: ot, transparent: true, toneMapped: false, depthWrite: false })); ov.position.z = 0.015; fr.add(ov); noM(fr);
+      disp.push({ c: oc, g: oc.getContext('2d'), t: ot, kind: 'mastcam' }); }
+    // éclairage d'ambiance de nuit : plafonnier dans la bulle + rubans LED sous la console et au pied des parois
+    const amb = cabAmbient(G, [[0, 2.3, 4.7, 1], [0, 1.6, 6.2, 0.5]], [[1.18, 0.012, 0.014, 0, 1.325, ZD + 0.16], [0.012, 0.012, 1.6, 0.6, YF + 0.04, 5.2], [0.012, 0.012, 1.6, -0.6, YF + 0.04, 5.2]]);
     // winchs animés sur les consoles, manivelle sur le winch au vent
     const rots = [], winch = (x, y, z, crank) => { const g = new THREE.Group(); g.position.set(x, y, z); g.scale.setScalar(1.3); g.userData.noMergeTree = true; G.add(g); const r = new THREE.Group(); g.add(r); rots.push(r);
       add(new THREE.CylinderGeometry(0.095, 0.105, 0.03, 24), m.ti2, 0, 0.015, 0, 0, 0, 0, g); add(new THREE.CylinderGeometry(0.075, 0.09, 0.11, 24), m.ti, 0, 0.085, 0, 0, 0, 0, r);
@@ -2922,6 +2950,7 @@ const O50I = (() => {
     const norm = a => ((a % 360) + 540) % 360 - 180;
     const data = () => { const bsp = P.dspd || 0, tws = P.tws || 0, twa = norm((P.twd || 0) - (P.dispHdg || 0)); return { bsp, tws, twa, hdg: ((P.dispHdg || 0) % 360 + 360) % 360, heel: P.heel || 0, lift: P.lift || 0, fS: P.foilS ?? 1, fP: P.foilP ?? 1 }; };
     const draw = (d, s, night) => { const g = d.g, w = d.c.width, h = d.c.height, fg = night ? '#ff3b2f' : '#f4f6f7', dim = night ? '#a3261f' : '#8d969c', acc = night ? '#ff3b2f' : '#ff7a1a';
+      if (d.kind === 'mastcam') { cabCamOverlay(g, w, h, mcam.ir, night); d.t.needsUpdate = true; return; }
       g.fillStyle = night ? '#070000' : '#0d0f11'; g.fillRect(0, 0, w, h); g.textAlign = 'left'; g.textBaseline = 'alphabetic';
       if (d.kind.startsWith('big:')) { const k = d.kind.slice(4), v = k === 'BSP' ? s.bsp.toFixed(1) : k === 'TWS' ? s.tws.toFixed(1) : k === 'TWA' ? String(Math.round(Math.abs(s.twa))) + '°' : String(Math.round(s.hdg) % 360).padStart(3, '0');
         g.fillStyle = dim; g.font = 'bold 26px Arial'; g.fillText(k === 'BSP' ? T('VITESSE', 'SPEED') : k === 'TWS' ? T('VENT RÉEL', 'TRUE WIND') : k === 'TWA' ? T('ANGLE VENT', 'WIND ANGLE') : T('CAP', 'HEADING'), 12, 30);
@@ -2936,8 +2965,8 @@ const O50I = (() => {
         bar(80, T('VOL', 'LIFT'), s.lift / 1.2, Math.round(Math.min(1, s.lift / 1.2) * 100) + '%'); bar(150, T('GÎTE', 'HEEL'), Math.abs(s.heel) / 20, Math.round(Math.abs(s.heel)) + '°'); bar(220, T('FOIL SV', 'LEE FOIL'), s.twa >= 0 ? s.fP : s.fS, Math.round((s.twa >= 0 ? s.fP : s.fS) * 100) + '%'); }
       d.t.needsUpdate = true; };
     let acc = 1;
-    return { eye: () => new THREE.Vector3(EYE.x, EYE.y, EYE.z), wetHit() {},
-      update(dt, night, active) { acc += dt; if (!active || acc < 0.25) return; acc = 0; const s = data(); disp.forEach(d => draw(d, s, night)); },
+    return { mcam, eye: () => new THREE.Vector3(EYE.x, EYE.y, EYE.z), wetHit() {},
+      update(dt, night, active) { mcam.update(dt, active); amb.update(dt); acc += dt; if (!active || acc < 0.25) return; acc = 0; const s = data(); disp.forEach(d => draw(d, s, night)); },
       look(az) { seat.visible = Math.abs(az) < 100; },
       anim(dt, grind, ease) { const w = dt * (grind * 7 - ease * 4); rots.forEach((r, i) => r.rotation.y -= w * (i % 2 ? -1 : 1)); } };
   }
@@ -3218,7 +3247,7 @@ function updateSpray(rdt, sceneVx, sceneVz) {
    s = { bsp (nd), tws (nd), sea (0..1 état de mer), pitchV (vitesse de tangage, rad/s), grind (0..1 on borde au winch), ease (0..1 on choque) }
    Idée générale : à l'intérieur on n'entend presque plus le vent ; on entend la coque. L'eau gronde dans les fonds (grave, étouffé),
    le chuintement d'écume passe à travers le bordé, chaque vague qui tape résonne dans la structure carbone, le vérin du pilote
-   travaille sans arrêt, les appendices chantent au-delà de ~14 nd. Les chocs sont synthétisés par modes de résonance (panneaux carbone),
+   travaille sans arrêt, le vent apparent siffle dans les haubans et la toile frémit. Les chocs sont synthétisés par modes de résonance (panneaux carbone),
    jamais deux fois identiques : 5 familles (coup sec d'étrave, chute lourde, claque sur le flanc, double impact, choc qui fait vibrer la coque). */
 function cabAudio(ctx, out, rnd = Math.random) {
   const sr = ctx.sampleRate, T = () => ctx.currentTime;
@@ -3237,12 +3266,16 @@ function cabAudio(ctx, out, rnd = Math.random) {
   const wash = loop(white, 0.8, [filt('bandpass', 750, 0.6), filt('lowpass', 1400)], 0, 0.25);      // écoulement le long du bordé
   const fizz = loop(white, 1, [filt('highpass', 3200, 0.5), filt('lowpass', 6500)], 0, 0.1);       // écume, à travers la coque
   const windIn = loop(brown, 1.3, [filt('lowpass', 300, 0.5)], 0, 0.1);                             // vent sur la casquette, très étouffé
-  const whistle = loop(white, 1, [filt('bandpass', 1150, 18)], 0.2, 0.15);                         // gréement qui siffle au loin
-  // appendices qui chantent : sinusoïde instable + battement
-  const humG = ctx.createGain(); humG.gain.value = 0; const humBP = filt('bandpass', 400, 6); humBP.connect(humG); send(humG, 0, 0.4);
-  const h1 = ctx.createOscillator(), h2 = ctx.createOscillator(), h3 = ctx.createOscillator(), lfo = ctx.createOscillator(), lfoG = ctx.createGain(), h3g = ctx.createGain();
-  h1.type = h2.type = 'sine'; h3.type = 'triangle'; h3g.gain.value = 0.18; lfo.frequency.value = 0.31; lfoG.gain.value = 5; lfo.connect(lfoG); [h1, h2, h3].forEach(o => lfoG.connect(o.frequency));
-  h1.connect(humBP); h2.connect(humBP); h3.connect(h3g); h3g.connect(humBP); [h1, h2, h3, lfo].forEach(o => o.start());
+  // vent : souffle large qui entre par l'arrière ouvert + deux haubans qui sifflent (bandes étroites, la note glisse avec la rafale, sans battement)
+  const airL = loop(white, 1, [filt('highpass', 700, 0.5), filt('bandpass', 1900, 0.7)], -0.25, 0.2), airR = loop(white, 0.93, [filt('highpass', 700, 0.5), filt('bandpass', 2300, 0.7)], 0.25, 0.2);
+  const wh1 = loop(white, 1, [filt('bandpass', 820, 28), filt('bandpass', 820, 28)], -0.3, 0.2), wh2 = loop(white, 1.04, [filt('bandpass', 1310, 30), filt('bandpass', 1310, 30)], 0.35, 0.2);
+  // voile : chuintement de la toile sous le vent, et par épisodes la chute qui frémit (battement rapide, pas une ondulation lente)
+  const cloth = loop(brown, 1.6, [filt('bandpass', 520, 0.8), filt('lowpass', 1600)], 0.1, 0.3);
+  const flt = loop(white, 1, [filt('bandpass', 300, 1.1), filt('lowpass', 900)], 0.05, 0.35), fltAM = ctx.createGain(), fltO = ctx.createOscillator(), fltD = ctx.createGain();
+  fltAM.gain.value = 0.5; fltO.type = 'triangle'; fltO.frequency.value = 11; fltD.gain.value = 0.5; fltO.connect(fltD); fltD.connect(fltAM.gain); flt.f[1].disconnect(); flt.f[1].connect(fltAM); fltAM.connect(flt.g); fltO.start();
+  const snap = (a, t = T()) => { const s1 = ctx.createBufferSource(), f1 = filt('bandpass', 170 + rnd() * 80, 0.9), f2 = filt('lowpass', 900), g = ctx.createGain(); s1.buffer = brown; s1.connect(f1); f1.connect(f2); f2.connect(g);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(a, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0004, t + 0.16 + rnd() * 0.1); send(g, 0.1, 0.5); s1.start(t, rnd() * 3); s1.stop(t + 0.3);
+    const s2 = ctx.createBufferSource(), f3 = filt('bandpass', 1400, 0.8), g2 = ctx.createGain(); s2.buffer = white; s2.connect(f3); f3.connect(g2); g2.gain.setValueAtTime(a * 0.25, t); g2.gain.exponentialRampToValueAtTime(0.0004, t + 0.06); send(g2, 0.1, 0.4); s2.start(t, rnd() * 2); s2.stop(t + 0.1); };
   // ---------- winchs : engrenages du moulin qui ronronnent, cliquets (linguets) qui claquent, écoute qui file en choquant ----------
   const wG = ctx.createGain(); wG.gain.value = 0; const wLP = filt('bandpass', 420, 1.5), wO = ctx.createOscillator(), wO2 = ctx.createOscillator(), wO2g = ctx.createGain(); wO.type = 'sawtooth'; wO2.type = 'triangle';
   wO.frequency.value = 80; wO2.frequency.value = 560; wO2g.gain.value = 0.12; wO.connect(wLP); wO2.connect(wO2g); wO2g.connect(wLP); wLP.connect(wG); send(wG, 0.1, 0.3); wO.start(); wO2.start();
@@ -3253,33 +3286,42 @@ function cabAudio(ctx, out, rnd = Math.random) {
   // hydrogénérateurs (IMOCA) : sifflement tonal qui monte avec la vitesse
   const hyG = ctx.createGain(); hyG.gain.value = 0; const hy = ctx.createOscillator(), hy2 = ctx.createOscillator(), hyBP = filt('bandpass', 1000, 4); hy.type = 'sawtooth'; hy2.type = 'sine';
   hy.connect(hyBP); hy2.connect(hyBP); hyBP.connect(hyG); send(hyG, 0.4, 0.3); hy.start(); hy2.start();
-  const PROF = { c40: { hum: 1, rush: 1, res: 1, hydro: 0 }, imoca: { hum: 2.2, rush: 1.25, res: 0.82, hydro: 1 }, o50: { hum: 2.6, rush: 0.85, res: 1.25, hydro: 0 } }; let pf = PROF.c40; // o50 : coque plus légère qui claque plus clair, foils qui chantent
+  const PROF = { c40: { rush: 1, res: 1, hydro: 0 }, imoca: { rush: 1.25, res: 0.82, hydro: 1 }, o50: { rush: 0.85, res: 1.25, hydro: 0 } }; let pf = PROF.c40; // o50 : coque plus légère qui claque plus clair
   // ---------- état lent (houle, rafales) ----------
-  const st = { ph: 0, gust: 0, gv: 0, swell: 0, sv: 0, nextPilot: 0.8, pilotDir: 1, lvl: 1, lastKind: '', wph: 0 };
+  const st = { ph: 0, gust: 0, gv: 0, swell: 0, sv: 0, nextPilot: 0.8, pilotDir: 1, lvl: 1, lastKind: '', wph: 0, flu: 0, fluT: 4, fluF: 11, pg: 0 };
   const set = (p, v, tc = 0.08) => p.setTargetAtTime(v, T(), tc);
   const A = {
     profile(id) { pf = PROF[id] || PROF.c40; },
+    snap,
     level(v) { st.lvl = v; set(bus.gain, v, 0.3); set(wet.gain, 0.22 * v, 0.3); },
     update(dt, s) {
       const bsp = s.bsp || 0, tws = s.tws || 0, sea = s.sea ?? Math.min(1, tws / 35);
       // houle : passage des vagues le long de la coque (période ~ 3 à 6 s), plus un bruit lent
       st.ph += dt * 2 * Math.PI / (6 - 3 * sea); st.sv += (rnd() - 0.5) * dt * 3 - st.sv * dt * 0.8; st.swell = Math.max(-1, Math.min(1, st.swell + st.sv * dt));
-      const wave = 0.5 + 0.5 * Math.sin(st.ph) * (0.6 + 0.4 * sea) + 0.25 * st.swell + Math.min(0.6, Math.abs(s.pitchV || 0) * 1.5);
+      const wave = 0.5 + 0.3 * Math.sin(st.ph) * (0.4 + 0.6 * sea) + 0.25 * st.swell + Math.min(0.6, Math.abs(s.pitchV || 0) * 1.5);
       st.gv += (rnd() - 0.5) * dt * 4 - st.gv * dt * 1.2; st.gust = Math.max(-1, Math.min(1, st.gust + st.gv * dt));
       const v = Math.min(1.4, bsp / 16), bg = (s.bg ?? 1) * pf.rush;
-      set(rushL.g.gain, bg * (0.05 + 0.22 * v) * (0.55 + 0.6 * wave), 0.12); set(rushR.g.gain, bg * (0.05 + 0.22 * v) * (0.55 + 0.6 * (1 - wave * 0.6)), 0.12);
-      set(wash.g.gain, bg * (0.02 + 0.14 * v * v) * (0.4 + 0.9 * wave), 0.1); set(wash.f[0].frequency, 600 + 400 * v + 300 * wave, 0.2);
-      set(fizz.g.gain, bg * (0.012 + 0.05 * v * v * (0.3 + wave)), 0.1); set(wash.pan, Math.sin(st.ph * 0.5) * 0.4, 0.3);
-      const w = Math.max(0, tws * (1 + 0.25 * st.gust)) / 30;
-      set(windIn.g.gain, (s.bgw ?? bg) * 0.08 * w * w, 0.25); set(whistle.g.gain, Math.max(0, w - 0.6) * 0.035 * (0.6 + 0.4 * st.gust), 0.25); set(whistle.f[0].frequency, 1050 + 250 * w + 120 * st.gust, 0.3);
-      const hf = 230 + 15 * bsp, hk = Math.pow(Math.max(0, Math.min(1, (bsp - 13) / 9)), 1.5) * (0.75 + 0.25 * Math.sin(st.ph * 1.7));
-      set(h1.frequency, hf, 0.4); set(h2.frequency, hf + 1.6, 0.4); set(h3.frequency, hf * 2.01, 0.4); set(humBP.frequency, hf, 0.4); set(humG.gain, 0.09 * hk * pf.hum, 0.3); const hf2 = 700 + 32 * bsp; set(hy.frequency, hf2, 0.4); set(hy2.frequency, hf2 * 2, 0.4); set(hyBP.frequency, hf2, 0.4); set(hyG.gain, pf.hydro * 0.012 * Math.min(1, bsp / 12), 0.5);
+      const vr = Math.min(1, v); set(rushL.g.gain, bg * (0.05 + 0.2 * vr) * (0.7 + 0.35 * wave), 0.25); set(rushR.g.gain, bg * (0.05 + 0.2 * vr) * (0.7 + 0.35 * (1 - wave * 0.6)), 0.25);
+      // écoulement le long du bordé : régulier, il épaissit avec la vitesse ; seule une variation lente et irrégulière (pas de balayage périodique)
+      const irr = 0.85 + 0.2 * st.swell + 0.1 * st.gust; set(wash.g.gain, bg * (0.02 + 0.08 * Math.min(1, v) * Math.min(1, v)) * irr, 0.6); set(wash.f[0].frequency, 650 + 250 * Math.min(1, v), 1.5);
+      set(fizz.g.gain, bg * (0.012 + 0.035 * Math.min(1, v * v)) * irr, 0.6); set(wash.pan, 0.15 * st.swell, 1);
+      // vent apparent : c'est lui qu'on entend (au portant rapide il tombe, au près il monte)
+      const twa = (s.twa ?? 90) * Math.PI / 180, aws = Math.sqrt(Math.max(0, tws * tws + bsp * bsp + 2 * tws * bsp * Math.cos(twa))), w = Math.max(0, aws * (1 + 0.22 * st.gust)) / 30;
+      set(windIn.g.gain, (s.bgw ?? bg) * 0.08 * w * w, 0.25);
+      const air = 0.07 * w * w * (0.75 + 0.35 * st.gust); set(airL.g.gain, air, 0.3); set(airR.g.gain, air * 0.85, 0.3);
+      const wk = Math.pow(Math.max(0, Math.min(1, (aws - 16) / 20)), 1.3); set(wh1.g.gain, 1.3 * wk * (0.55 + 0.45 * Math.max(0, st.gust + 0.3)), 0.6); set(wh2.g.gain, 0.8 * wk * (0.5 + 0.5 * Math.max(0, st.gust)), 0.8);
+      const wf = 1 + 0.06 * w + 0.03 * st.gust; set(wh1.f[0].frequency, 820 * wf, 0.8); set(wh1.f[1].frequency, 820 * wf, 0.8); set(wh2.f[0].frequency, 1310 * wf, 0.9); set(wh2.f[1].frequency, 1310 * wf, 0.9);
+      set(cloth.g.gain, 0.16 * w * (0.6 + 0.4 * Math.abs(st.gust)), 0.3);
+      // chute qui frémit : épisodes de 1 à 3 s, plus fréquents dans les rafales ; la toile reclaque quand la rafale retombe
+      st.fluT -= dt * (0.6 + 1.5 * Math.max(0, st.gust)); if (st.fluT <= 0 && st.flu <= 0 && aws > 9) { st.flu = 1 + rnd() * 2; st.fluF = 9 + rnd() * 6; st.fluT = 5 + rnd() * 9; set(fltO.frequency, st.fluF, 0.05); }
+      st.flu -= dt; set(flt.g.gain, st.flu > 0 ? 0.45 * Math.min(1, w) * Math.min(1, st.flu * 2) : 0, st.flu > 0 ? 0.15 : 0.25);
+      if (st.pg > 0.35 && st.gust < 0.05 && aws > 10) { snap(0.4 * Math.min(1.2, w)); st.pg = st.gust; } else st.pg = Math.max(st.pg * (1 - dt * 0.2), st.gust);
+      const hf2 = 700 + 32 * bsp; set(hy.frequency, hf2, 0.4); set(hy2.frequency, hf2 * 2, 0.4); set(hyBP.frequency, hf2, 0.4); set(hyG.gain, pf.hydro * 0.012 * Math.min(1, bsp / 12), 0.5);
       // winchs : la vitesse de la manivelle (≈ 1,5 tr/s à fond) fait le régime des engrenages et la cadence des cliquets
       const gr = Math.max(0, Math.min(1, s.grind || 0)), ez = Math.max(0, Math.min(1, s.ease || 0));
       set(wG.gain, 0.02 * Math.pow(gr, 0.7), 0.06); set(wO.frequency, 55 + 70 * gr, 0.1); set(wO2.frequency, 380 + 420 * gr, 0.1); set(zip.g.gain, 0.09 * ez, 0.05); set(zip.f[0].frequency, 1100 + 900 * ez, 0.1);
       st.wph += dt * gr * 24; while (st.wph >= 1) { st.wph -= 1; pawl(T() + rnd() * dt); }
-      // événements spontanés : craquements de structure, corrections du pilote
-      if (s.autoPilot !== false) { st.nextPilot -= dt * (0.5 + 1.0 * sea); if (st.nextPilot <= 0) { A.pilot(0.25 + rnd() * (0.4 + 0.9 * sea), st.pilotDir); st.pilotDir *= -1; st.nextPilot = 1.5 + rnd() * 3.5; } }
+            // vérin de barre : il ne travaille que quand le cap change (pilote ou skipper) — déclenché par le jeu via A.pilot()
     },
     // ---------- vague qui tape ----------
     // Briques : bruit filtré (claque d'eau, coup sourd) + modes de résonance (sinusoïdes amorties, fréquences inharmoniques d'un panneau
@@ -3340,6 +3382,8 @@ function cabAudio(ctx, out, rnd = Math.random) {
         case 'grib': chime(t, 659, 0.06, 0.35); chime(t + 0.13, 784, 0.06, 0.35); chime(t + 0.26, 1047, 0.07, 0.6); break;      // fichiers météo reçus
         case 'routerWarn': for (let i = 0; i < 2; i++) { chime(t + i * 0.5, 1175, 0.1, 0.35); chime(t + i * 0.5 + 0.16, 1175, 0.1, 0.35); } break; // routage : alerte (virement conseillé, route impossible)
         case 'ais': for (let i = 0; i < 5; i++) tone(t + i * 0.11, 0.055, 4000, 0.05, 'square', 4000, -0.3); break;             // cible AIS en approche
+        case 'pilotOn': tone(t, 0.07, 1500, 0.08, 'square', 1500, 0.15); tone(t + 0.1, 0.07, 2000, 0.08, 'square', 2000, 0.15); tone(t + 0.2, 0.12, 2650, 0.08, 'square', 2650, 0.15); break;   // pilote engagé : trois notes qui montent
+        case 'pilotOff': tone(t, 0.12, 2650, 0.09, 'square', 2650, 0.15); tone(t + 0.16, 0.12, 1500, 0.09, 'square', 1500, 0.15); tone(t + 0.4, 0.5, 1500, 0.07, 'square', 1500, 0.15); break; // pilote en veille : descend + note tenue
         case 'oscar': tone(t, 0.16, 1200, 0.06, 'sine', 2400, 0.3, 8000); tone(t + 0.22, 0.16, 1200, 0.06, 'sine', 2400, 0.3, 8000); break; // OSCAR : objet détecté
         case 'msg': { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(1250, t + 0.07);
           g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.08, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0003, t + 0.18); o.connect(g); send(g, 0.3, 0.3); o.start(t); o.stop(t + 0.2); break; } // message satellite reçu
@@ -3350,6 +3394,55 @@ function cabAudio(ctx, out, rnd = Math.random) {
   return A;
 }
 const cabOn = () => cam.mode === 'cabin' && !!(player && player.vis && player.vis.cab) && !(MENU_CINE && !$('overlay').classList.contains('hide'));
+/* ===== Cabine : commun (caméra de mât avec mode infrarouge, éclairage d'ambiance de nuit) ===== */
+// couleur d'ambiance choisie dans Réglages (bleu par défaut) ; 'off' = éteint
+const CABL = { blue: 0x2f6bff, red: 0xff2a10, green: 0x22d870, white: 0xffe8cc, off: 0 };
+const cabLightHex = () => CABL[SETTINGS.cabLight] ?? CABL.blue;
+// éclairage d'ambiance : une ou deux petites lampes sous le toit + rubans LED (meshes) qui prennent la couleur choisie ; s'allume à la tombée de la nuit.
+// La lampe reste dans la scène de jour (intensité 0) pour ne jamais recompiler les shaders à la bascule.
+function cabAmbient(parent, lamps, strips) {
+  const L = lamps.map(([x, y, z, k = 1, d = 3.2]) => { const l = new THREE.PointLight(0xffffff, 0, d, 1.6); l.position.set(x, y, z); l.userData.k = k; parent.add(l); return l; });
+  const sm = new THREE.MeshBasicMaterial({ color: 0x000000, toneMapped: false }); (strips || []).forEach(([w, h, d, x, y, z, rx = 0, ry = 0, rz = 0]) => { const s = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), sm); s.position.set(x, y, z); s.rotation.set(rx, ry, rz); s.userData.noMerge = true; parent.add(s); });
+  const c = new THREE.Color(); let k = 0;
+  return { update(dt) { const hex = cabLightHex(), tgt = hex ? Math.max(0, Math.min(1, ((ENV.night || 0) - 0.25) / 0.45)) : 0; k += (tgt - k) * Math.min(1, dt * 1.5); c.setHex(hex || 0xffffff);
+    L.forEach(l => { l.color.copy(c); l.intensity = 2.6 * k * l.userData.k; }); sm.color.copy(c).multiplyScalar(0.12 + 0.9 * k * (hex ? 1 : 0)); if (!hex) sm.color.setHex(0x080808); } };
+}
+// caméra en tête de mât (mi-hauteur) qui filme la proue et le plan d'eau devant ; image rendue ~10 fois par seconde dans une cible HDR,
+// affichée telle quelle de jour, en infrarouge de nuit (luminance fortement amplifiée, niveaux de gris « blanc chaud », grain du capteur)
+function cabMastCam(root, hide, mastPt, tilt = -0.6, fov = 80) {
+  const rt = new THREE.WebGLRenderTarget(400, 256, { type: THREE.HalfFloatType }), cam = new THREE.PerspectiveCamera(fov, 400 / 256, 0.3, 80000);
+  const U = { map: { value: rt.texture }, uIR: { value: 0 }, uGain: { value: 30 }, uT: { value: 0 } };
+  const mat = new THREE.ShaderMaterial({ uniforms: U, toneMapped: true,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D map; uniform float uIR, uGain, uT; varying vec2 vUv;
+      float hh(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+      void main(){ vec3 c = texture2D(map, vUv).rgb;
+        if (uIR > 0.5) { float l = dot(c, vec3(0.3, 0.59, 0.11)); float v = 1.0 - exp(-l * uGain); v = pow(v, 0.75);
+          vec2 px = floor(vUv * vec2(400.0, 256.0)); v += (hh(px + uT) - 0.5) * 0.09; v += (hh(vec2(px.y, uT)) - 0.5) * 0.025; vec2 q = vUv - 0.5; v *= 1.0 - dot(q, q) * 0.8;
+          gl_FragColor = vec4(pow(clamp(v, 0.0, 1.0) * vec3(0.93, 1.0, 0.96), vec3(2.2)), 1.0); }
+        else { gl_FragColor = vec4(c, 1.0);
+          #include <tonemapping_fragment>
+        }
+        #include <colorspace_fragment>
+      }` });
+  const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler(); let acc = 1, ir = 0;
+  return { mat, rt, gl: () => renderer, hf: v => THREE.DataUtils.fromHalfFloat(v), get ir() { return ir; },
+    update(dt, active) { acc += dt; U.uT.value = (U.uT.value + dt * 37) % 1000; ir = (ENV.night || 0) > 0.45 ? 1 : 0; U.uIR.value = ir; U.uGain.value = 18 + 70 * Math.max(0, (ENV.night || 0) - 0.45);
+      if (!active || acc < 0.1 || typeof renderer === 'undefined') return; acc = 0; root.updateMatrixWorld(); const mp = typeof mastPt === 'function' ? mastPt() : mastPt; cam.position.set(mp[0], mp[1], mp[2]).applyMatrix4(root.matrixWorld);
+      cam.quaternion.copy(root.getWorldQuaternion(_q)).multiply(_q2.setFromEuler(_e.set(tilt, mp[3] || 0, 0, 'YXZ'))); cam.updateMatrixWorld();
+      const t0 = renderer.getRenderTarget(), cOn = SKYC.uCOn.value, vis = hide.map(o => o.visible); SKYC.uCOn.value = 0; hide.forEach(o => o.visible = false);
+      renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(t0); SKYC.uCOn.value = cOn; hide.forEach((o, i) => o.visible = vis[i]); } };
+}
+// côté au vent dans le repère du bateau (x tribord) : la caméra s'y décale et regarde un peu dehors, pour que la voile d'avant (sous le vent) masque moins la vue
+const cabWindSide = () => { const P = player; return ((((P.twd || 0) - (P.dispHdg || 0)) % 360 + 540) % 360 - 180) >= 0 ? -1 : 1; };
+// bandeau dessiné par-dessus l'image de la caméra
+function cabCamOverlay(g, w, h, ir, night) {
+  g.clearRect(0, 0, w, h); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(0, 0, w, 26); g.fillStyle = night ? '#ff4433' : '#eaf6ff'; g.font = 'bold 15px Arial'; g.textAlign = 'left';
+  g.fillText(T('CAM MÂT · AVANT', 'MAST CAM · FORWARD') + (ir ? ' · IR' : ''), 8, 18); g.textAlign = 'right'; g.fillStyle = (Date.now() / 600 | 0) % 2 ? '#ff3b2f' : 'rgba(255,59,47,0.35)'; g.fillText('● REC', w - 8, 18);
+  g.strokeStyle = ir ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.35)'; g.lineWidth = 1.5; g.strokeRect(w / 2 - 26, h / 2 - 16, 52, 32); g.textAlign = 'left';
+  if (ir) { g.fillStyle = 'rgba(255,255,255,0.75)'; g.font = 'bold 12px Arial'; g.fillText('IR · WHITE HOT', 8, h - 8); }
+}
+/* ===== fin cabine commun */
 // travail aux winchs (pour l'animation et le son en cabine) : on borde quand le réglage d'écoute diminue, on choque quand il augmente ;
 // virements / empannages : on choque l'ancienne écoute puis on borde la nouvelle ; changements de voile et ris : drisse au moulin
 const SW = { g: 0, e: 0, pt: null };
@@ -3361,13 +3454,19 @@ function sheetWork(rdt) { const P = player; if (!P) return SW; const tr = P.trim
 const CAL = { t: {} };
 function cabAlert(kind) { if (AUD.cab && AUD.on && cabOn()) AUD.cab.beep(kind); }
 function cabAlerts(rdt) { const P = player, c = CAL, now = realT; if (!P) return;
-  const sig = [P.mode, Math.round(P.lockTwa || 0), Math.round(P.hdg || 0), P.sail, P.reef, P.autoSail, P.autoTrim, P.autoFoil].join('|'); if (c.sig != null && sig !== c.sig) cabAlert('key'); c.sig = sig;
+  // pilote : engagé en mode vent (TWA) ou cap, pilote routeur enclenché / désenclenché
+  const fo = !!ROUTE.follow; if (c.fo != null && fo !== c.fo) { cabAlert(fo ? 'pilotOn' : 'pilotOff'); c.sig = null; } c.fo = fo;
+  if (c.mode != null && P.mode !== c.mode) { cabAlert(P.mode === 'twa' ? 'pilotOn' : 'pilot'); c.sig = null; } c.mode = P.mode;
+  const sig = [Math.round(P.lockTwa || 0), Math.round(P.hdg || 0), P.sail, P.reef, P.autoSail, P.autoTrim, P.autoFoil].join('|'); if (c.sig != null && sig !== c.sig) cabAlert('key'); c.sig = sig;
   const man = P.man ? P.man.type + (P.man.label || '') : ''; if (man && man !== c.man) cabAlert('pilot'); c.man = man;
   if (c.twd == null) { c.twd = P.twd || 0; c.tws = P.tws || 0; }
   const dd = Math.abs(norm180((P.twd || 0) - c.twd)), ds = (P.tws || 0) - c.tws;
   if ((dd > 12 || ds > 5) && now > (c.t.alarm || 0)) { cabAlert('alarm'); c.t.alarm = now + 60; c.twd = P.twd || 0; c.tws = P.tws || 0; }
   const k = Math.min(1, rdt / 40); c.twd += norm180((P.twd || 0) - c.twd) * k; c.tws += ((P.tws || 0) - c.tws) * k;
   const amb = (key, lo, hi, kind, cond = true) => { if (c.t[key] == null) c.t[key] = now + lo * (0.3 + Math.random()); if (now > c.t[key]) { if (cond) cabAlert(kind); c.t[key] = now + lo + Math.random() * (hi - lo); } };
+  // vérin de barre : ne tourne que quand le cap change (corrections du pilote en mode vent, ordres du skipper, manœuvres) ; durée selon l'écart à rattraper
+  const hd = P.dispHdg ?? P.hdg ?? 0; if (c.hd == null) c.hd = hd; const dh = norm180(hd - c.hd); c.hd = hd; c.dh = (c.dh || 0) + dh;
+  if (Math.abs(c.dh) > 0.35 && now > (c.ram || 0) && AUD.cab && AUD.on && cabOn()) { const len = clamp(0.18 + Math.abs(c.dh) * 0.09, 0.18, 1.4); AUD.cab.pilot(len, Math.sign(c.dh)); c.ram = now + len + 0.12; c.dh = 0; }
   amb('ais', 70, 200, 'ais'); amb('msg', 90, 260, 'msg'); amb('grib', 150, 400, 'grib'); amb('power', 300, 700, 'power'); }
 function cabImpact(p) { const V = player && player.vis; if (!V || !V.cab || !cabOn()) return; V.cab.wetHit(p * 0.6); if (AUD.cab && AUD.on) AUD.cab.slam(Math.min(1.3, p)); }
 
@@ -3453,7 +3552,7 @@ function updateAudio(rdt) {
   // vue cabine : l'extérieur est étouffé par le rouf, l'ambiance intérieure prend le relais
   const cin = cabOn() ? 1 : 0; AUD.master.gain.setTargetAtTime(cin ? 0.32 : 1, t, 0.25); AUD.extF.frequency.setTargetAtTime(cin ? 750 : 20000, t, 0.25);
   if (AUD.cab) { if (AUD.cabCls !== CLS.id) { AUD.cab.profile(CLS.id); AUD.cabCls = CLS.id; } if (cin !== AUD.cabWas) { AUD.cab.level(cin * live); AUD.cabWas = cin; } if (cin) { const rx = P.vis ? P.vis.root.rotation.x : 0, pv = (rx - (AUD.prx ?? rx)) / Math.max(rdt, 1e-3); AUD.prx = rx;
-    AUD.cab.update(rdt, { bsp: P.dspd || P.spd || 0, tws: P.tws || 0, sea: clamp((seaAmp + swellAmp * 0.5) / 1.6, 0, 1), rain: ENV.rain || 0, pitchV: pv, autoPilot: running && !paused, grind: SW.g, ease: SW.e }); } cabAlerts(rdt); }
+    AUD.cab.update(rdt, { bsp: P.dspd || P.spd || 0, tws: P.tws || 0, sea: clamp((seaAmp + swellAmp * 0.5) / 1.6, 0, 1), rain: ENV.rain || 0, pitchV: pv, autoPilot: running && !paused, grind: SW.g, ease: SW.e, twa: norm180((P.twd || 0) - (P.hdg || 0)) }); } cabAlerts(rdt); }
   const a = Math.abs(P.twa || 0) * D2R, tws = P.tws || 0, aws = Math.sqrt(tws * tws + P.spd * P.spd + 2 * tws * P.spd * Math.cos(a)), near = 1 - clamp(cam.dist / 500, 0, 0.75);
   AUD.wind.fl.frequency.setTargetAtTime(220 + aws * 22, t, 0.5);
   AUD.whistle.gn.gain.setTargetAtTime(smooth(20, 40, aws) * 0.1 * live, t, 0.5); AUD.whistle.fl.frequency.setTargetAtTime(1400 + aws * 22, t, 0.6);
@@ -5069,6 +5168,7 @@ function showMenu(view = 'home') {
     <div class="setrow"><div><b>${T('Halo des bouées', 'Mark halos')}</b><small>${T('Disque lumineux sur la zone de validation de chaque marque.', 'Glowing disc over each mark\'s rounding zone.')}</small></div>${seg('halo', [[true, T('Oui', 'On')], [false, T('Non', 'Off')]])}</div>
     <div class="setrow"><div><b>${T('Hauts-fonds', 'Shallows')}</b><small>${T('Eau turquoise et ressac près des côtes, alerte « terre devant ».', 'Turquoise water and surf near coasts, “land ahead” warning.')}</small></div>${seg('shore', [[true, T('Oui', 'On')], [false, T('Non', 'Off')]])}</div>
     <div class="setrow"><div><b>${T('Interface', 'Layout')}</b></div><div class="seg"><button id="mobToggle" class="${isMobile() ? 'on' : ''}">📱 ${T('Téléphone', 'Phone')}</button></div></div>
+    <div class="setrow"><div><b>${T('Lumière de cabine', 'Cabin light')}</b><small>${T('Éclairage d’ambiance de la vue Cabine, la nuit. Le rouge préserve la vision nocturne.', 'Ambient lighting in the Cabin view at night. Red preserves night vision.')}</small></div>${seg('cabLight', [['blue', T('Bleu', 'Blue')], ['red', T('Rouge', 'Red')], ['green', T('Vert', 'Green')], ['white', T('Blanc', 'White')], ['off', T('Éteinte', 'Off')]])}</div>
     <div class="setrow"><div><b>${T('Son', 'Sound')}</b></div><div class="seg"><button id="sndToggle" class="${AUD.on ? 'on' : ''}">🔊 ${AUD.on ? T('Activé', 'On') : T('Coupé', 'Off')}</button></div></div>
     <h3>🌐 ${T('Profil en ligne', 'Online profile')}</h3>${recoveryBlock()}${FOOT}`; }
   else { html += `${BACK}<h3>🧭 Solo</h3>${clsPick(DAILY_CLASSES)}
@@ -5629,6 +5729,7 @@ function rel(lat, lon) { return [(lon - player.lon) * 60 * NM * refCos, -(lat - 
 const HEAD_KEYS = ['foc', 'gen', 'spi'];
 function updateHeads(b, v, cd, SD, tr, side, flutter, seed, rdt, fx) {
   const cur = svi(b), A = v.sa || (v.sa = { from: cur, to: cur, q: 1, man: null, stowed: [] }), furl = !!cd.furlers;
+  if (A.sd !== SD) { A.sd = SD; A.stowed = []; } // plan de voilure changé (modèle 3D chargé après coup) : les voiles enroulées se recalent sur leurs nouveaux étais
   if (b.man && b.man.type === 'sail' && b.man !== A.man) { A.man = b.man; A.from = sailOf(b, b.man.fromSail).vi; A.to = sailOf(b, b.man.toSail).vi; A.q = 0; A.T = clamp(b.man.dur / Math.max(1, accel), 3.5, 10); }
   if (A.q < 1) A.q = Math.min(1, A.q + rdt / A.T); else A.from = A.to = cur;
   let clew = null;
