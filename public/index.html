@@ -1897,7 +1897,42 @@ function windowsGeo() { // hublots du rouf (bande sombre sur les côtés et deva
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g;
 }
 // livrée de coque (motif original) : bande courbe, filet blanc, numéro à l'avant
-function hullTexture(hull, accent, num, mirror, res) {
+/* ===== Livrée du joueur : traits dessinés à la main sur la bande de coque (pas d'import d'image) ===== */
+const LIV_KEY = 'gl3d_livery', LIV_W = 1024, LIV_H = 128, LIV_CLASSES = ['imoca', 'o50', 'c40', 'mini'];
+let LIV = {}; try { LIV = JSON.parse(localStorage.getItem(LIV_KEY) || '{}') || {}; } catch (e) { LIV = {}; }
+let PORT_BUILD = false; const PORT_DIRTY = new Set(); // port : visuels à refaire (livrée changée)
+const LTEX = {}, playerHull = () => BOAT_DEFS.find(d => d.player).hull;
+const hexOf = n => '#' + n.toString(16).padStart(6, '0');
+function liveryStroke(g, s) { // s = { c, w (fraction de la hauteur), p: [[x, y] en fractions] }
+  const W = g.canvas.width, H = g.canvas.height, r = s.w * H / 2; g.strokeStyle = g.fillStyle = s.c; g.lineWidth = s.w * H; g.lineCap = g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(s.p[0][0] * W, s.p[0][1] * H);
+  if (s.p.length < 2) { g.arc(s.p[0][0] * W, s.p[0][1] * H, r, 0, Math.PI * 2); g.fill(); return; }
+  s.p.forEach(q => g.lineTo(q[0] * W, q[1] * H)); g.stroke();
+}
+function liveryPaint(g, cls) { // fond = couleur de coque du joueur, puis les traits de la classe
+  g.fillStyle = hexOf(playerHull()); g.fillRect(0, 0, g.canvas.width, g.canvas.height);
+  (LIV[cls] || []).forEach(s => liveryStroke(g, s));
+}
+function liveryRefresh(cls) { // met à jour la texture partagée déjà posée sur les bateaux
+  if (LTEX[cls]) { liveryPaint(LTEX[cls].c.getContext('2d'), cls); LTEX[cls].t.needsUpdate = true; }
+}
+function liveryTex(cls) {
+  if (!LTEX[cls]) { const c = document.createElement('canvas'); c.width = LIV_W; c.height = LIV_H; LTEX[cls] = { c, t: new THREE.CanvasTexture(c) }; LTEX[cls].t.anisotropy = 4; }
+  liveryRefresh(cls); return LTEX[cls].t;
+}
+const LHM = {}, LGEO = new WeakMap();
+function liveryHullMat(cls) { // matériau de coque avec la livrée (la couleur passe dans la texture)
+  if (!LHM[cls]) LHM[cls] = new THREE.MeshStandardMaterial({ map: liveryTex(cls), color: 0xffffff, roughness: 0.3, metalness: 0.2, side: THREE.DoubleSide });
+  return LHM[cls];
+}
+function liveryGeo(geo) { // projection de profil : u = longueur, v = hauteur (même image des deux bords)
+  if (LGEO.has(geo)) return LGEO.get(geo);
+  const g = geo.clone(), P = g.attributes.position, b = new THREE.Box3().setFromBufferAttribute(P), sz = b.getSize(new THREE.Vector3()), uv = new Float32Array(P.count * 2);
+  for (let i = 0; i < P.count; i++) { uv[2 * i] = (P.getZ(i) - b.min.z) / (sz.z || 1); uv[2 * i + 1] = (P.getY(i) - b.min.y) / (sz.y || 1); }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); LGEO.set(geo, g); return g;
+}
+function hullTexture(hull, accent, num, mirror, res, lv) {
+  if (lv && (LIV[lv] || []).length) return liveryTex(lv);
   const c = document.createElement('canvas'); c.width = res; c.height = res / 8; const g = c.getContext('2d'), W = c.width, H = c.height, hex = n => '#' + n.toString(16).padStart(6, '0');
   g.fillStyle = hex(hull); g.fillRect(0, 0, W, H);
   g.fillStyle = hex(accent); g.beginPath(); g.moveTo(0, H * 0.75); g.bezierCurveTo(W * 0.3, H * 0.95, W * 0.45, H * 0.2, W * 0.78, H * 0.35); g.lineTo(W * 0.78, H * 0.6); g.bezierCurveTo(W * 0.5, H * 0.5, W * 0.3, H * 1.05, 0, H); g.fill();
@@ -2103,10 +2138,10 @@ function applyImocaModel2(V, M) {
   }
   V.keel.position.set(...meta.keelPivot); V.boomPivot.position.set(...meta.boomPivot); V.boomPivot.children.forEach(c => { if (!c.userData.m2) c.visible = false; });
   const par = { static: V.root, mast: V.m2.inner, rig: V.m2.rig, boom: V.boomPivot, keel: V.keel };
-  const matOf = k => k === 'hull' ? V.mats.hullMat : k === 'acc' || k === 'foil' ? V.mats.accMat : C[k] || C.vcol;
+  const LIVE = (V.isPlayer || V.port || PORT_BUILD) && (LIV.imoca || []).length > 0, matOf = k => k === 'hull' ? (LIVE ? liveryHullMat('imoca') : V.mats.hullMat) : k === 'acc' || k === 'foil' ? V.mats.accMat : C[k] || C.vcol;
   for (const p of M.parts) {
     if (p.grp === 'foil') { [V.foilS, V.foilP].forEach(g => { const m = new THREE.Mesh(p.geo, matOf('foil')); g.add(m); list.push(m); }); continue; }
-    const m = new THREE.Mesh(p.geo, matOf(p.mat)); m.userData.m2 = true; (par[p.grp] || V.root).add(m); list.push(m);
+    const m = new THREE.Mesh(LIVE && p.mat === 'hull' ? liveryGeo(p.geo) : p.geo, matOf(p.mat)); m.userData.m2 = true; (par[p.grp] || V.root).add(m); list.push(m);
   }
   V.foilPos = [0, 0, 0, 1.5, 1.1];
   if (V.navSp) IMOCA_NAV.forEach((q, i) => V.navSp[i] && V.navSp[i].position.set(...q));
@@ -2648,9 +2683,9 @@ function loadSmallModels(kind) { if (!SMALL_MODEL[kind]) return;
 function applySmallModel(V) {
   const S = SMALL_MODEL[V.kind]; if (!S) return; const M = (V.isPlayer && GFX.level !== 'low' ? S.hi : S.lo) || S.hi || S.lo; if (!M || V.stl === M) return;
   unmergeStatic(V); if (V.stlMeshes) V.stlMeshes.forEach(m => m.parent && m.parent.remove(m));
-  V.param.forEach(o => o.visible = false); const C = imocaMats(M), list = [], matOf = k => k === 'hull' ? V.mats.hullMat : k === 'acc' ? V.mats.accMat : C[k] || C.vcol; if (V.kind === 'c40') C40I.mats(M, C);
+  V.param.forEach(o => o.visible = false); const C = imocaMats(M), list = [], LIVE = (V.isPlayer || V.port || PORT_BUILD) && (LIV[V.kind] || []).length > 0, matOf = k => k === 'hull' ? (LIVE ? liveryHullMat(V.kind) : V.mats.hullMat) : k === 'acc' ? V.mats.accMat : C[k] || C.vcol; if (V.kind === 'c40') C40I.mats(M, C);
   V.keel.position.set(...M.meta.keelPivot);
-  for (const p of M.parts) { const m = new THREE.Mesh(p.geo, matOf(p.mat)); (p.grp === 'keel' ? V.keel : V.root).add(m); list.push(m); }
+  for (const p of M.parts) { const m = new THREE.Mesh(LIVE && p.mat === 'hull' ? liveryGeo(p.geo) : p.geo, matOf(p.mat)); (p.grp === 'keel' ? V.keel : V.root).add(m); list.push(m); }
   if (V.isPlayer) list.forEach(o => { o.castShadow = true; o.receiveShadow = true; });
   if (V.ghost) list.forEach(o => { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.3; o.material.depthWrite = false; });
   if (V.kind === 'c40' && !V.ghost) { C40I.attach(V, M); V.cabEye = C40I.EYE; }
@@ -2668,7 +2703,7 @@ function makeBoat(hull, accent, name, isPlayer) {
   const res = isPlayer ? 512 : 256, num = String(isPlayer ? 29 : (hull % 89) + 10);
   const hullMat = new THREE.MeshStandardMaterial({ color: hull, roughness: 0.28, metalness: 0.25, side: THREE.DoubleSide });
   const accMat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.35, side: THREE.DoubleSide });
-  const liv = m => new THREE.MeshStandardMaterial({ map: hullTexture(hull, accent, num, m, isPlayer ? 1024 : 512), roughness: 0.25, metalness: 0.2, side: THREE.DoubleSide });
+  const liv = m => new THREE.MeshStandardMaterial({ map: hullTexture(hull, accent, num, m, isPlayer ? 1024 : 512, (isPlayer || PORT_BUILD) ? 'imoca' : null), roughness: 0.25, metalness: 0.2, side: THREE.DoubleSide });
   const param = [], add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); root.add(m); param.push(m); return m; };
   const livS = liv(false), livP = liv(true);
   add(HULL.deck, MAT.deck); add(HULL.topS, livS); add(HULL.topP, livP); add(HULL.strS, accMat); add(HULL.strP, accMat); add(HULL.bottom, MAT.bottom); add(HULL.ends, hullMat);
@@ -2760,7 +2795,7 @@ function makeMini(hull, accent, name, isPlayer, proto, c40) {
   const K = MINI_KIT, root = new THREE.Group(); root.rotation.order = 'YXZ';
   const res = isPlayer ? 512 : 256, num = String(c40 ? (isPlayer ? 229 : 150 + (hull % 140)) : isPlayer ? (proto ? 1129 : 1029) : (proto ? 1000 : 800) + (hull % 190));
   const accMat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.35, side: THREE.DoubleSide }), hullMat = new THREE.MeshStandardMaterial({ color: hull, roughness: 0.3, metalness: 0.2, side: THREE.DoubleSide });
-  const liv = m => new THREE.MeshStandardMaterial({ map: hullTexture(hull, accent, num, m, isPlayer ? 1024 : 512), roughness: 0.28, metalness: 0.15, side: THREE.DoubleSide });
+  const liv = m => new THREE.MeshStandardMaterial({ map: hullTexture(hull, accent, num, m, isPlayer ? 1024 : 512, (isPlayer || PORT_BUILD) ? (c40 ? 'c40' : 'mini') : null), roughness: 0.28, metalness: 0.15, side: THREE.DoubleSide });
   const param = [], add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); root.add(m); return m; }, addP = (...a) => { const m = add(...a); param.push(m); return m; };
   const H = K.HULL; addP(H.deck, MAT.deck); addP(H.topS, liv(false)); addP(H.topP, liv(true)); addP(H.strS, accMat); addP(H.strP, accMat); addP(H.bottom, MAT.bottom); addP(H.ends, hullMat);
   addP(K.COACH, MAT.roof); addP(K.WIN, MAT.glass);
@@ -3015,7 +3050,7 @@ function makeTri(hull, accent, name, isPlayer) {
   const K = o50Kit(), root = new THREE.Group(); root.rotation.order = 'YXZ'; if (!K.__o50i) { O50I.patchKit(K); O50I.domeMat(O50_DOME); K.__o50i = 1; }
   const res = isPlayer ? 512 : 256, num = String(isPlayer ? 50 : 10 + (hull % 40));
   const accMat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.35, side: THREE.DoubleSide }), hullMat = new THREE.MeshStandardMaterial({ color: hull, roughness: 0.28, metalness: 0.22, side: THREE.DoubleSide });
-  const liv = m => new THREE.MeshStandardMaterial({ map: hullTexture(hull, accent, num, m, isPlayer ? 1024 : 512), roughness: 0.25, metalness: 0.18, side: THREE.DoubleSide });
+  const liv = m => new THREE.MeshStandardMaterial({ map: hullTexture(hull, accent, num, m, isPlayer ? 1024 : 512, (isPlayer || PORT_BUILD) ? 'o50' : null), roughness: 0.25, metalness: 0.18, side: THREE.DoubleSide });
   const livS = liv(false), livP = liv(true), param = [];
   const add = (geo, mat, x = 0, y = 0, z = 0, par = root) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); par.add(m); param.push(m); return m; };
   const H = K.HM; add(H.deck, hullMat); add(H.topS, livS); add(H.topP, livP); add(H.strS, accMat); add(H.strP, accMat); add(H.bottom, MAT.bottom); add(H.ends, hullMat);
@@ -5124,8 +5159,54 @@ let SOLO_TAB = 'ocean', REG_F = 'all';
 const sailLabels = () => { try { [msailBtns, sailBtns].forEach(L => L.forEach((b, i) => { b.firstChild.nodeValue = sailNm(i); b.title = `${sailNm(i)} (${i + 1}) — ${T(SAILS[i].d, SAILS[i].de)}`; b.style.borderBottomColor = SAILS[i].ui; })); } catch (e) {} };
 function refreshSailBtns() { sailLabels(); }
 function setLang(l) { LANG = l === 'en' ? 'en' : 'fr'; SETTINGS.lang = LANG; saveSettings(); applyStaticLang(); sailLabels(); if (MODE === 'race') buildMarkVis(); document.documentElement.lang = LANG; }
+/* ===== Éditeur de livrée (menu « Livrée ») ===== */
+let LIV_SEL = 'imoca', LIV_COL = '#ffffff', LIV_BRUSH = 0.09;
+const LIV_PAL = ['#ffffff', '#111418', '#d62839', '#f4a261', '#ffd60a', '#2a9d8f', '#1d3557', '#4ea8de', '#8ac926', '#8e44ad'];
+const LIV_BRUSHES = [['S', 0.04], ['M', 0.09], ['L', 0.16]];
+function livSave() {
+  try { localStorage.setItem(LIV_KEY, JSON.stringify(LIV)); } catch (e) { /* stockage plein : le dessin reste pour la session */ }
+  PORT_DIRTY.add(LIV_SEL); if (CLS.id === LIV_SEL) PORT_DIRTY.add('player');
+}
+function livartView() {
+  const T_ = (fr, en) => T(fr, en);
+  return `<h3>🎨 ${T_('Livrée', 'Livery')}</h3>
+    <p>${T_('Dessine la livrée de ton bateau à main levée : seulement tes traits, pas d’import d’image. Chaque trait est enregistré tout de suite et apparaît sur le bateau du port et en course.', 'Draw your boat’s livery freehand: only your own strokes, no image import. Each stroke is saved right away and shows on the port boat and in races.')}</p>
+    <div class="chips" style="margin:8px 0">${LIV_CLASSES.map(id => `<button class="chip ${LIV_SEL === id ? 'on' : ''}" data-lcls="${id}">${CLASSES[id].name}</button>`).join('')}</div>
+    <canvas id="livCv" width="${LIV_W}" height="${LIV_H}" style="width:100%;height:auto;display:block;border-radius:10px;border:1px solid #2b4a63;touch-action:none;cursor:crosshair"></canvas>
+    <div class="chips" style="margin:10px 0 4px;align-items:center">${LIV_PAL.map(c => `<button data-lcol="${c}" title="${c}" style="width:28px;height:28px;padding:0;border-radius:50%;background:${c};border:3px solid ${c === LIV_COL ? '#7fe0ff' : '#33506a'}"></button>`).join('')}
+      <input type="color" id="livCustom" value="${LIV_COL}" title="${T_('Couleur libre', 'Custom colour')}" style="width:34px;height:28px;border:none;background:none;padding:0">
+      <span style="margin-left:10px">${LIV_BRUSHES.map(([l, w]) => `<button class="chip ${LIV_BRUSH === w ? 'on' : ''}" data-lw="${w}">${l}</button>`).join(' ')}</span></div>
+    <div class="go" style="justify-content:flex-start;margin:6px 0">
+      <button id="livUndo" class="sec">↶ ${T_('Annuler le dernier trait', 'Undo last stroke')}</button>
+      <button id="livClear" class="sec">${T_('Livrée d’origine', 'Original livery')}</button>
+      <span id="livSaved" style="font-size:12.5px;color:#a9c3d6;align-self:center"></span></div>`;
+}
+function initLivery() {
+  const cv = $('livCv'); if (!cv) return; const g = cv.getContext('2d');
+  liveryPaint(g, LIV_SEL);
+  $('card').querySelectorAll('[data-lcls]').forEach(b => b.onclick = () => { LIV_SEL = b.dataset.lcls; showMenu('livery'); });
+  $('card').querySelectorAll('[data-lcol]').forEach(b => b.onclick = () => { LIV_COL = b.dataset.lcol; showMenu('livery'); });
+  $('card').querySelectorAll('[data-lw]').forEach(b => b.onclick = () => { LIV_BRUSH = +b.dataset.lw; showMenu('livery'); });
+  $('livCustom').oninput = e => { LIV_COL = e.target.value; };
+  const note = () => { $('livSaved').textContent = T('Enregistré ✓', 'Saved ✓'); };
+  const pt = e => { const r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * 1e4) / 1e4, Math.round((e.clientY - r.top) / r.height * 1e4) / 1e4]; };
+  let cur = null;
+  cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); cur = { c: LIV_COL, w: LIV_BRUSH, p: [pt(e)] }; (LIV[LIV_SEL] ||= []).push(cur); liveryStroke(g, cur); };
+  cv.onpointermove = e => {
+    if (!cur) return; const q = pt(e), l = cur.p[cur.p.length - 1];
+    if (Math.abs(q[0] - l[0]) + Math.abs(q[1] - l[1]) < 0.0015) return;
+    cur.p.push(q); liveryStroke(g, { c: cur.c, w: cur.w, p: [l, q] });
+  };
+  const end = () => { if (!cur) return; cur = null; livSave(); liveryRefresh(LIV_SEL); note(); };
+  cv.onpointerup = end; cv.onpointercancel = end;
+  $('livUndo').onclick = () => { (LIV[LIV_SEL] || []).pop(); livSave(); liveryRefresh(LIV_SEL); showMenu('livery'); };
+  $('livClear').onclick = () => { LIV[LIV_SEL] = []; livSave(); liveryRefresh(LIV_SEL); showMenu('livery'); };
+}
+
 function showMenu(view = 'home') {
   MENU_VIEW = view;
+  if (view === 'home' && PORT.g) { PORT_DIRTY.forEach(id => { if (id !== 'player') portRebuild(id); }); PORT_DIRTY.forEach(id => { if (id !== 'player') PORT_DIRTY.delete(id); }); }
+  if (view !== 'livery' && PORT_DIRTY.has('player') && !running) { PORT_DIRTY.delete('player'); setClass(CLS.id); } // visuel du joueur refait avec sa livrée
   if (running) { paused = true; saveGame(); }
   const sv = loadSave(), svCourse = sv ? (sv.mode === 'race' ? cN(COURSES[sv.course]) : T('Navigation libre', 'Free sailing')) + ' · ' + CLASSES[sv.cls || 'imoca'].name : '';
   const HEAD = `<div class="mhead"><div><h1>Off<span>ing</span></h1><p class="tag">Same wind. Your race.</p></div><div class="mtools"><button data-lang="fr" class="${LANG === 'fr' ? 'on' : ''}">FR</button><button data-lang="en" class="${LANG === 'en' ? 'on' : ''}">EN</button><button id="goSet" title="${T('Réglages', 'Settings')}">⚙</button></div></div>`;
@@ -5145,6 +5226,7 @@ function showMenu(view = 'home') {
       <button id="goMulti" data-default><b>🌐 ${T('Multi : défi du jour & course de la semaine', 'Multiplayer: daily challenge & race of the week')}</b><small>${dc} — ${dl} · 🌊 ${cN(COURSES[weeklyPick(weekKey())])}</small></button>
       <button id="goSolo"><b>🧭 Solo</b><small>${T(`Transat, Mini Transat, Fastnet, ${COASTAL.length} côtiers, entraînement`, `Transat, Mini Transat, Fastnet, ${COASTAL.length} coastal courses, training`)}</small></button>
       <button id="goBoards"><b>🏆 ${T('Classements', 'Leaderboards')}</b><small>${NET.ok ? T('Classements du jour et de la semaine en ligne', 'Daily and weekly online leaderboards') : T('Tes essais et fantômes du jour', 'Your attempts and ghosts today')}</small></button>
+      <button id="goLiv"><b>🎨 ${T('Livrée', 'Livery')}</b><small>${T('Dessine la coque de ton bateau, à main levée', 'Draw your boat’s hull, freehand')}</small></button>
       <button id="goSet"><b>⚙ ${T('Réglages', 'Settings')}</b><small>${T('Langue, graphismes, son, profil en ligne', 'Language, graphics, sound, online profile')}</small></button>
       <button id="goHelp"><b>📖 ${T('Aide & commandes', 'Help & controls')}</b><small>${T('Manœuvres, voiles, foils, routeur', 'Manoeuvres, sails, foils, router')}</small></button>
     </nav>
@@ -5161,6 +5243,7 @@ function showMenu(view = 'home') {
     ${netBlock()}
     <div class="dgrid">${pick.courses.map(id => { const c = COURSES[id]; return `<div class="dcard"><img src="${courseThumb(c, 420, 210)}" alt=""><div><b style="font-size:16px">${cN(c)}</b><br><span style="color:#a9c3d6;font-size:12.5px">${cZ(c)} · ${c.nm} nm · ${T(REGION_NAMES[c.region][0], REGION_NAMES[c.region][1])}</span></div>
       ${pick.classes.map(cl => { const d = dailyLoad(`gl3d_daily_${day}_${id}_${cl}`); return `<div class="dcls"><div><b>${clsName(cl)}</b><small>${d.runs.length ? `🏁 ${fmtDur(d.runs[0].T)} · ${plural(d.n, 'essai', 'attempt')}${d.pts ? ' · ✓ pts' : ''}` : T('Pas encore d\'essai', 'No attempt yet')}</small></div><button data-daily="${id}" data-dcls="${cl}">${d.runs.length ? T('Nouvel essai', 'Try again') : T('Relever', 'Race')}</button>${NET.ok ? `<button data-board="${id}" data-dcls="${cl}" class="sec" title="${T('Classement du jour', 'Daily leaderboard')}">🏆</button>` : '<span></span>'}</div>`; }).join('')}</div>`; }).join('')}</div>${FOOT}`;
+  else if (view === 'livery') html += `${BACK}${livartView()}${FOOT}`;
   else if (view === 'settings') { const lv = SETTINGS.gfx, seg = (k, opts) => `<div class="seg">${opts.map(([v, l]) => `<button data-set="${k}" data-val="${v}" class="${String(SETTINGS[k]) === String(v) ? 'on' : ''}">${l}</button>`).join('')}</div>`;
     html += `${BACK}<h3>⚙ ${T('Réglages', 'Settings')}</h3>
     <div class="setrow"><div><b>${T('Langue', 'Language')}</b></div>${seg('lang', [['fr', 'Français'], ['en', 'English']])}</div>
@@ -5190,12 +5273,13 @@ function showMenu(view = 'home') {
   $('card').innerHTML = html; $('card').classList.add('wide');
   const on = (id, f) => { if ($(id)) $(id).onclick = f; };
   $('card').querySelectorAll('[data-lang]').forEach(b => b.onclick = () => { setLang(b.dataset.lang); showMenu(view); });
-  on('goSet', () => showMenu('settings')); on('goSet2', () => showMenu('settings')); on('goBoards', () => showMenu('multi')); on('goMulti2', () => showMenu('multi'));
+  on('goLiv', () => showMenu('livery')); on('goSet', () => showMenu('settings')); on('goSet2', () => showMenu('settings')); on('goBoards', () => showMenu('multi')); on('goMulti2', () => showMenu('multi'));
   on('tutoGo', tutoStart); on('tutoNo', () => { tutoMark('skip'); showMenu('home'); }); on('tutoGo2', tutoStart);
   on('back', () => showMenu('home')); on('goSolo', () => showMenu('solo')); on('goMulti', () => showMenu('multi')); on('goHelp', () => showHelp(view));
   on('mobToggle', () => { setMobile(!isMobile()); showMenu(view); }); on('sndToggle', () => { setSound(!AUD.on); showMenu(view); });
   $('card').querySelectorAll('[data-set]').forEach(b => b.onclick = () => { const k = b.dataset.set, v = b.dataset.val; SETTINGS[k] = v === 'true' ? true : v === 'false' ? false : v; saveSettings();
     if (k === 'lang') setLang(v); else applyGfx(SETTINGS.gfx); showMenu(view); });
+  if (view === 'livery') initLivery();
   $('card').querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { SOLO_TAB = b.dataset.tab; showMenu('solo'); });
   $('card').querySelectorAll('[data-reg]').forEach(b => b.onclick = () => { REG_F = b.dataset.reg; showMenu('solo'); });
   $('card').querySelectorAll('.clsPick [data-cls]').forEach(b => b.onclick = () => { const id = b.dataset.cls; if (CLS.id === id) return; const wasRunning = running; running = false; setClass(id); if (!DAILY.on) setupMode(MODE, COURSE.id); if (wasRunning) toast(T(`Classe ${CLS.name} : choisis une course pour repartir`, `${CLS.name}: pick a course to start again`), 2500); showMenu(view); });
@@ -6342,6 +6426,14 @@ function portStow(v) {
     roll.position.copy(v.root.worldToLocal(c.applyMatrix4(h.matrixWorld))); v.root.add(roll);
   });
 }
+function portVis(id, x) { // un bateau du port, avec sa livrée
+  PORT_BUILD = true; let v; try { v = makeBoatOf(id, Object.assign({}, BOAT_DEFS.find(d => d.player), { player: false })); } finally { PORT_BUILD = false; }
+  v.port = true; PORT.vis[id] = v; v.root.position.set(x, 0, PORT_Z); v.root.rotation.y = PORT_ROT; PORT.g.add(v.root); portStow(v); return v;
+}
+function portRebuild(id) {
+  const old = PORT.vis[id]; if (!old || !PORT.g) return;
+  PORT.g.remove(old.root); portVis(id, PORT_BERTHS.find(b => b.id === id).x);
+}
 function buildPort() {
   const g = new THREE.Group(); g.visible = false; scene.add(g); PORT.g = g;
   const stone = new THREE.MeshStandardMaterial({ color: 0x8b867b, roughness: 0.95 }), cap = new THREE.MeshStandardMaterial({ color: 0xbdb5a4, roughness: 0.8 });
@@ -6359,12 +6451,7 @@ function buildPort() {
   const key = new THREE.PointLight(0xffc48a, 500, 0, 2); key.position.set(-20, 26, 30); g.add(key);
   const hi = new THREE.PointLight(0x7fe0ff, 0, 40, 2); hi.position.set(0, 10, PORT_Z); g.add(hi);
   PORT.key = key; PORT.hi = hi;
-  const base = (boats.find(b => !b.isPlayer) || boats[0]).def;
-  PORT_BERTHS.forEach(({ id, x }) => {
-    const v = makeBoatOf(id, Object.assign({}, base, { player: false })); PORT.vis[id] = v;
-    v.root.position.set(x, 0, PORT_Z); v.root.rotation.y = PORT_ROT; v.root.visible = true; g.add(v.root);
-    portStow(v);
-  });
+  PORT_BERTHS.forEach(({ id, x }) => portVis(id, x));
   const lb = document.createElement('div'); lb.id = 'portLbl';
   lb.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;display:none;transform:translate(-50%,-115%);padding:7px 12px;border-radius:9px;background:rgba(3,12,22,.82);border:1px solid rgba(127,224,255,.55);color:#e8f6ff;font:600 13px/1.25 system-ui,sans-serif;white-space:nowrap;z-index:5;text-align:center';
   $('overlay').appendChild(lb); PORT.lbl = lb;
