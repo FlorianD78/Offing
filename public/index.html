@@ -2862,8 +2862,7 @@ const O50I = (() => {
     const rr = (x, y, w, h, r) => { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); };
     const pane = (x, y, w, h, r, wrap) => [0].concat(wrap ? [-512, 512] : []).forEach(o => { // vitrage = trou dans la peau + verre fumé + cadre noir
       g.save(); g.globalCompositeOperation = 'destination-out'; rr(x + o, y, w, h, r); g.fill(); g.restore();
-      g.fillStyle = 'rgba(14,20,26,0.1)'; rr(x + o, y, w, h, r); g.fill(); g.strokeStyle = '#16191c'; g.lineWidth = 4; rr(x + o, y, w, h, r); g.stroke();
-      g.strokeStyle = 'rgba(255,255,255,0.25)'; g.lineWidth = 1; rr(x + o + 4, y + 4, w - 8, h - 8, Math.max(1, r - 3)); g.stroke(); });
+      g.strokeStyle = '#16191c'; g.lineWidth = 4; rr(x + o, y, w, h, r); g.stroke(); }); // vitrage = trou net (transparent) dans la coque, cadre noir seul
     // pare-brise enveloppant : panneau central + deux panneaux d'angle (montants noirs entre eux)
     // pare-brise resserré sur l'avant (u 0,6 à 0,9) : 6 px de montant entre chaque vitre, rien ne déborde sur les flancs
     pane(352, 58, 64, 176, 10); pane(306, 70, 40, 160, 12); pane(422, 70, 40, 160, 12);
@@ -2883,7 +2882,7 @@ const O50I = (() => {
   function domeMat(m) {
     if (m.__o50i) return; m.__o50i = true; Object.assign(m, { transparent: true, alphaTest: 0.02, depthWrite: true });
     m.onBeforeCompile = sh => { sh.uniforms.uIn = uIn; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uIn;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\n  if (uIn > 0.5 && !gl_FrontFacing) diffuseColor.rgb *= vec3(0.42, 0.44, 0.47);'); }; // face intérieure plus sombre en vue cabine
+      .replace('#include <color_fragment>', '#include <color_fragment>\n  if (uIn > 0.5 && !gl_FrontFacing) diffuseColor.rgb *= vec3(0.3, 0.32, 0.35);'); }; // face intérieure plus sombre en vue cabine
     m.customProgramCacheKey = () => 'o50in'; m.needsUpdate = true;
   }
   // ---------- matériaux ----------
