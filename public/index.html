@@ -701,7 +701,7 @@ const CLD = [0, 0, 0, 0];
 function cloudAt(lat, lon, t) {
   const o = CLD;
   if (MODE !== 'race') { const dx = (lon - TC.lon) * 60 * Math.cos(TC.lat * D2R), dy = (lat - TC.lat) * 60, sq = TW.auto ? smooth(0.55, 0.82, squallN(dx / 4 + t / 3600 * 1.5, dy / 4)) * 0.75 : 0;
-    o[0] = 0.12 + 0.2 * sq; o[1] = 0.25; o[2] = 0.3; o[3] = sq * 0.85; return o; }
+    o[0] = 0.04 + 0.28 * sq; o[1] = 0.1 + 0.15 * sq; o[2] = 0.07 + 0.3 * sq; o[3] = sq * 0.85; return o; }
   const S = wxSystems(t), cl = Math.cos(lat * D2R), p = pressure(lat, lon, t), hs = lat >= 0 ? 1 : -1, al = Math.abs(lat), S0 = SOUTH(), dk = S0 ? 33 : 24, h = (t + WX_OFF) / 3600;
   let st = 0.5 * smooth(1017, 1000, p), as = 0, ci = 0.1 + 0.15 * smooth(1018, 1006, p), cu = 0.17 + 0.28 * smooth(8, 14, al) * smooth(30, 21, al), cb = 0, rn = 0;
   const itcz = S0 ? 0 : Math.exp(-(((lat - 5) / 4.5) ** 2)); cb = 0.55 * itcz; as += 0.45 * itcz; ci += 0.5 * itcz;
@@ -712,13 +712,16 @@ function cloudAt(lat, lon, t) {
     else { cb += 0.85 * k * Math.exp(-((w / 50) ** 2)); as += 0.45 * k * smooth(-50, 0, w) * smooth(170, 40, w); st += 0.4 * k * smooth(10, 70, w) * smooth(430, 240, w);
       cu += 0.45 * k * smooth(-40, -110, w) * smooth(-480, -220, w); rn += 0.5 * k * Math.exp(-((w / 40) ** 2)); } }
   for (const Rg of S.ridges) { const g = Math.min(1, Rg.amp / 8 * gqAx(lat, lon, cl, Rg)), f = 1 - 0.85 * g; st *= f; as *= f; ci *= 1 - 0.6 * g; cb *= f; rn *= f; cu *= 1 - 0.35 * g; }
-  { const hc = S.hc, g = gq(lat, lon, cl, hc[0], hc[1], 430, 720) * smooth(1014, 1024, p); st *= 1 - 0.75 * g; as *= 1 - 0.85 * g; ci *= 1 - 0.6 * g; cb *= 1 - 0.9 * g; rn *= 1 - 0.9 * g; cu = Math.max(cu * (1 - 0.3 * g), 0.16); } // petits cumulus de beau temps
+  { const hc = S.hc, g = gq(lat, lon, cl, hc[0], hc[1], 430, 720) * smooth(1014, 1024, p); st *= 1 - 0.75 * g; as *= 1 - 0.85 * g; ci *= 1 - 0.6 * g; cb *= 1 - 0.9 * g; rn *= 1 - 0.9 * g; cu *= 1 - 0.3 * g; }
   if (S.cut) { const g = gq(lat, lon, cl, S.cut.lat, S.cut.lon, 190, 230) * S.cut.amp / 10; as += 0.7 * g; cb += 0.45 * g; rn += 0.3 * g; }
   for (const W of S.waves) if (W.amp > 0.3) { const g = W.amp / 2.8 * gqAx(lat, lon, cl, W); cb += 0.5 * g; as += 0.3 * g; ci += 0.3 * g; }
   // grains : même champ que le vent (mêmes zones, même bruit)
   const zone = Math.max(smooth(6, 13, lat) * smooth(28, 20, lat), smooth(S0 ? 990 : 1008, S0 ? 970 : 994, p) * 0.9, wxConv(lat, lon, t), S0 ? 0.3 : 0.12);
   cb = Math.max(cb, smooth(0.55, 0.82, squallN((lon + h * 0.25) * 4, lat * 4 + h * 0.03)) * zone * 0.95);
   if (COURSE.coastal && COURSE.clim) { const f = 1 - 0.45 * COURSE.clim.k; st *= f; as *= f; }
+  // beau temps : quand rien n'annonce de mauvais temps (pas de couche, de front, de pluie ni de grain), cumulus et cirrus s'estompent
+  // progressivement jusqu'à quelques petits cumulus épars ; le champ est continu, donc le ciel se dégage (ou se charge) en douceur
+  { const bad = Math.max(st, as, rn * 1.5, cb), fair = smooth(0.42, 0.08, bad); cu = Math.max(cu * (1 - 0.55 * fair), 0.07 * fair); ci *= 1 - 0.5 * fair; }
   o[0] = clamp(1 - (1 - clamp(st, 0, 1)) * (1 - clamp(as, 0, 1)), 0, 1); o[1] = clamp(ci, 0, 1); o[2] = clamp(cu, 0, 1); o[3] = clamp(Math.max(cb, rn), 0, 1); return o;
 }
 // carte de nébulosité : 4 lignes par image, puis fondu avec la carte précédente
@@ -1167,7 +1170,8 @@ const SKY_CLOUDS = `uniform vec2 uCloudOff; uniform vec2 uBoatOff; uniform float
       if (dd < -0.35) return 0.0;
       float den = smoothstep(0.0, 0.3, dd) * smoothstep(0.0, 0.06, yf);
       if (det) { vec3 P3 = vec3(p.x + uBoatOff.x + uCloudOff.x * 1.3, y * 1.15, p.y + uBoatOff.y + uCloudOff.y * 1.3); float w = smoothstep(0.3, 0.68, texture(uN3, P3 / 3200.0).r * 0.68 + texture(uN3, P3 / 1150.0 + 0.37).r * 0.32);
-        den = clamp((smoothstep(-0.4, 0.3, dd) * smoothstep(0.0, 0.06, yf) - (1.0 - w) * (0.55 + 0.3 * yf)) / 0.3, 0.0, 1.0); }
+        // bourgeons autour des tours seulement : sans empreinte au sol (x = 0), plus de nuage (avant, une nappe basse couvrait tout le ciel dès 2 % de couverture)
+        den = clamp((smoothstep(-0.4, 0.3, dd) * smoothstep(0.0, 0.06, yf) * smoothstep(0.0, 0.12, x) - (1.0 - w) * (0.55 + 0.3 * yf)) / 0.3, 0.0, 1.0); }
       return den; }
     vec4 clouds(vec3 d){
       vec3 acc = vec3(0.0); float T = 1.0;
