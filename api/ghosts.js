@@ -2,13 +2,13 @@
 // GET ?course&cls[&player][&mode=top][&week=1] -> 1er essai (ou mode=top) : top 10 ; ensuite : les 10 meilleurs temps les plus proches du tien (hors toi)
 const { handler, HttpError, UUID_RE, parisDay, weekKey, thinTrace } = require('./_lib/util');
 const { db } = require('./_lib/db');
-const { loadEngine } = require('./_lib/engine');
+const { validCourse } = require('./_lib/meta');
 
 const out = (rows, every) => rows.map(x => ({ name: x.players?.name || '?', T: x.time_s, trace: thinTrace(x.trace, every) }));
 
 module.exports = handler(['GET'], async (req, res) => {
-  const { course, cls, player, mode, week } = req.query || {}, weekly = week === '1', day = weekly ? weekKey() : parisDay(), E = loadEngine();
-  if (!(weekly ? E.weeklyPick(day) === course : E.coastal().includes(course)) || !E.classes().includes(cls)) throw new HttpError(400, 'parcours invalide');
+  const { course, cls, player, mode, week } = req.query || {}, weekly = week === '1', day = weekly ? weekKey() : parisDay();
+  if (!validCourse(course, cls, weekly)) throw new HttpError(400, 'parcours invalide');
   const me = mode !== 'top' && player && UUID_RE.test(player) ? await db().getBest(player, day, course, cls) : null;
   let rows;
   if (!me) {

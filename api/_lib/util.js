@@ -40,6 +40,9 @@ class HttpError extends Error { constructor(status, msg) { super(msg); this.stat
 function handler(methods, fn) {
   return async (req, res) => {
     res.setHeader('content-type', 'application/json; charset=utf-8');
+    // CORS : le jeu peut aussi tourner hors du domaine Vercel (aperçu claude.ai, autre hébergement) ; pas de cookie, le jeton est dans le corps
+    res.setHeader('access-control-allow-origin', '*'); res.setHeader('access-control-allow-headers', 'content-type, accept'); res.setHeader('access-control-allow-methods', methods.concat('OPTIONS').join(', '));
+    if (req.method === 'OPTIONS') { res.setHeader('access-control-max-age', '86400'); return res.status(204).end(); }
     if (!methods.includes(req.method)) { res.setHeader('allow', methods.join(', ')); return res.status(405).json({ error: 'méthode non autorisée' }); }
     try {
       const out = await fn(req, res);
