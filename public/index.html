@@ -147,7 +147,7 @@ body.mobile .card.help .go{bottom:-16px;margin:12px -16px -16px;padding:10px 16p
 .mmfoot{margin-top:auto;padding-top:20px;display:flex;align-items:center;gap:14px;font-size:11.5px;color:#7fa3bd}
 .mmside{position:fixed;right:32px;bottom:32px;width:360px;border-radius:16px;padding:14px;background:rgba(8,22,36,.82);border:1px solid rgba(255,209,102,.4);backdrop-filter:blur(6px);display:flex;flex-direction:column;gap:8px}
 .mmside h3{margin:0;font-size:14px;color:#ffd166}.mmside button{padding:10px;background:#1f8fd6;border-color:#55b8f7}
-body.inmenu > *:not(canvas):not(#overlay):not(#loader):not(script){visibility:hidden!important}
+body.inmenu > *:not(canvas):not(#overlay):not(#loader):not(#menuBg):not(script){visibility:hidden!important}
 #loader{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:#04101c}#loader.hide{display:none}
 .ldbg{position:absolute;inset:-30px;background-size:cover;background-position:center;filter:blur(14px) brightness(.45) saturate(1.2);transform:scale(1.05)}
 .ldbox{position:relative;width:min(560px,90vw);text-align:center}.ldbox h2{margin:0 0 6px;font-size:26px}.ldbox p{color:#a9c3d6}
@@ -324,6 +324,31 @@ body.mobile #tr.mid .fc{display:none}
   body.mobile #toast{left:calc((100vw - var(--bcW,340px)) / 2);top:42px;max-width:calc(100vw - var(--bcW,340px) - 20px)}
 }
 }
+/* menus de course (solo / multi) : liste à gauche, fiche détaillée à droite */
+#menuBg{transition:filter .35s}body.mblur #menuBg{filter:blur(9px) brightness(.45) saturate(.9);transform:scale(1.04)}
+#overlay.mu{background:radial-gradient(ellipse at 30% 20%,rgba(10,40,64,.35),rgba(3,10,18,.75))}
+.card.rx{max-width:1240px;height:calc(100vh - 32px);height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden;padding:18px 22px 16px;background:rgba(7,20,33,.9);backdrop-filter:blur(6px)}
+.rxHead{display:flex;align-items:center;gap:12px;margin:0 0 10px}.rxHead h2{margin:0;font-size:22px;letter-spacing:.02em}.rxHead h2 small{display:block;font-size:12.5px;font-weight:500;color:#8fb3cc;letter-spacing:0;margin-top:2px}.rxHead .rxSp{flex:1}
+.clsPick.rxCls{grid-template-columns:repeat(4,1fr);gap:6px;margin:0}.clsPick.rxCls button{padding:7px 10px;font-size:0;line-height:1.25;text-align:left;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12)}.clsPick.rxCls button b{font-size:13.5px}.clsPick.rxCls button i{font-size:11.5px;margin:1px 0 0}.clsPick.rxCls button.on{background:rgba(31,143,214,.28);border-color:#55b8f7;box-shadow:inset 0 0 0 1px #55b8f7}
+.rxTabs{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.rxTabs .tabs{margin:10px 0 8px;flex:1}
+.rxBody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);gap:16px;margin-top:6px}
+.rxList{overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:6px;padding:2px 4px 2px 0}
+.rxList .chips{margin:0 0 4px}
+.rxRow{display:grid;grid-template-columns:132px minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;padding:7px;border-radius:12px;background:rgba(255,255,255,.035)!important;border:1px solid rgba(255,255,255,.08)!important;color:#e8f4ff;transition:background .12s,border-color .12s;font-size:13px;white-space:normal}
+.rxRow:hover{background:rgba(127,209,255,.08)!important;border-color:rgba(127,209,255,.3)!important}.rxRow.on{background:rgba(31,143,214,.2)!important;border-color:#55b8f7!important}
+.rxRow img,.rxRow .rxIco{width:132px;height:74px;border-radius:8px;object-fit:cover;display:block}.rxIco{display:flex!important;align-items:center;justify-content:center;font-size:34px;background:linear-gradient(135deg,#0d4a6e,#0a3350)}
+.rxTx{display:flex;flex-direction:column;gap:2px;min-width:0}.rxTx b{font-size:15px}.rxTx span{color:#a9c3d6;font-size:12.5px}.rxTx small{color:#7fa3bd;font-size:11.5px}
+.rxBadge{font-style:normal;font-size:11px;padding:3px 8px;border-radius:999px;background:rgba(61,255,154,.12);color:#8dffc1;border:1px solid rgba(61,255,154,.3);white-space:nowrap}.rxBadge.y{background:rgba(255,209,102,.12);color:#ffd166;border-color:rgba(255,209,102,.35)}
+.rxDet{overflow:auto;overscroll-behavior:contain;border-radius:14px;border:1px solid rgba(127,209,255,.18);background:rgba(4,14,24,.55);padding:14px;display:flex;flex-direction:column;gap:10px}
+.rxMap{width:100%;aspect-ratio:16/9;max-height:31vh;object-fit:cover;border-radius:10px;display:block;border:1px solid rgba(255,255,255,.08)}div.rxMap{display:flex;align-items:center;justify-content:center;font-size:64px;background:linear-gradient(135deg,#0d4a6e,#06243a)}
+.rxDet h2{margin:2px 0 0;font-size:21px}.rxDet .rxSub{margin:0;color:#9fc4dc;font-size:13.5px}
+.rxStats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.rxStats div{padding:7px 9px;border-radius:9px;background:rgba(255,255,255,.05)}.rxStats small{display:block;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#7fa3bd}.rxStats b{font-size:14.5px}
+.rxDet p{margin:0}.rxDet table{width:100%}.rxDet .dcls{margin:0}
+.rxCta{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding:8px 0 0;position:sticky;bottom:-14px;background:linear-gradient(0deg,rgba(4,14,24,1) 72%,rgba(4,14,24,0));margin-bottom:-14px;padding-bottom:14px}.rxCta:empty{display:none}.rxCta button{flex:1;min-width:180px;padding:12px 18px;font-size:16px;font-weight:700;background:linear-gradient(180deg,#2aa0ea,#1a7fc4);border-color:#6cc6ff}.rxCta button.sec{flex:0 1 auto;min-width:0;font-weight:500;font-size:14px;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15)}
+.rxNote{font-size:12.5px;color:#a9c3d6}
+.pzWrap{max-width:420px;margin:0 auto;text-align:left}.pzWrap h1{font-size:30px;margin:0}.pzWrap .rxSub{color:#9fc4dc;margin:2px 0 14px}.pzWrap .mmnav button{background:rgba(255,255,255,.04)!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:10px;margin:0 0 6px}.pzWrap .mmnav button:hover{border-color:rgba(127,209,255,.4)!important}
+@media (max-width:900px){.card.rx{height:auto;max-height:calc(100dvh - 32px);overflow:auto;display:block}.rxBody{display:flex;flex-direction:column}.rxList{max-height:none;overflow:visible}.rxDet{overflow:visible}.clsPick.rxCls{grid-template-columns:1fr 1fr}.rxStats{grid-template-columns:1fr 1fr}.rxRow{grid-template-columns:96px minmax(0,1fr) auto}.rxRow img,.rxRow .rxIco{width:96px;height:54px}}
+body.mobile .card.rx{height:auto;max-height:calc(100dvh - 32px);overflow:auto;display:block}body.mobile .rxBody{display:flex;flex-direction:column}body.mobile .rxList,body.mobile .rxDet{overflow:visible}body.mobile .clsPick.rxCls{grid-template-columns:1fr 1fr}body.mobile .rxStats{grid-template-columns:1fr 1fr}
 </style>
 </head>
 <body>
@@ -2742,7 +2767,7 @@ const IMI = (() => {
         g.font = 'bold 22px Arial'; g.fillStyle = fg; const it = [['SOG', s.bsp.toFixed(1)], ['COG', String(Math.round(s.hdg) % 360).padStart(3, '0') + '°'], ['TWS', s.tws.toFixed(1)], ['TWA', Math.round(s.twa) + '°'], ['VMG', s.vmg.toFixed(1)], ['POL', Math.round(s.pol) + '%']];
         it.forEach(([a, b], i) => { const x = 14 + i * (w - 20) / it.length; g.fillStyle = dim; g.font = 'bold 15px Arial'; g.fillText(a, x, 17); g.fillStyle = fg; g.font = 'bold 22px Arial'; g.fillText(b, x, 38); });
         g.fillStyle = dim; g.font = '16px Arial'; g.fillText(T('ROUTAGE · isochrones · grib ECMWF 0,25°', 'ROUTING · isochrones · ECMWF 0.25° grib'), 14, h - 14); g.textAlign = 'right'; g.fillStyle = acc; g.fillText(T('pilote : ', 'pilot: ') + (s.mode === 'twa' ? 'TWA ' + Math.abs(Math.round(s.lock || 0)) + '°' : T('CAP', 'HDG')), w - 14, h - 14); }
-      else if (d.kind === 'mastcam') cabCamOverlay(g, w, h, mcam.ir, night);
+      else if (d.kind === 'mastcam') cabCamOverlay(g, w, h, mcam.ir, night, mcam);
       else if (d.kind === 'perf') { // écran de performance : polaire du vent du moment (une courbe par voile, enveloppe, VMG, point actuel), voile en service, foils, quille, gîte
         const D2 = Math.PI / 180, card = night ? 'rgba(40,0,0,0.9)' : 'rgba(18,30,42,0.95)', grid = night ? 'rgba(255,60,40,0.16)' : 'rgba(150,200,230,0.14)';
         g.fillStyle = night ? 'rgba(20,0,0,0.95)' : 'rgba(6,14,22,0.95)'; g.fillRect(0, 0, w, 34); g.fillStyle = acc; g.fillRect(0, 34, w, 2);
@@ -3030,7 +3055,7 @@ const O50I = (() => {
     const rr = (x, y, w, h, r) => { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); };
     const pane = (x, y, w, h, r, wrap) => [0].concat(wrap ? [-512, 512] : []).forEach(o => { // vitrage = trou dans la peau + verre fumé + cadre noir
       g.save(); g.globalCompositeOperation = 'destination-out'; rr(x + o, y, w, h, r); g.fill(); g.restore();
-      g.strokeStyle = '#16191c'; g.lineWidth = 4; rr(x + o, y, w, h, r); g.stroke(); }); // vitrage = trou net (transparent) dans la coque, cadre noir seul
+      g.strokeStyle = '#1b1f23'; g.lineWidth = 2.6; rr(x + o, y, w, h, r); g.stroke(); g.strokeStyle = 'rgba(60,66,72,.9)'; g.lineWidth = 0.8; rr(x + o + 1.6, y + 1.6, w - 3.2, h - 3.2, Math.max(1, r - 1.6)); g.stroke(); }); // vitrage = trou net (transparent) dans la coque, cadre noir seul
     // pare-brise enveloppant : panneau central + deux panneaux d'angle (montants noirs entre eux)
     // pare-brise resserré sur l'avant (u 0,6 à 0,9) : 6 px de montant entre chaque vitre, rien ne déborde sur les flancs
     pane(352, 58, 64, 176, 10); pane(306, 70, 40, 160, 12); pane(422, 70, 40, 160, 12);
@@ -3050,7 +3075,7 @@ const O50I = (() => {
   function domeMat(m) {
     if (m.__o50i) return; m.__o50i = true; Object.assign(m, { transparent: true, alphaTest: 0.02, depthWrite: true });
     m.onBeforeCompile = sh => { sh.uniforms.uIn = uIn; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uIn;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\n  if (uIn > 0.5 && !gl_FrontFacing) diffuseColor.rgb *= vec3(0.3, 0.32, 0.35);'); }; // face intérieure plus sombre en vue cabine
+      .replace('#include <color_fragment>', '#include <color_fragment>\n  if (uIn > 0.5 && !gl_FrontFacing) diffuseColor.rgb = vec3(0.2, 0.215, 0.23);'); }; // face intérieure plus sombre en vue cabine
     m.customProgramCacheKey = () => 'o50in'; m.needsUpdate = true;
   }
   // ---------- matériaux ----------
@@ -3086,19 +3111,25 @@ const O50I = (() => {
     const seat = new THREE.Group(); seat.userData.noMergeTree = true; seat.position.set(0, YF + 0.12, ZS); G.add(seat); const sk = kit(seat);
     sk.cyl(0.05, 0.07, 0.45, m.ti2, 0, 0.22, 0, 0, 0, 0, 12); sk.box(0.5, 0.05, 0.46, m.red, 0, 0.47, 0); sk.box(0.44, 0.05, 0.4, m.redD, 0, 0.5, -0.02);
     sk.box(0.5, 0.66, 0.05, m.red, 0, 0.82, 0.23, 0.18, 0, 0); [1, -1].forEach(k => { sk.box(0.05, 0.42, 0.42, m.red, k * 0.26, 0.68, 0.05, 0.08, 0, k * 0.12); sk.box(0.04, 0.28, 0.012, m.orange, k * 0.12, 0.98, 0.2, 0.18, 0, 0); });
-    // console d'instruments à l'avant de la bulle : 4 afficheurs + écran foils/flotteur + écran de carte
-    const disp = [], mk = (w, h, pw, ph, x, y, z, rx, ry, kind) => { const c = document.createElement('canvas'); c.width = pw; c.height = ph; const t = new THREE.CanvasTexture(c); t.anisotropy = 8;
-      const fr = box(w + 0.025, h + 0.025, 0.025, m.dark, x, y, z, rx, ry, 0), scr = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, toneMapped: false })); scr.position.z = 0.0135; fr.add(scr); noM(fr); disp.push({ c, g: c.getContext('2d'), t, kind }); };
-    const ZD = 3.75; box(1.2, 0.06, 0.4, m.carbon, 0, 1.36, ZD - 0.05); box(1.2, 0.76, 0.05, m.carbon, 0, 0.98, ZD - 0.25);
-    [['BSP', -0.52], ['TWS', -0.18], ['TWA', 0.18], ['HDG', 0.52]].forEach(([k, x]) => mk(0.3, 0.19, 256, 160, x, 1.5, ZD, -0.6, -x * 0.12, 'big:' + k));
-    mk(0.34, 0.22, 512, 330, 0, 1.17, ZD + 0.13, -0.5, 0, 'nav'); mk(0.36, 0.23, 512, 330, 0.55, 1.2, ZD + 0.2, -0.55, -0.4, 'float');
-    // caméra en tête de mât (mi-hauteur) : proue, flotteurs et plan d'eau devant ; infrarouge la nuit
+    // tableau de bord (refait) : un pupitre carbone incliné face au barreur, sous la ligne de vue du pare-brise.
+    // Rangée du haut : 4 afficheurs (vitesse, vent, angle, cap) ; rangée du bas : caméra de mât, carte, flotteurs/foils. Casquette anti-reflets au-dessus.
+    const disp = [], ZD = 3.72, YD = 1.27, dash = new THREE.Group(); dash.rotation.order = 'YXZ'; dash.position.set(0, YD, ZD); dash.rotation.x = -Math.atan2(EYE.y - YD, EYE.z - ZD); G.add(dash); dash.userData.noMergeTree = true;
+    const dk = kit(dash);
+    const mk = (w, h, pw, ph, x, y, kind) => { const c = document.createElement('canvas'); c.width = pw; c.height = ph; const t = new THREE.CanvasTexture(c); t.anisotropy = 8;
+      const fr = dk.box(w + 0.022, h + 0.022, 0.022, m.dark, x, y, 0.012), scr = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, toneMapped: false })); scr.position.z = 0.012; fr.add(scr); disp.push({ c, g: c.getContext('2d'), t, kind }); return fr; };
+    dk.box(1.22, 0.62, 0.04, m.carbon, 0, 0, -0.02); dk.box(1.26, 0.025, 0.16, m.carbon, 0, 0.32, 0.06); [1, -1].forEach(k => dk.box(0.025, 0.66, 0.1, m.carbon, k * 0.62, 0, 0.03)); // pupitre, casquette, joues
+    [['BSP', -0.435], ['TWS', -0.145], ['TWA', 0.145], ['HDG', 0.435]].forEach(([k, x]) => mk(0.27, 0.165, 256, 160, x, 0.175, 'big:' + k));
+    mk(0.4, 0.25, 512, 320, 0, -0.13, 'nav'); mk(0.33, 0.21, 512, 330, 0.405, -0.15, 'float');
+    // sous le pupitre : caisson jusqu'au plancher, poignée de maintien devant la casquette, télécommande de pilote à droite
+    box(1.22, 0.44, 0.55, m.carbon, 0, YF + 0.22, ZD + 0.02); tube([[-0.5, 1.62, ZD - 0.22], [0, 1.66, ZD - 0.26], [0.5, 1.62, ZD - 0.22]], 0.016, m.ti2, 12);
+    { const pk = box(0.13, 0.05, 0.09, m.dark, 0.5, 1.07, ZD + 0.34, -0.3, -0.25, 0); noM(pk); for (let i = 0; i < 6; i++) noM(box(0.022, 0.008, 0.018, i === 2 ? m.red : m.grey, 0.465 + (i % 3) * 0.035, 1.1, ZD + 0.32 + (i > 2 ? 0.03 : 0), -0.3, -0.25, 0)); }
+    // caméra en tête de mât (mi-hauteur) : proue, flotteurs et plan d'eau devant ; infrarouge la nuit — écran en bas à gauche du pupitre
     const mcam = cabMastCam(V.root, [G], () => { const k = cabWindSide(); return [k * 1.45, 11.5, -0.35, k * 0.3]; }, -0.6, 80) /* au bout de la barre de flèche au vent : le foc ne masque pas la vue */;
-    { const fr = box(0.385, 0.255, 0.025, m.dark, -0.55, 1.2, ZD + 0.2, -0.55, 0.4, 0); const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.23), mcam.mat); scr.position.z = 0.0135; fr.add(scr);
-      const oc = document.createElement('canvas'); oc.width = 400; oc.height = 256; const ot = new THREE.CanvasTexture(oc), ov = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.23), new THREE.MeshBasicMaterial({ map: ot, transparent: true, toneMapped: false, depthWrite: false })); ov.position.z = 0.015; fr.add(ov); noM(fr);
+    { const fr = dk.box(0.352, 0.232, 0.022, m.dark, -0.405, -0.15, 0.012); const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.33, 0.21), mcam.mat); scr.position.z = 0.012; fr.add(scr);
+      const oc = document.createElement('canvas'); oc.width = 400; oc.height = 256; const ot = new THREE.CanvasTexture(oc), ov = new THREE.Mesh(new THREE.PlaneGeometry(0.33, 0.21), new THREE.MeshBasicMaterial({ map: ot, transparent: true, toneMapped: false, depthWrite: false })); ov.position.z = 0.014; fr.add(ov);
       disp.push({ c: oc, g: oc.getContext('2d'), t: ot, kind: 'mastcam' }); }
     // éclairage d'ambiance de nuit : plafonnier dans la bulle + rubans LED sous la console et au pied des parois
-    const amb = cabAmbient(G, [[0, 2.3, 4.7, 1], [0, 1.6, 6.2, 0.5]], [[1.18, 0.012, 0.014, 0, 1.325, ZD + 0.16], [0.012, 0.012, 1.6, 0.6, YF + 0.04, 5.2], [0.012, 0.012, 1.6, -0.6, YF + 0.04, 5.2]]);
+    const amb = cabAmbient(G, [[0, 2.3, 4.7, 1], [0, 1.6, 6.2, 0.5]], [[1.18, 0.012, 0.014, 0, YF + 0.45, ZD + 0.3], [0.012, 0.012, 1.6, 0.6, YF + 0.04, 5.2], [0.012, 0.012, 1.6, -0.6, YF + 0.04, 5.2]]);
     // winchs animés sur les consoles, manivelle sur le winch au vent
     const rots = [], winch = (x, y, z, crank) => { const g = new THREE.Group(); g.position.set(x, y, z); g.scale.setScalar(1.3); g.userData.noMergeTree = true; G.add(g); const r = new THREE.Group(); g.add(r); rots.push(r);
       add(new THREE.CylinderGeometry(0.095, 0.105, 0.03, 24), m.ti2, 0, 0.015, 0, 0, 0, 0, g); add(new THREE.CylinderGeometry(0.075, 0.09, 0.11, 24), m.ti, 0, 0.085, 0, 0, 0, 0, r);
@@ -3111,14 +3142,13 @@ const O50I = (() => {
       tube([[k * 0.5, y, z], [k * 0.4, YF + 0.15, z + 0.3], [k * 0.25, YF + 0.03, z + 0.9 + rnd(0, 0.5)], [k * rnd(0.1, 0.4), YF + 0.03, z + 1.5 + rnd(0, 0.6)]], 0.0055, m.ropes[(ri++) % m.ropes.length], 22); } });
     // divers : sac de matossage, gourde, poignées, caméra embarquée, pompe de ballast… (cockpit de multicoque : spartiate)
     box(0.25, 0.3, 0.6, m.foam, -0.55, YF + 0.15, 6.3); cyl(0.035, 0.035, 0.22, m.red, 0.5, YF + 0.11, 5.9, 0, 0, 0, 12);
-    [1, -1].forEach(k => tube([[k * 0.55, 1.75, 4.6], [k * 0.62, 1.9, 5.2], [k * 0.55, 1.75, 5.8]], 0.015, m.ti2, 10));
-    box(0.06, 0.045, 0.05, m.dark, 0.0, 2.3, 6.0);
+    [1, -1].forEach(k => tube([[k * 0.42, 2.2, 4.4], [k * 0.46, 2.24, 5.0], [k * 0.42, 2.2, 5.6]], 0.012, m.ti2, 10)); // mains courantes sous le toit de la bulle (hors du champ des vitres latérales)
     G.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     // ---------- écrans ----------
     const norm = a => ((a % 360) + 540) % 360 - 180;
     const data = () => { const bsp = P.dspd || 0, tws = P.tws || 0, twa = norm((P.twd || 0) - (P.dispHdg || 0)); return { bsp, tws, twa, hdg: ((P.dispHdg || 0) % 360 + 360) % 360, heel: P.heel || 0, lift: P.lift || 0, fS: P.foilS ?? 1, fP: P.foilP ?? 1 }; };
     const draw = (d, s, night) => { const g = d.g, w = d.c.width, h = d.c.height, fg = night ? '#ff3b2f' : '#f4f6f7', dim = night ? '#a3261f' : '#8d969c', acc = night ? '#ff3b2f' : '#ff7a1a';
-      if (d.kind === 'mastcam') { cabCamOverlay(g, w, h, mcam.ir, night); d.t.needsUpdate = true; return; }
+      if (d.kind === 'mastcam') { cabCamOverlay(g, w, h, mcam.ir, night, mcam); d.t.needsUpdate = true; return; }
       g.fillStyle = night ? '#070000' : '#0d0f11'; g.fillRect(0, 0, w, h); g.textAlign = 'left'; g.textBaseline = 'alphabetic';
       if (d.kind.startsWith('big:')) { const k = d.kind.slice(4), v = k === 'BSP' ? s.bsp.toFixed(1) : k === 'TWS' ? s.tws.toFixed(1) : k === 'TWA' ? String(Math.round(Math.abs(s.twa))) + '°' : String(Math.round(s.hdg) % 360).padStart(3, '0');
         g.fillStyle = dim; g.font = 'bold 26px Arial'; g.fillText(k === 'BSP' ? T('VITESSE', 'SPEED') : k === 'TWS' ? T('VENT RÉEL', 'TRUE WIND') : k === 'TWA' ? T('ANGLE VENT', 'WIND ANGLE') : T('CAP', 'HEADING'), 12, 30);
@@ -3138,7 +3168,12 @@ const O50I = (() => {
       look(az) { seat.visible = Math.abs(az) < 100; },
       anim(dt, grind, ease) { const w = dt * (grind * 7 - ease * 4); rots.forEach((r, i) => r.rotation.y -= w * (i % 2 ? -1 : 1)); } };
   }
-  function dropDome(parent, geo) { dropM = dropLayer(); dropOverlay(parent, geo, dropM); }
+  // gouttes seulement sur les vitrages : le calque suit la peau de la bulle, on le découpe avec la texture de la bulle (vitre = trou)
+  function dropDome(parent, geo) { dropM = dropLayer(); const dm = dropOverlay(parent, geo, dropM); dm.geometry.setAttribute('uvm', geo.attributes.uv); const mask = o50Kit().domeTex;
+    dropM.onBeforeCompile = sh => { sh.uniforms.uMask = { value: mask };
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 uvm; varying vec2 vUvm;').replace('#include <uv_vertex>', '#include <uv_vertex>\n  vUvm = uvm;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uMask; varying vec2 vUvm;').replace('#include <map_fragment>', 'if (texture2D(uMask, vUvm).a > 0.5) discard;\n#include <map_fragment>'); };
+    dropM.customProgramCacheKey = () => 'o50drops'; }
   function winchPos() { return [[XW, 1.56, 3.2], [-XW, 1.56, 3.2], [XW, 1.56, 4.4], [-XW, 1.56, 4.4]]; }
   function attach(V) { const G = new THREE.Group(); G.name = 'o50cab'; shell(G); if (V.isPlayer && !V.ghost) V.cab = fit(G, V); V.root.add(G); V.cabEye = EYE; }
   return { patchKit, domeMat, attach, uIn, EYE, winchPos, dropDome };
@@ -3160,13 +3195,13 @@ function o50Kit() {
   const ext = (pts, w) => { const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) { const p = pts[i]; p.length === 4 ? sh.quadraticCurveTo(p[0], p[1], p[2], p[3]) : sh.lineTo(p[0], p[1]); } sh.closePath();
     const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.06, bevelSegments: 2, curveSegments: 8 }); g.rotateY(-Math.PI / 2); g.translate(w / 2, 0, 0); return g; };
   // cockpit (d'après rendus) : coque blanche ajourée de grandes découpes, posée sur le bras arrière, au-dessus d'un cockpit creusé
-  const domeTex = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d'); g.fillStyle = '#f3f4f6'; g.fillRect(0, 0, 512, 256);
+  const domeTex = (() => { const c = document.createElement('canvas'); c.width = 2048; c.height = 1024; const g = c.getContext('2d'); g.scale(4, 4); g.fillStyle = '#f3f4f6'; g.fillRect(0, 0, 512, 256);
     g.globalCompositeOperation = 'destination-out'; const hole = (x, y, rx, ry) => { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); g.fill(); };
     for (let k = 0; k < 8; k++) hole(32 + k * 64, 168, 20, 24);          // bandeau de découpes sur le pourtour
     g.globalCompositeOperation = 'source-over'; g.fillStyle = '#3b4046';  // hublots et capots sombres en damier sur le dessus (vue du dessus)
     const rr = (x, y, w, h) => { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, 5) : g.rect(x, y, w, h); g.fill(); };
     for (let r = 0; r < 3; r++) for (let k = 0; k < 8; k++) rr(14 + k * 64, 30 + r * 34, 34, 22);
-    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t; })();
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 16; return t; })();
   const dome = (() => { const g = new THREE.SphereGeometry(1, 36, 14, 0, Math.PI * 2, 0, Math.PI / 2); g.scale(1.18, 0.78, 2.3); g.translate(0, 1.48, 5.0); /* dépasse du bras arrière, comme sur la photo */ return g; })();
   const rig = (() => { const pos = [], L = (a, b) => pos.push(...a, ...b), top = [0, 23.35, O50_MZ - 0.05], mid = [0, 15.2, O50_MZ], bs = [0, 1.85, -7.55]; // plus de bout-dehors : amures à l'étrave
     [1, -1].forEach(k => { const cp = [k * O50_X, 1.45, O50_FZ(1) + 0.5], dia = [k * 1.25, 12.0, O50_MZ + 0.1]; L(top, cp); L(mid, cp); L([0, 3.0, O50_MZ], dia); L(dia, top); L(top, [k * O50_X, 1.25, 5.9]); L([0, 0.95, O50_ZF], [k * O50_X * 0.55, O50_BY(0.55), O50_FZ(0.55)]); });
@@ -3579,6 +3614,34 @@ function cabAmbient(parent, lamps, strips) {
 // caméra en tête de mât (mi-hauteur) qui filme la proue et le plan d'eau devant ; image rendue ~10 fois par seconde dans une cible HDR,
 // affichée telle quelle de jour, en infrarouge de nuit (luminance fortement amplifiée, niveaux de gris « blanc chaud », grain du capteur)
 const CAM_DT = 0.2; // caméra de mât : 5 images/s (était 10) ; le rendu complet de la scène est le plus gros coût de la vue cabine
+// passe thermique de la caméra de mât (nuit) : au lieu d'amplifier l'image visible (ciel saturé, mer en bruit gris), on rend une image « IR »
+// dédiée : ciel froid (noir), mer selon son émissivité (plus claire face à la caméra, sombre en rasant où elle reflète le ciel froid,
+// sillages et écume un peu plus chauds), bateaux chauds (blancs) ; le brouillard thermique est plus léger que le visible
+const IRP = { sc: null, oMat: null, hMat: null, c: null };
+function irMats() {
+  if (IRP.oMat) return; IRP.c = new THREE.Color(); IRP.sc = new THREE.Scene(); IRP.sc.matrixWorldAutoUpdate = false;
+  const fs = oceanMat.fragmentShader, i0 = fs.indexOf('float U = max(ws'), i1 = fs.indexOf('void main0(){');
+  const body = fs.slice(0, i0).replace('void main0(){', 'void main(){') + `
+      float nv = max(dot(n, v), 0.0), fr = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
+      float t = 0.07 + 0.24 * pow(nv, 2.0) * (1.0 - fr) * (0.8 + 0.4 * smoothstep(0.55, 1.2, vCrest)) + 0.1 * hf + 0.05 * aer + 0.03 * ring;
+      if (uSdfOn > 0.5) { vec2 su = (vWorld.xz - uSdfC) / uSdfS + 0.5; if (min(min(su.x, su.y), min(1.0 - su.x, 1.0 - su.y)) > 0.0) { float d = texture2D(uSdf, su).r * 1500.0; t += 0.12 * (1.0 - smoothstep(0.0, 60.0, d)); } }
+      t = mix(t, 0.055, 1.0 - exp(-camD * uFog * 0.35));
+      gl_FragColor = vec4(vec3(t), 1.0); }`;
+  IRP.oMat = new THREE.ShaderMaterial({ side: THREE.DoubleSide, fog: false, uniforms: oceanU, extensions: { derivatives: true }, vertexShader: oceanMat.vertexShader, fragmentShader: body });
+  IRP.hMat = new THREE.ShaderMaterial({ side: THREE.DoubleSide, fog: false, uniforms: { uFog: oceanU.uFog },
+    vertexShader: 'varying vec3 vN; varying float vD; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalMatrix * normal; vD = -mv.z; gl_Position = projectionMatrix * mv; }',
+    fragmentShader: `uniform float uFog; varying vec3 vN; varying float vD;
+      void main(){ float l = abs(normalize(vN).z), hot = mix(0.3, 1.0, smoothstep(22.0, 60.0, vD)); float t = hot * (0.6 + 0.4 * l);
+        gl_FragColor = vec4(vec3(mix(t, 0.035, 1.0 - exp(-vD * uFog * 0.35))), 1.0); }` });
+}
+function irRender(rt, cam) {
+  irMats(); const cc = renderer.getClearColor(IRP.c).getHex(), ca = renderer.getClearAlpha(), ac = renderer.autoClear;
+  renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 1); renderer.clear();
+  ocean.material = IRP.oMat; renderer.render(ocean, cam); ocean.material = oceanMat;
+  const roots = active.map(b => b.vis && b.vis.root).filter(r => r && r.visible); if (player && player.vis && !roots.includes(player.vis.root)) roots.push(player.vis.root);
+  IRP.sc.overrideMaterial = IRP.hMat; IRP.sc.children = roots; renderer.autoClear = false; renderer.render(IRP.sc, cam); IRP.sc.children = [];
+  renderer.autoClear = ac; renderer.setClearColor(cc, ca);
+}
 function cabMastCam(root, hide, mastPt, tilt = -0.6, fov = 80) {
   const rt = new THREE.WebGLRenderTarget(400, 256, { type: THREE.HalfFloatType }), cam = new THREE.PerspectiveCamera(fov, 400 / 256, 0.3, 80000);
   const U = { map: { value: rt.texture }, uIR: { value: 0 }, uGain: { value: 30 }, uT: { value: 0 } };
@@ -3587,7 +3650,7 @@ function cabMastCam(root, hide, mastPt, tilt = -0.6, fov = 80) {
     fragmentShader: `uniform sampler2D map; uniform float uIR, uGain, uT; varying vec2 vUv;
       float hh(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
       void main(){ vec3 c = texture2D(map, vUv).rgb;
-        if (uIR > 0.5) { float l = dot(c, vec3(0.3, 0.59, 0.11)); float v = 1.0 - exp(-l * uGain); v = pow(v, 0.75);
+        if (uIR > 0.5) { float l = dot(c, vec3(0.3, 0.59, 0.11)); float v = 1.0 - exp(-l * 2.0); v = pow(v, 0.8);
           vec2 px = floor(vUv * vec2(400.0, 256.0)); v += (hh(px + uT) - 0.5) * 0.09; v += (hh(vec2(px.y, uT)) - 0.5) * 0.025; vec2 q = vUv - 0.5; v *= 1.0 - dot(q, q) * 0.8;
           gl_FragColor = vec4(pow(clamp(v, 0.0, 1.0) * vec3(0.93, 1.0, 0.96), vec3(2.2)), 1.0); }
         else { gl_FragColor = vec4(c, 1.0);
@@ -3596,21 +3659,37 @@ function cabMastCam(root, hide, mastPt, tilt = -0.6, fov = 80) {
         #include <colorspace_fragment>
       }` });
   const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler(); let acc = 1, ir = 0;
-  return { mat, rt, gl: () => renderer, hf: v => THREE.DataUtils.fromHalfFloat(v), get ir() { return ir; },
+  return { mat, rt, cam, gl: () => renderer, hf: v => THREE.DataUtils.fromHalfFloat(v), get ir() { return ir; },
     update(dt, active) { acc += dt; U.uT.value = (U.uT.value + dt * 37) % 1000; ir = (ENV.night || 0) > 0.45 ? 1 : 0; U.uIR.value = ir; U.uGain.value = 18 + 70 * Math.max(0, (ENV.night || 0) - 0.45);
       if (!active || acc < CAM_DT || typeof renderer === 'undefined') return; acc = 0; root.updateMatrixWorld(); const mp = typeof mastPt === 'function' ? mastPt() : mastPt; cam.position.set(mp[0], mp[1], mp[2]).applyMatrix4(root.matrixWorld);
-      cam.quaternion.copy(root.getWorldQuaternion(_q)).multiply(_q2.setFromEuler(_e.set(tilt, mp[3] || 0, 0, 'YXZ'))); cam.updateMatrixWorld();
+      const fv = ir ? fov * 0.6 : fov; if (cam.fov !== fv) { cam.fov = fv; cam.updateProjectionMatrix(); } // IR : visée à l'horizon, champ resserré (détection)
+      cam.quaternion.copy(root.getWorldQuaternion(_q)).multiply(_q2.setFromEuler(_e.set(ir ? -0.09 : tilt, mp[3] || 0, 0, 'YXZ'))); cam.updateMatrixWorld();
       const t0 = renderer.getRenderTarget(), cOn = SKYC.uCOn.value, vis = hide.map(o => o.visible); SKYC.uCOn.value = 0; hide.forEach(o => o.visible = false);
-      renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(t0); SKYC.uCOn.value = cOn; hide.forEach((o, i) => o.visible = vis[i]); } };
+      const px = spMat.uniforms.uPx.value; spMat.uniforms.uPx.value = 256 / (2 * Math.tan(fov * D2R / 2)); // taille des embruns pour cette caméra (sinon grosses taches)
+      if (ir) irRender(rt, cam); else { renderer.setRenderTarget(rt); renderer.render(scene, cam); } renderer.setRenderTarget(t0); spMat.uniforms.uPx.value = px; SKYC.uCOn.value = cOn; hide.forEach((o, i) => o.visible = vis[i]); } };
 }
 // côté au vent dans le repère du bateau (x tribord) : la caméra s'y décale et regarde un peu dehors, pour que la voile d'avant (sous le vent) masque moins la vue
 const cabWindSide = () => { const P = player; return ((((P.twd || 0) - (P.dispHdg || 0)) % 360 + 540) % 360 - 180) >= 0 ? -1 : 1; };
 // bandeau dessiné par-dessus l'image de la caméra
-function cabCamOverlay(g, w, h, ir, night) {
+function cabCamOverlay(g, w, h, ir, night, mc) {
   g.clearRect(0, 0, w, h); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(0, 0, w, 26); g.fillStyle = night ? '#ff4433' : '#eaf6ff'; g.font = 'bold 15px Arial'; g.textAlign = 'left';
   g.fillText(T('CAM MÂT · AVANT', 'MAST CAM · FORWARD') + (ir ? ' · IR' : ''), 8, 18); g.textAlign = 'right'; g.fillStyle = (Date.now() / 600 | 0) % 2 ? '#ff3b2f' : 'rgba(255,59,47,0.35)'; g.fillText('● REC', w - 8, 18);
   g.strokeStyle = ir ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.35)'; g.lineWidth = 1.5; g.strokeRect(w / 2 - 26, h / 2 - 16, 52, 32); g.textAlign = 'left';
-  if (ir) { g.fillStyle = 'rgba(255,255,255,0.75)'; g.font = 'bold 12px Arial'; g.fillText('IR · WHITE HOT', 8, h - 8); }
+  if (ir) { g.fillStyle = 'rgba(255,255,255,0.75)'; g.font = 'bold 12px Arial'; g.fillText('IR · WHITE HOT', 8, h - 8); if (mc && mc.cam) irTargets(g, w, h, mc.cam); }
+}
+// suivi de cibles de la caméra thermique : un cadre et la distance sur chaque bateau détecté (un concurrent à 2 milles ne fait que 1 ou 2 pixels)
+const _irA = new THREE.Vector3(), _irB = new THREE.Vector3();
+function irTargets(g, w, h, cam) {
+  let n = 0; const lab = []; g.font = 'bold 11px Arial'; g.textAlign = 'center'; g.lineWidth = 1.5;
+  active.forEach(b => { if (b === player || !b.vis || !b.vis.root.visible || n > 5) return; const R = b.vis.root, d = R.position.distanceTo(cam.position); if (d > 9000) return;
+    _irA.copy(R.position).project(cam); if (_irA.z > 1 || Math.abs(_irA.x) > 0.97 || Math.abs(_irA.y) > 0.95) return; _irB.copy(R.position).setY(R.position.y + 20).project(cam);
+    const x = (_irA.x + 1) / 2 * w, y = (1 - _irA.y) / 2 * h, hs = clamp(((1 - _irB.y) / 2 * h - y) * -0.6, 7, 40), ws = hs * 1.3, k = hs * 0.45; n++;
+    g.strokeStyle = 'rgba(255,214,64,0.9)'; g.beginPath();
+    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sy]) => { const cx = x + sx * ws, cy = y - hs * 0.6 + sy * hs; g.moveTo(cx - sx * k, cy); g.lineTo(cx, cy); g.lineTo(cx, cy - sy * k); }); g.stroke();
+    if (d > 500) { const r = clamp(d / 900, 1.5, 3), gr = g.createRadialGradient(x, y - 1, 0, x, y - 1, r * 2); gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(x - r * 2, y - 1 - r * 2, r * 4, r * 4); } // point chaud : bateau trop petit pour le capteur
+    const t = (d / 1852).toFixed(d < 1852 ? 2 : 1) + ' NM'; let ly = y - hs * 1.6 - 4; if (lab.some(([a, c]) => Math.abs(a - x) < 46 && Math.abs(c - ly) < 13)) ly = y + hs * 0.4 + 13; lab.push([x, ly]);
+    g.fillStyle = 'rgba(255,214,64,0.95)'; g.fillText(t, x, ly); });
+  g.textAlign = 'left';
 }
 /* ===== fin cabine commun */
 // travail aux winchs (pour l'animation et le son en cabine) : on borde quand le réglage d'écoute diminue, on choque quand il augmente ;
@@ -3847,7 +3926,7 @@ const TOURS = {
   tdf: { id: 'tdf', icon: '🇫🇷', name: 'Tour de France à la voile', en: 'Tour de France under sail',
     desc: 'Le Havre → La Rochelle → Lisbonne → Marseille, ≈ 2 050 nm : Cotentin et pointe de Bretagne, golfe de Gascogne et cap Finisterre, puis Gibraltar et la Méditerranée.',
     descEn: 'Le Havre → La Rochelle → Lisbon → Marseille, ≈ 2,050 nm: Cotentin and Brittany, Bay of Biscay and Cape Finisterre, then Gibraltar and the Mediterranean.',
-    legs: [tourLeg('tdf', 1, 3, 'Le Havre', 'Le Havre', 'La Rochelle', 'La Rochelle', 420, [49.53, -0.02], [49.6, -0.5], [46.10, -1.30], [45.6, 50.3, -6.0, 0.6], null),
+    legs: [tourLeg('tdf', 1, 3, 'Le Havre', 'Le Havre', 'La Rochelle', 'La Rochelle', 420, [49.53, -0.02], [49.6, -0.5], [46.10, -1.30], [45.6, 50.3, -6.0, 0.6], null, [['Cap de la Hague', 'Cap de la Hague', 49.78, -2.0, 3], ['Ouessant', 'Ushant', 48.47, -5.25, 3]]),
       tourLeg('tdf', 2, 3, 'La Rochelle', 'La Rochelle', 'Lisbonne', 'Lisbon', 580, [46.08, -1.42], [46.0, -1.8], [38.67, -9.35], [38.2, 46.6, -11.5, -0.8], NORTADA),
       tourLeg('tdf', 3, 3, 'Lisbonne', 'Lisbon', 'Marseille', 'Marseille', 1050, [38.64, -9.40], [38.4, -9.6], [43.24, 5.28], [35.4, 44.0, -10.8, 6.5], NORTADA.concat(MEDZ), [['Cap Saint-Vincent', 'Cape St. Vincent', 36.92, -9.12, 3], ['Détroit de Gibraltar', 'Strait of Gibraltar', 35.96, -5.55, 3]])] },
   med: { id: 'med', icon: '🌊', name: 'Tour de Méditerranée', en: 'Mediterranean tour',
@@ -4123,7 +4202,10 @@ function botDecide(b, w, dt) {
   if (pr.mi !== b.mi || dMk < pr.d - (CZ() ? 0.5 : 3)) { pr.t = gameT; pr.d = dMk; pr.mi = b.mi; }
   else if (gameT - pr.t > (CZ() ? 2 : 12) * 3600) { pr.t = gameT; pr.d = dMk; b.strictT = gameT + (CZ() ? 1.5 : 6) * 3600; if (!b.routeJob) scheduleBotRoute(b); }
   const stale = valid && b.fcPend != null && gameT - R.t0 > botEvery(b) * 3600 && gameT - b.fcPend >= lag, off = adv && adv.xtrack > (CZ() ? 3 : 10 + (b.every - 6) * 1.7);
-  if (!b.routeJob && (!valid || stale || off)) scheduleBotRoute(b);
+  // au départ, la route du joueur (même départ, même marque) est partagée avec la flotte dès qu'elle est prête : on l'attend
+  // au lieu de lancer cinq calculs identiques qui engorgent la file
+  const waitShared = !valid && b.mi === 0 && ROUTE.busy && ROUTE.dest && ROUTE.dest.mi === 0 && gameT - ROUTE.t0 < 6 * 3600;
+  if (!b.routeJob && !waitShared && (!valid || stale || off)) scheduleBotRoute(b);
   if (CZ() && dMk < 3 && !segLandLL(b.lat, b.lon, mk.lat, mk.lon, dMk)) adv = null; // près de la marque, en vue directe : on vise la bouée
   let h, side, cur = norm180(w.twd - b.hdg) >= 0 ? 1 : -1;
   let ah = adv ? adv.hdg : null;
@@ -4136,7 +4218,10 @@ function botDecide(b, w, dt) {
   }
   if (ah !== null) { h = norm360(ah + (Math.random() - 0.5) * 3); side = norm180(w.twd - h) >= 0 ? 1 : -1; if (side !== cur && Math.abs(norm180(w.twd - h)) < 4) side = cur; }
   else {
-    const dist = dMk, best = vmcBest(b, [mk.lat, mk.lon], w), hy = dist < 120 ? 0 : b.hyst, cv = best[cur].v;
+    // sans route : à la sortie du départ, cap sur le point de sortie prévu par le parcours (pas en ligne droite vers une marque derrière la côte)
+    const fw = b.mi === 0 && COURSE.firstWp && !valid && gcDist(b.lat, b.lon, COURSE.firstWp[0], COURSE.firstWp[1]) > 2 ? COURSE.firstWp : null;
+    const dist = fw ? gcDist(b.lat, b.lon, fw[0], fw[1]) : dMk, best = vmcBest(b, fw || [mk.lat, mk.lon], w), hy = dist < 120 ? 0 : b.hyst, cv = best[cur].v;
+    b.nextDecision = Math.min(b.nextDecision, CZ() ? 120 : 300); // décision provisoire : on réévalue vite, la route arrive
     side = best[-cur].v > cv + hy * Math.abs(cv) + 0.2 ? -cur : cur; h = norm360(best[side].h + (Math.random() - 0.5) * 3);
   }
   if (side !== cur) requestMan(b, { type: 'turn', toTwa: norm180(w.twd - h) }); else b.hdg = h;
@@ -4607,7 +4692,8 @@ function startRouting(dest, shareWithBots) {
   const job = { st, onStep: s => { ROUTE.steps = s.step; }, onDone: (r, s) => {
     if (ROUTE.job !== job) return; ROUTE.job = null;
     if (r === 'done') { Object.assign(ROUTE, { nodes: flatNodes(s.best), eta: s.best.t, busy: false, nmode: st.mode || 'normal' }); if (ROUTE.follow) toast('Routage mis à jour', 1500); cabAlert('router');
-      if (shareWithBots && !st.mode) active.forEach(b => { if (!b.isPlayer && b.mi === dest.mi) b.route = { nodes: ROUTE.nodes, mi: dest.mi, t0: gameT - Math.random() * botEvery(b) * 3600 * 0.8, eta: s.best.t }; }); }
+      if (shareWithBots && !st.mode) active.forEach(b => { if (!b.isPlayer && b.mi === dest.mi) { if (b.routeJob) { b.routeJob.cancelled = true; b.routeJob = null; }
+        b.route = { nodes: ROUTE.nodes, mi: dest.mi, t0: gameT - Math.random() * botEvery(b) * 3600 * 0.8, eta: s.best.t }; b.nextDecision = Math.min(b.nextDecision, 20 + Math.random() * 100); } }); }
     else { Object.assign(ROUTE, { busy: false, err: 'Destination hors de portée (terre ou trop loin)', nodes: null }); cabAlert('routerWarn'); }
   } };
   ROUTE.job = job; enqueueJob(job, true);
@@ -4767,7 +4853,8 @@ addEventListener('keydown', e => {
   keys[k] = true; keys.shift = e.shiftKey;
   if (e.repeat) return;
   if (AUD.on) initAudio();
-  if (!$('overlay').classList.contains('hide')) { if (k === 'enter') { const b = $('card').querySelector('[data-default]'); if (b) b.click(); } return; }
+  if (!$('overlay').classList.contains('hide')) { if (k === 'enter') { const b = $('card').querySelector('[data-default]'); if (b) b.click(); }
+    else if (k === 'escape' && running && GAME.loaded) { if (MENU_VIEW === 'pause') { $('overlay').classList.add('hide'); paused = false; } else if (MENU_VIEW === 'settings') showMenu('pause'); } return; }
   switch (k) {
     case ' ': doTack(); break; case 't': toggleMode(); break; case 'v': doVMG(); break;
     case '1': case '2': case '3': setSail(+k - 1); break;
@@ -4780,7 +4867,7 @@ addEventListener('keydown', e => {
     case 'k': if (ROUTE.nodes) applyAdvice(); break;
     case 'x': setSound(!AUD.on); break; case 'j': setCycle(!ENV.cycle); break;
     case 'c': toggleCam(); break; case 'm': toggleMapBig(); break; case 'p': togglePause(); break;
-    case 'h': case '?': showHelp(); break; case 'escape': if (ROUTE.pick) { ROUTE.pick = false; } else showMenu(); break;
+    case 'h': case '?': showHelp(); break; case 'escape': if (ROUTE.pick) { ROUTE.pick = false; } else if (MENU_VIEW === 'pause' && running && !$('overlay').classList.contains('hide')) { $('overlay').classList.add('hide'); paused = false; } else showMenu(); break;
     case '+': case '=': setAccel(ACCELS[Math.min(ACCELS.length - 1, ACCELS.indexOf(accel) + 1)]); break;
     case '-': case '_': setAccel(ACCELS[Math.max(0, ACCELS.indexOf(accel) - 1)]); break;
   }
@@ -5328,7 +5415,10 @@ function courseThumb(c, W = 300, H = 170, extra) {
   const cLa = (la0 + la1) / 2, cLo = (lo0 + lo1) / 2, X = lo => W / 2 + (lo - cLo) * cl * s, Y = la => H / 2 - (la - cLa) * s;
   const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#0d4a6e'); gr.addColorStop(1, '#0a3350'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
   const om = MODE, oi = ISLANDS; MODE = 'race'; ISLANDS = RACE_ISL_ALL || (RACE_ISL_ALL = mkIslands(RACE_ISLANDS));
-  try { const st = 2; for (let y = 0; y < H; y += st) for (let x = 0; x < W; x += st) { const la = cLa - (y + 1 - H / 2) / s, lo = cLo + (x + 1 - W / 2) / (cl * s); if (isLand(la, lo)) { g.fillStyle = zeaAt(la, lo) ? '#7a2c35' : '#5f7f4e'; g.fillRect(x, y, st, st); } } }
+  // terres échantillonnées une fois tous les 2 px, puis agrandies avec lissage (côtes nettes au lieu de marches d'escalier)
+  try { const st = 2, lw = Math.ceil(W / st), lh = Math.ceil(H / st), lc = document.createElement('canvas'); lc.width = lw; lc.height = lh; const lg = lc.getContext('2d'), im = lg.createImageData(lw, lh);
+    for (let j = 0; j < lh; j++) for (let i = 0; i < lw; i++) { const la = cLa - (j * st + 1 - H / 2) / s, lo = cLo + (i * st + 1 - W / 2) / (cl * s); if (isLand(la, lo)) { const z = zeaAt(la, lo), o = (j * lw + i) * 4; im.data[o] = z ? 122 : 98; im.data[o + 1] = z ? 44 : 128; im.data[o + 2] = z ? 53 : 80; im.data[o + 3] = 255; } }
+    lg.putImageData(im, 0, 0); g.save(); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.shadowColor = 'rgba(190,230,170,.55)'; g.shadowBlur = 2; g.drawImage(lc, 0, 0, lw * st, lh * st); g.restore(); }
   finally { MODE = om; ISLANDS = oi; }
   const pts = [[c.start.lat, c.start.lon]].concat(c.marks.map(m => [m.lat, m.lon]));
   g.setLineDash([4, 4]); g.strokeStyle = 'rgba(255,209,102,.85)'; g.lineWidth = 1.5; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(X(p[1]), Y(p[0])) : g.moveTo(X(p[1]), Y(p[0]))); g.stroke(); g.setLineDash([]);
@@ -5439,7 +5529,98 @@ function initLivery() {
     ['', '_deck', '_bot'].forEach(x => { delete LIV[LIV_SEL + x]; delete LIV_REDO[LIV_SEL + x]; }); delete SAILC[LIV_SEL]; livSave(); sailSave(); edRefresh(); showMenu('livery'); };
 }
 
-function showMenu(view = 'home') {
+/* ===== Menus de course (solo et multi) : liste des courses à gauche, fiche de la course choisie à droite ===== */
+const RX_SEL = {};
+function courseBoxOf(c) { if (c.box) return c.box; const P = [[c.start.lat, c.start.lon]].concat(c.marks.map(m => [m.lat, m.lon])); let a = 90, b = -90, d = 180, e = -180; P.forEach(([la, lo]) => { a = Math.min(a, la); b = Math.max(b, la); d = Math.min(d, lo); e = Math.max(e, lo); });
+  const m = Math.max(b - a, e - d) * 0.12 + 0.5; return (c.box = [a - m, b + m, d - m, e + m]); }
+const rxThumb = (c, W, H) => courseThumb(Object.assign(c, { box: courseBoxOf(c) }), W, H);
+function recBest(id) { let t = null; try { t = parseFloat(localStorage.getItem('gl3d_best_' + id + (CLS.id === 'imoca' ? '' : '_' + CLS.id))); } catch (e) {} return t || null; }
+const rxRec = id => { const t = recBest(id); return t ? fmtDur(t) : '—'; };
+const RX_OCEAN = () => [
+  { key: 'transat', btn: 'goRace', icon: '⛵', t: 'Transat', sub: T('Bretagne → Guadeloupe', 'Brittany → Guadeloupe'), nm: 3300, legs: 1, play: CLS.id === 'imoca' ? '≥ 38 min' : '≥ 30 min',
+    d: T(`Traversée de l'Atlantique face à 5 bateaux qui se routent eux aussi : dépressions au départ de Bretagne, puis descente vers les alizés. ${CLS.id === 'imoca' ? '11 à 13 jours de course.' : '≈ 15 à 22 jours de course.'}`, `Atlantic crossing against 5 boats that route too: lows off Brittany, then down to the trade winds. ${CLS.id === 'imoca' ? '11 to 13 days of racing.' : '≈ 15 to 22 days of racing.'}`) },
+  { key: 'minitransat', btn: 'goMiniT', icon: '🌴', t: 'Mini Transat', sub: T('Les Sables → La Palma → Saint-François', 'Les Sables → La Palma → Saint-François'), nm: 4000, legs: 2, play: '45-70 min',
+    d: T('Deux étapes, classement au temps cumulé : golfe de Gascogne et Canaries, puis la grande traversée dans les alizés.', 'Two legs, ranked on cumulative time: Bay of Biscay and the Canaries, then the long trade-wind crossing.') },
+  { key: 'sas', btn: 'goSAS', icon: '⚓', t: T('Les Sables – Açores', 'Les Sables – Azores'), sub: T('Les Sables → Horta → Les Sables', 'Les Sables → Horta → Les Sables'), nm: 2500, legs: 2, play: '35-50 min',
+    d: T('Descente vers l\'anticyclone, escale à Horta, retour face aux dépressions. Classement au temps cumulé.', 'Down to the high, stopover in Horta, back against the lows. Ranked on cumulative time.') },
+  { key: 'fastnet', btn: 'goFast', icon: '🗼', t: 'Fastnet', sub: T('Solent → phare du Fastnet → Cherbourg', 'Solent → Fastnet lighthouse → Cherbourg'), nm: 620, legs: 1, play: '30-70 min',
+    d: T('Côtes, cailloux, courants et dépressions de Manche : la course la plus tactique du grand large.', 'Coasts, rocks, tides and Channel lows: the most tactical of the offshore races.') },
+  { key: 'indien', btn: 'goIndien', icon: '🌊', t: T('Océan Indien', 'Indian Ocean'), sub: T('Le Cap → Fremantle', 'Cape Town → Fremantle'), nm: 4700, legs: 1, play: '40-60 min',
+    d: T('Les quarantièmes rugissants : dépressions en série, mer très formée, zone des glaces interdite.', 'The Roaring Forties: back-to-back lows, huge seas, ice exclusion zone.') },
+];
+const rxRowH = (tab, it, sel) => `<button class="rxRow ${sel === it.key ? 'on' : ''}" data-rsel="${tab}|${it.key}">${it.img ? `<img src="${it.img}" alt="">` : `<span class="rxIco">${it.icon}</span>`}<span class="rxTx"><b>${it.icon && it.img ? it.icon + ' ' : ''}${it.t}</b><span>${it.sub}</span><small>${it.meta || ''}</small></span>${it.badge || '<span></span>'}</button>`;
+const rxDetH = it => `<div class="rxDet" id="rxDet">${it.big ? `<img class="rxMap" src="${it.big}" alt="">` : `<div class="rxMap">${it.icon}</div>`}<div><h2>${it.icon} ${it.t}</h2><p class="rxSub">${it.sub}</p></div>
+  ${it.stats ? `<div class="rxStats">${it.stats.map(([l, v]) => `<div><small>${l}</small><b>${v}</b></div>`).join('')}</div>` : ''}${it.body || ''}<div class="rxCta">${it.cta || ''}</div></div>`;
+const rxStart = () => `⛵ ${T('Prendre le départ', 'Start')} · ${CLS.name}`;
+function rxSoloItems(tab) {
+  const S = T('Étapes', 'Legs'), D = T('Distance', 'Distance'), P = T('Temps de jeu', 'Play time'), R = T('Record', 'Record');
+  if (tab === 'ocean') return RX_OCEAN().map(o => { const c = COURSES[o.key], rb = recBest(o.key);
+    return { key: o.key, icon: o.icon, t: o.t, sub: o.sub, img: rxThumb(c, 264, 148), meta: `≈ ${nf(o.nm)} nm · ${o.play}${o.legs > 1 ? ' · ' + plural(o.legs, 'étape', 'leg') : ''}`, badge: rb ? `<i class="rxBadge">👻 ${fmtDur(rb)}</i>` : '',
+      det: () => ({ icon: o.icon, t: o.t, sub: o.sub, big: rxThumb(c, 640, 360), stats: [[D, `≈ ${nf(o.nm)} nm`], [P, o.play], [S, o.legs], [R, rxRec(o.key)]], body: `<p>${o.d}</p>`, cta: `<button id="${o.btn}" data-default>${rxStart()}</button>` }) }; });
+  if (tab === 'tours') return Object.values(TOURS).map(t => { const Pr = tourProg(t.id), k = Pr.legs.length, n = t.legs.length, G = tourGeneral(t.id, CLS.id), lab = c => `${T(c.from, c.fromEn)} → ${T(c.to, c.toEn)}`, nm = t.legs.reduce((a, c) => a + c.nm, 0);
+    const th = { id: 'tour_' + t.id, box: t.box, start: t.legs[0].start, marks: t.legs.map(c => c.marks[c.marks.length - 1]) };
+    const row = (c, i) => { const L = Pr.legs[i], st = L ? `✅ ${fmtDur(L.T)} · ${ord(L.r)}` : i === k ? `▶ ${T('à courir', 'next')}` : '🔒'; return `<tr class="${i === k ? 'me' : ''}"><td>${i + 1}</td><td>${lab(c)}</td><td style="color:#7fa3bd">≈ ${c.nm} nm</td><td style="text-align:right">${st}</td></tr>`; };
+    return { key: t.id, icon: t.icon, t: cN(t), sub: t.legs.map(c => T(c.from, c.fromEn)).concat(T(t.legs[n - 1].to, t.legs[n - 1].toEn)).join(' → '), img: courseThumb(th, 264, 148),
+      meta: `${plural(n, 'étape', 'leg')} · ≈ ${nf(nm)} nm`, badge: k >= n ? `<i class="rxBadge">🏆 ${T('terminé', 'done')}</i>` : k ? `<i class="rxBadge y">${k}/${n}</i>` : '',
+      det: () => ({ icon: t.icon, t: cN(t), sub: T(t.desc, t.descEn), big: courseThumb(th, 640, 360), stats: [[S, n], [D, `≈ ${nf(nm)} nm`], [T('Progression', 'Progress'), `${k}/${n}`], [T('Général', 'Overall'), G ? `${ord(G.rank)} / ${G.rows.length}` : '—']],
+        body: `<table>${t.legs.map(row).join('')}</table>${G ? `<p class="rxNote">${T('Temps cumulé', 'Cumulative time')} (${CLS.name}) : <b>${fmtDur(G.rows[G.rank - 1].T)}</b>. ${T('Entre deux étapes, enchaîne ou reviens plus tard : la progression est gardée pour chaque classe.', 'Between legs, race on or come back later: progress is kept for each class.')}</p>` : `<p class="rxNote">${T('Classement général au temps cumulé. Entre deux étapes, enchaîne ou reviens plus tard : la progression est gardée pour chaque classe.', 'Overall ranking on cumulative time. Between legs, race on or come back later: progress is kept for each class.')}</p>`}`,
+        cta: `${k < n ? `<button data-tleg="${t.legs[k].id}" data-default>⛵ ${T(`Étape ${k + 1}`, `Leg ${k + 1}`)} : ${lab(t.legs[k])}</button>` : ''}${k ? `<button class="sec" data-treset="${t.id}">↺ ${T('Recommencer', 'Restart')}</button>` : ''}` }) }; });
+  if (tab === 'coast') return COASTAL.filter(c => REG_F === 'all' || c.region === REG_F).map(c => { const rb = recBest(c.id);
+    return { key: c.id, icon: '⚓', t: cN(c), sub: `${cZ(c)} · ${T(...REGION_NAMES[c.region])}`, img: courseThumb(c, 264, 148), meta: `${c.nm} nm · ${estTxt(c)} · ${plural(c.marks.length - 1, 'marque', 'mark')}`, badge: rb ? `<i class="rxBadge">👻 ${fmtDur(rb)}</i>` : '',
+      det: () => ({ icon: '⚓', t: cN(c), sub: `${cZ(c)} · ${T(...REGION_NAMES[c.region])}`, big: courseThumb(c, 640, 360), stats: [[D, `${c.nm} nm`], [P, estTxt(c)], [T('Marques', 'Marks'), c.marks.length - 1], [R, rxRec(c.id)]],
+        body: `<p class="rxNote">${c.marks.map((m, i) => `${m.finish ? '🏁' : `<b>${i + 1}</b>`} ${mN(m)}`).join(' · ')}</p><p class="rxNote">${T('Météo et heure de départ tirées au sort, 5 bots.', 'Random weather and start time, 5 bots.')}</p>`, cta: `<button data-coast="${c.id}" data-default>${rxStart()}</button>` }) }; });
+  return [
+    { key: 'free', icon: '🏝', t: T('Navigation libre', 'Free sailing'), sub: T('Archipel de 7 îles et 9 bouées', 'Archipelago of 7 islands and 9 buoys'), meta: T('Vent réglable, sans chrono', 'Adjustable wind, no clock'),
+      det: () => ({ icon: '🏝', t: T('Navigation libre', 'Free sailing'), sub: T('Archipel de 7 îles et 9 bouées', 'Archipelago of 7 islands and 9 buoys'), body: `<p>${T('Vent réglable, routeur vers n\'importe quel point. Idéal pour apprendre les allures, les voiles et les manœuvres.', 'Adjustable wind, router to any point. Ideal to learn points of sail, sails and manoeuvres.')}</p>`, cta: `<button id="goTrain" data-default>${T('S\'entraîner', 'Train')} · ${CLS.name}</button>` }) },
+    { key: 'tuto', icon: '🎓', t: T('Tutoriel', 'Tutorial'), sub: T('4 minutes guidées', '4 guided minutes'), meta: T('Allures, virement, spi, écoute, routeur', 'Points of sail, tack, spinnaker, sheet, router'),
+      det: () => ({ icon: '🎓', t: T('Tutoriel', 'Tutorial'), sub: T('4 minutes guidées dans l\'archipel', '4 guided minutes in the archipelago'), body: `<p>${T('Allures, virement, spi, écoute, routeur, accélération du temps.', 'Points of sail, tack, spinnaker, sheet, router, time acceleration.')}</p>`, cta: `<button id="tutoGo2" data-default>${T('Lancer le tutoriel', 'Start the tutorial')}</button>` }) },
+    { key: 'help', icon: '📖', t: T('Aide', 'Help'), sub: T('Comment marche le jeu', 'How the game works'), meta: T('Manœuvres, prévisions, foils, ris, routeur', 'Manoeuvres, forecasts, foils, reefs, router'),
+      det: () => ({ icon: '📖', t: T('Aide', 'Help'), sub: T('Comment marche le jeu', 'How the game works'), body: `<p>${T('Manœuvres, prévisions, foils, ris, routeur : tout le fonctionnement du jeu.', 'Manoeuvres, forecasts, foils, reefs, router: how the game works.')}</p>`, cta: `<button id="goHelp" class="sec">${T('Lire l\'aide', 'Read help')}</button>` }) },
+  ];
+}
+function rxLayout(title, sub, tabsHtml, listTop, items, tab) {
+  const sel = items.some(x => x.key === RX_SEL[tab]) ? RX_SEL[tab] : (items[0] && items[0].key);
+  const it = items.find(x => x.key === sel);
+  return `<div class="rxHead"><button id="back" class="sec">← ${T('Retour', 'Back')}</button><h2>${title}<small>${sub}</small></h2><span class="rxSp"></span></div>
+    ${clsPick(DAILY_CLASSES).replace('class="clsPick"', 'class="clsPick rxCls"')}
+    ${tabsHtml ? `<div class="rxTabs">${tabsHtml}</div>` : ''}
+    <div class="rxBody"><div class="rxList" id="rxList">${listTop || ''}${items.map(x => rxRowH(tab, x, sel)).join('') || `<p class="rxNote">${T('Aucune course.', 'No race.')}</p>`}</div>${it ? rxDetH(it.det()) : '<div></div>'}</div>`;
+}
+function rxSolo() {
+  const tabs = `<div class="tabs">${[['ocean', T('🌊 Grand large', '🌊 Offshore')], ['tours', T('🏁 Courses à étapes', '🏁 Stage races')], ['coast', T(`⚓ Côtiers (${COASTAL.length})`, `⚓ Coastal (${COASTAL.length})`)], ['train', T('🏝 Entraînement', '🏝 Training')]].map(([k, l]) => `<button data-tab="${k}" class="${SOLO_TAB === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  let top = '';
+  if (SOLO_TAB === 'coast') { const regs = ['all', ...Object.keys(REGION_NAMES).filter(r => COASTAL.some(c => c.region === r))];
+    top = `<div class="chips">${regs.map(r => `<button class="chip ${REG_F === r ? 'on' : ''}" data-reg="${r}">${r === 'all' ? T('Toutes les mers', 'All seas') : T(...REGION_NAMES[r])}</button>`).join('')}</div>`; }
+  return rxLayout('🧭 Solo', T('Choisis ton bateau, puis ta course', 'Pick your boat, then your race'), tabs, top, rxSoloItems(SOLO_TAB), 'solo_' + SOLO_TAB);
+}
+function rxMulti() {
+  const day = parisDay(), pick = dailyPick(day), dayTxt = new Date(day + 'T12:00:00').toLocaleDateString(LOC(), { weekday: 'long', day: 'numeric', month: 'long' });
+  const wk = weekKey(), wid = weeklyPick(wk), wc = COURSES[wid], left = Math.max(0, Math.ceil((weekEnd(wk).getTime() + 12 * 3600e3 - Date.now()) / 86400e3));
+  const est = cl => { const v = { imoca: 16, o50: 18, c40: 11, proto: 8.5 }[cl] || 12; return wc.nm / v; };
+  const clsRow = (id, cl, key, week) => { const d = dailyLoad(key); return `<div class="dcls"><div><b>${clsName(cl)}</b><small>${d.runs.length ? `🏁 ${fmtDur(d.runs[0].T)} · ${plural(d.n, 'essai', 'attempt')}${d.pts ? ' · ✓ pts' : ''}` : week ? T(`≈ ${Math.round(est(cl))} h de course`, `≈ ${Math.round(est(cl))} h race`) : T('Pas encore d\'essai', 'No attempt yet')}</small></div><button data-daily="${id}" data-dcls="${cl}"${week ? ' data-week="1"' : ''}>${d.runs.length ? T('Nouvel essai', 'Try again') : T('Prendre le départ', 'Start')}</button>${NET.ok ? `<button data-board="${id}" data-dcls="${cl}"${week ? ' data-week="1"' : ''} class="sec" title="${T('Classement', 'Leaderboard')}">🏆</button>` : '<span></span>'}</div>`; };
+  const items = [{ key: 'week', icon: '🌊', t: T('Course de la semaine', 'Race of the week'), sub: cN(wc), img: courseThumb(wc, 264, 148), meta: `${wc.nm} nm · ${T('toutes classes', 'all classes')} · ${T(`encore ${left} j`, `${left} d left`)}`, badge: '<i class="rxBadge y">🗓 ' + T('Hebdo', 'Weekly') + '</i>',
+    det: () => ({ icon: '🌊', t: T('Course de la semaine', 'Race of the week') + ' — ' + cN(wc), sub: `${cZ(wc)} · ${wc.nm} nm`, big: courseThumb(wc, 640, 360), stats: [[T('Distance', 'Distance'), `${wc.nm} nm`], [T('Fin', 'Ends'), T(`dans ${left} j`, `in ${left} d`)], [T('Classes', 'Classes'), 4], [T('Météo', 'Weather'), T('figée', 'fixed')]],
+      body: `<p class="rxNote">${T('Même météo pour tous jusqu\'à dimanche minuit. Un classement par classe ; ton premier essai de la semaine rapporte les points de place.', 'Same weather for everyone until Sunday midnight. One leaderboard per class; your first attempt of the week earns placing points.')}</p>${DAILY_CLASSES.map(cl => clsRow(wid, cl, `gl3d_week_${wk}_${wid}_${cl}`, true)).join('')}` }) }]
+    .concat(pick.courses.map(id => { const c = COURSES[id]; return { key: id, icon: '⚓', t: T('Défi du jour', 'Daily challenge') + ' · ' + cN(c), sub: `${cZ(c)} · ${T(REGION_NAMES[c.region][0], REGION_NAMES[c.region][1])}`, img: courseThumb(c, 264, 148), meta: `${c.nm} nm · ${pick.classes.map(clsName).join(' / ')}`, badge: '<i class="rxBadge">☀ ' + T('Jour', 'Day') + '</i>',
+      det: () => ({ icon: '⚓', t: cN(c), sub: `${T('Défi du jour', 'Daily challenge')} · ${dayTxt}`, big: courseThumb(c, 640, 360), stats: [[T('Distance', 'Distance'), `${c.nm} nm`], [T('Temps de jeu', 'Play time'), estTxt(c)], [T('Marques', 'Marks'), c.marks.length - 1], [T('Fin', 'Ends'), T('minuit', 'midnight')]],
+        body: `<p class="rxNote">${T('Même météo, mêmes prévisions et même hasard pour tous jusqu\'à minuit. Ton premier essai rapporte les points de place ; ensuite seul un nouveau record du jour rapporte un bonus.', 'Same weather, forecasts and luck for everyone until midnight. Your first attempt earns placing points; after that only a new daily record earns a bonus.')}</p>${pick.classes.map(cl => clsRow(id, cl, `gl3d_daily_${day}_${id}_${cl}`, false)).join('')}` }) }; }));
+  const sel = items.some(x => x.key === RX_SEL.multi) ? RX_SEL.multi : 'week', it = items.find(x => x.key === sel);
+  return `<div class="rxHead"><button id="back" class="sec">← ${T('Retour', 'Back')}</button><h2>🌐 ${T('Multi', 'Multiplayer')}<small>${T('Même vent pour tous · classements en ligne', 'Same wind for everyone · online leaderboards')}</small></h2><span class="rxSp"></span></div>
+    <div class="rxBody"><div class="rxList" id="rxList">${netBlock()}${items.map(x => rxRowH('multi', x, sel)).join('')}</div>${rxDetH(it.det())}</div>`;
+}
+function pauseView() {
+  const what = MODE === 'race' ? (DAILY.on ? (DAILY.week ? T('Course de la semaine · ', 'Race of the week · ') : T('Défi du jour · ', 'Daily challenge · ')) : '') + cN(COURSE) : T('Navigation libre', 'Free sailing');
+  return `<div class="pzWrap"><h1>⏸ Pause</h1><p class="rxSub">${what} · ${CLS.name}${MODE === 'race' ? ' · ' + fmtRace(gameT) : ''}</p>
+    <nav class="mmnav"><button id="resume" data-default><b>▶ ${T('Reprendre la course', 'Resume race')}</b><small>${T('Échap ou P pour revenir', 'Esc or P to come back')}</small></button>
+    <button id="goSet"><b>⚙ ${T('Réglages', 'Settings')}</b><small>${T('Graphismes, son, interface', 'Graphics, sound, layout')}</small></button>
+    <button id="goHelp"><b>📖 ${T('Aide & commandes', 'Help & controls')}</b><small>${T('Manœuvres, voiles, foils, routeur', 'Manoeuvres, sails, foils, router')}</small></button>
+    <button id="quitGame"><b>🏠 ${T('Menu principal', 'Main menu')}</b><small>${T('Partie sauvegardée · « Continuer » pour la reprendre', 'Game saved · “Continue” to resume it')}</small></button></nav></div>`;
+}
+
+function showMenu(view) {
+  if (view === undefined) view = running && GAME.loaded ? 'pause' : 'home';
+  // le jeu (scène de course, bots, routage, météo) n'est chargé qu'en course : la pause et ses réglages le gardent, tout autre menu le décharge
+  if (GAME.loaded && !LAUNCHING && !(running && (view === 'pause' || view === 'settings'))) unloadGame();
   MENU_VIEW = view;
   if (view === 'home' && PORT.g) { PORT_DIRTY.forEach(id => { if (id !== 'player') portRebuild(id); }); PORT_DIRTY.forEach(id => { if (id !== 'player') PORT_DIRTY.delete(id); }); }
   if (view !== 'livery' && PORT_DIRTY.has('player') && !running) { PORT_DIRTY.delete('player'); setClass(CLS.id); } // visuel du joueur refait avec sa livrée
@@ -5452,7 +5633,8 @@ function showMenu(view = 'home') {
   const day = parisDay(), pick = dailyPick(day), dayTxt = new Date(day + 'T12:00:00').toLocaleDateString(LOC(), { weekday: 'long', day: 'numeric', month: 'long' });
   const coastCard = c => `<div class="c"><img src="${courseThumb(c)}" alt=""><b>${cN(c)}</b><span>${cZ(c)} · ${c.nm} nm · ${estTxt(c)}</span>${recTxt(c.id)}<button data-coast="${c.id}">${T('Prendre le départ', 'Start')}</button></div>`;
   let html = HEAD;
-  $('card').classList.remove('help'); $('overlay').classList.remove('mh'); $('overlay').classList.toggle('mm', view === 'home'); MENU_CINE = view === 'home';
+  $('card').classList.remove('help'); $('overlay').classList.remove('mh'); $('overlay').classList.toggle('mm', view === 'home'); MENU_CINE = view === 'home' || !GAME.loaded;
+  $('overlay').classList.toggle('mu', !GAME.loaded && view !== 'home'); document.body.classList.toggle('mblur', !GAME.loaded && view !== 'home');
   if (view === 'home') { const PR = loadProfile(), LV = levelOf(PR.pts), dc = pick.courses.map(id => cN(COURSES[id])).join(' · '), dl = pick.classes.map(clsName).join(' · ');
     html = `<div class="mmwrap"><div class="logo">OFF<span>ING</span></div><p class="mmtag">Same wind. Your race.</p>
     <div class="mmprof">${NET.me ? `🌐 <b>${esc(NET.me.name)}</b> · ` : ''}⭐ ${nf(PR.pts)} pts · ${lvlName(LV.name)}<div class="bar"><i style="width:${Math.round(LV.prog * 100)}%"></i></div></div>
@@ -5472,13 +5654,8 @@ function showMenu(view = 'home') {
       <div class="chips">${pick.classes.map(id => `<span class="chip">${clsName(id)}</span>`).join('')}</div>
       <button id="goMulti2">${T('Relever les défis', 'Take the challenges')} →</button>
       <h3 style="margin-top:14px">🌊 ${T('Course de la semaine', 'Race of the week')}</h3>${(() => { const c = COURSES[weeklyPick(weekKey())]; return `<div class="dprev"><div><img src="${courseThumb(c)}" alt=""><b>${cN(c)}</b><span>${c.nm} nm · ${T('toutes classes', 'all classes')}</span></div></div>`; })()}</aside>`; }
-  else if (view === 'multi') html += `${BACK}
-    ${weeklyBlock()}
-    <h3>🌐 ${T('Défi du jour', 'Daily challenge')} — ${dayTxt}</h3>
-    <p>${T('Deux parcours et deux classes par jour, tirés au sort. Même météo, mêmes prévisions et même hasard pour tous jusqu\'à minuit. Ton premier essai sur chaque défi rapporte les points de place ; ensuite, seul un nouveau record du jour rapporte un bonus. Pas encore de fantôme ? Tu cours contre les bots.', 'Two courses and two classes per day, drawn at random. Same weather, same forecasts and same luck for everyone until midnight. Your first attempt on each challenge earns placing points; after that only a new daily record earns a bonus. No ghosts yet? You race the bots.')}</p>
-    ${netBlock()}
-    <div class="dgrid">${pick.courses.map(id => { const c = COURSES[id]; return `<div class="dcard"><img src="${courseThumb(c, 420, 210)}" alt=""><div><b style="font-size:16px">${cN(c)}</b><br><span style="color:#a9c3d6;font-size:12.5px">${cZ(c)} · ${c.nm} nm · ${T(REGION_NAMES[c.region][0], REGION_NAMES[c.region][1])}</span></div>
-      ${pick.classes.map(cl => { const d = dailyLoad(`gl3d_daily_${day}_${id}_${cl}`); return `<div class="dcls"><div><b>${clsName(cl)}</b><small>${d.runs.length ? `🏁 ${fmtDur(d.runs[0].T)} · ${plural(d.n, 'essai', 'attempt')}${d.pts ? ' · ✓ pts' : ''}` : T('Pas encore d\'essai', 'No attempt yet')}</small></div><button data-daily="${id}" data-dcls="${cl}">${d.runs.length ? T('Nouvel essai', 'Try again') : T('Relever', 'Race')}</button>${NET.ok ? `<button data-board="${id}" data-dcls="${cl}" class="sec" title="${T('Classement du jour', 'Daily leaderboard')}">🏆</button>` : '<span></span>'}</div>`; }).join('')}</div>`; }).join('')}</div>${FOOT}`;
+  else if (view === 'multi') html = rxMulti();
+  else if (view === 'pause') html = pauseView();
   else if (view === 'livery') html += `${BACK}${livartView()}${FOOT}`;
   else if (view === 'settings') { const lv = SETTINGS.gfx, seg = (k, opts) => `<div class="seg">${opts.map(([v, l]) => `<button data-set="${k}" data-val="${v}" class="${String(SETTINGS[k]) === String(v) ? 'on' : ''}">${l}</button>`).join('')}</div>`;
     html += `${BACK}<h3>⚙ ${T('Réglages', 'Settings')}</h3>
@@ -5491,37 +5668,25 @@ function showMenu(view = 'home') {
     <div class="setrow"><div><b>${T('Lumière de cabine', 'Cabin light')}</b><small>${T('Éclairage d’ambiance de la vue Cabine, la nuit. Le rouge préserve la vision nocturne.', 'Ambient lighting in the Cabin view at night. Red preserves night vision.')}</small></div>${seg('cabLight', [['blue', T('Bleu', 'Blue')], ['red', T('Rouge', 'Red')], ['green', T('Vert', 'Green')], ['white', T('Blanc', 'White')], ['off', T('Éteinte', 'Off')]])}</div>
     <div class="setrow"><div><b>${T('Son', 'Sound')}</b></div><div class="seg"><button id="sndToggle" class="${AUD.on ? 'on' : ''}">🔊 ${AUD.on ? T('Activé', 'On') : T('Coupé', 'Off')}</button></div></div>
     <h3>🌐 ${T('Profil en ligne', 'Online profile')}</h3>${recoveryBlock()}${FOOT}`; }
-  else { html += `${BACK}<h3>🧭 Solo</h3>${clsPick(DAILY_CLASSES)}
-    <div class="tabs">${[['ocean', T('🌊 Grand large', '🌊 Offshore')], ['tours', T('🏁 Courses à étapes', '🏁 Stage races')], ['coast', T(`⚓ Côtiers (${COASTAL.length})`, `⚓ Coastal (${COASTAL.length})`)], ['train', T('🏝 Entraînement', '🏝 Training')]].map(([k, l]) => `<button data-tab="${k}" class="${SOLO_TAB === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
-    if (SOLO_TAB === 'ocean') html += `<div class="modes three">
-      <div class="mode"><h2>⛵ Transat</h2><p>${T('Bretagne → Guadeloupe, ≈ 3 300 nm face à 5 bateaux qui se routent eux aussi.', 'Brittany → Guadeloupe, ≈ 3,300 nm against 5 boats that route too.')} ${CLS.id === 'imoca' ? T('11 à 13 jours de course, <b>≥ 38 min de jeu</b>.', '11 to 13 days of racing, <b>≥ 38 min of play</b>.') : T('≈ 15 à 22 jours de course, <b>≥ 30 min de jeu</b>.', '≈ 15 to 22 days of racing, <b>≥ 30 min of play</b>.')}${recTxt('transat')}</p><button id="goRace" data-default>${T('Prendre le départ', 'Start')}</button></div>
-      <div class="mode"><h2>🏝→🌴 Mini Transat</h2><p>${T('Les Sables → La Palma → Saint-François, ≈ 4 000 nm en 2 étapes, classement au temps cumulé. ≈ 45 à 70 min de jeu.', 'Les Sables → La Palma → Saint-François, ≈ 4,000 nm in 2 legs, ranked on cumulative time. ≈ 45 to 70 min of play.')}${recTxt('minitransat')}</p><button id="goMiniT">${T('Prendre le départ', 'Start')}</button></div>
-      <div class="mode"><h2>🏝↔⚓ ${T('Les Sables – Açores', 'Les Sables – Azores')}</h2><p>${T('Les Sables → Horta (Açores) → Les Sables, ≈ 2 500 nm en 2 étapes : descente vers l\'anticyclone, escale à Horta, retour face aux dépressions. Classement au temps cumulé. ≈ 35 à 50 min de jeu.', 'Les Sables → Horta (Azores) → Les Sables, ≈ 2,500 nm in 2 legs: down to the high, stopover in Horta, back against the lows. Ranked on cumulative time. ≈ 35 to 50 min of play.')}${recTxt('sas')}</p><button id="goSAS">${T('Prendre le départ', 'Start')}</button></div>
-      <div class="mode"><h2>🗼 Fastnet</h2><p>${T('Solent → phare du Fastnet → Cherbourg, ≈ 620 nm. Côtes, cailloux et dépressions de Manche. ≈ 30 à 70 min de jeu.', 'Solent → Fastnet lighthouse → Cherbourg, ≈ 620 nm. Coasts, rocks and Channel lows. ≈ 30 to 70 min of play.')}${recTxt('fastnet')}</p><button id="goFast">${T('Prendre le départ', 'Start')}</button></div>
-      <div class="mode"><h2>🌊 ${T('Océan Indien', 'Indian Ocean')}</h2><p>${T('Le Cap → Fremantle, ≈ 4 700 nm dans les quarantièmes rugissants : dépressions en série, mer très formée, zone des glaces à respecter. ≈ 40 à 60 min de jeu.', 'Cape Town → Fremantle, ≈ 4,700 nm in the Roaring Forties: back-to-back lows, huge seas, ice exclusion zone. ≈ 40 to 60 min of play.')}${recTxt('indien')}</p><button id="goIndien">${T('Prendre le départ', 'Start')}</button></div></div>`;
-    else if (SOLO_TAB === 'tours') html += `<p style="font-size:13px">${T('Plusieurs étapes, classement général au temps cumulé. Entre deux étapes, enchaîne ou reviens plus tard : la progression est gardée pour chaque classe de bateau.', 'Several legs, overall ranking on cumulative time. Between legs, race on or come back later: progress is kept for each boat class.')}</p><div class="modes">${Object.values(TOURS).map(tourCard).join('')}</div>`;
-    else if (SOLO_TAB === 'coast') { const regs = ['all', ...Object.keys(REGION_NAMES).filter(r => COASTAL.some(c => c.region === r))];
-      html += `<div class="chips" style="margin:8px 0">${regs.map(r => `<button class="chip ${REG_F === r ? 'on' : ''}" data-reg="${r}">${r === 'all' ? T('Toutes les mers', 'All seas') : T(...REGION_NAMES[r])}</button>`).join('')}</div>
-      <p style="font-size:13px">${T('5 à 20 min de jeu, météo et heure de départ tirées au sort, 5 bots.', '5 to 20 min of play, random weather and start time, 5 bots.')}</p>
-      <div class="coast">${COASTAL.filter(c => REG_F === 'all' || c.region === REG_F).map(coastCard).join('')}</div>`; }
-    else html += `<div class="modes"><div class="mode"><h2>🎓 ${T('Tutoriel', 'Tutorial')}</h2><p>${T('4 minutes guidées dans l\'archipel : allures, virement, spi, écoute, routeur, accélération du temps.', '4 guided minutes in the archipelago: points of sail, tack, spinnaker, sheet, router, time acceleration.')}</p><button id="tutoGo2">${T('Lancer le tutoriel', 'Start the tutorial')}</button></div><div class="mode"><h2>🏝 ${T('Navigation libre', 'Free sailing')}</h2><p>${T('Archipel de 7 îles et 9 bouées. Vent réglable, routeur vers n\'importe quel point. Idéal pour apprendre les allures, les voiles et les manœuvres.', 'Archipelago of 7 islands and 9 buoys. Adjustable wind, router to any point. Ideal to learn points of sail, sails and manoeuvres.')}</p><button id="goTrain" data-default>${T('S\'entraîner', 'Train')}</button></div>
-      <div class="mode"><h2>📖 ${T('Aide', 'Help')}</h2><p>${T('Manœuvres, prévisions, foils, ris, routeur : tout le fonctionnement du jeu.', 'Manoeuvres, forecasts, foils, reefs, router: how the game works.')}</p><button id="goHelp" class="sec">${T('Lire l\'aide', 'Read help')}</button></div></div>`;
-    html += FOOT; }
-  $('card').innerHTML = html; $('card').classList.add('wide');
+  else html = rxSolo();
+  const lsc = $('rxList') ? $('rxList').scrollTop : 0, keepSc = MENU_KEEP_SC; MENU_KEEP_SC = false;
+  $('card').innerHTML = html; $('card').classList.toggle('wide', view !== 'pause'); $('card').classList.toggle('rx', view === 'solo' || view === 'multi'); if (keepSc && $('rxList')) $('rxList').scrollTop = lsc;
   const on = (id, f) => { if ($(id)) $(id).onclick = f; };
   $('card').querySelectorAll('[data-lang]').forEach(b => b.onclick = () => { setLang(b.dataset.lang); showMenu(view); });
   on('goLiv', () => showMenu('livery')); on('goSet', () => showMenu('settings')); on('goSet2', () => showMenu('settings')); on('goBoards', () => showMenu('multi')); on('goMulti2', () => showMenu('multi'));
   on('tutoGo', tutoStart); on('tutoNo', () => { tutoMark('skip'); showMenu('home'); }); on('tutoGo2', tutoStart);
-  on('back', () => showMenu('home')); on('goSolo', () => showMenu('solo')); on('goMulti', () => showMenu('multi')); on('goHelp', () => showHelp(view));
+  on('back', () => showMenu(running && GAME.loaded ? 'pause' : 'home')); on('quitGame', () => { unloadGame(); showMenu('home'); }); on('goSolo', () => showMenu('solo')); on('goMulti', () => showMenu('multi')); on('goHelp', () => showHelp(view));
   on('mobToggle', () => { setMobile(!isMobile()); showMenu(view); }); on('sndToggle', () => { setSound(!AUD.on); showMenu(view); });
   $('card').querySelectorAll('[data-set]').forEach(b => b.onclick = () => { const k = b.dataset.set, v = b.dataset.val; SETTINGS[k] = v === 'true' ? true : v === 'false' ? false : v; saveSettings();
     if (k === 'lang') setLang(v); else applyGfx(SETTINGS.gfx); showMenu(view); });
   if (view === 'livery') initLivery();
   $('card').querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { SOLO_TAB = b.dataset.tab; showMenu('solo'); });
+  $('card').querySelectorAll('[data-rsel]').forEach(b => { b.onclick = () => { const [tb, k] = b.dataset.rsel.split('|'); RX_SEL[tb === 'multi' ? 'multi' : tb] = k; MENU_KEEP_SC = true; showMenu(view); };
+    b.ondblclick = () => { const p = $('card').querySelector('.rxCta button, #rxDet .dcls button[data-daily]'); if (p) p.click(); }; });
   $('card').querySelectorAll('[data-reg]').forEach(b => b.onclick = () => { REG_F = b.dataset.reg; showMenu('solo'); });
   $('card').querySelectorAll('[data-tleg]').forEach(b => b.onclick = () => tourLaunch(b.dataset.tleg));
   $('card').querySelectorAll('[data-treset]').forEach(b => b.onclick = () => { const t = TOURS[b.dataset.treset]; if (!confirm(T(`Recommencer le ${cN(t)} (${CLS.name}) ? Les temps des étapes déjà courues seront effacés.`, `Restart the ${cN(t)} (${CLS.name})? Times of legs already sailed will be erased.`))) return; tourPut(t.id, { legs: [] }); showMenu('solo'); });
-  $('card').querySelectorAll('.clsPick [data-cls]').forEach(b => b.onclick = () => { const id = b.dataset.cls; if (CLS.id === id) return; const wasRunning = running; running = false; setClass(id); if (!DAILY.on) setupMode(MODE, COURSE.id); if (wasRunning) toast(T(`Classe ${CLS.name} : choisis une course pour repartir`, `${CLS.name}: pick a course to start again`), 2500); showMenu(view); });
+  $('card').querySelectorAll('.clsPick [data-cls]').forEach(b => b.onclick = () => { const id = b.dataset.cls; if (CLS.id === id) return; const wasRunning = running; running = false; setClass(id); if (!DAILY.on && GAME.loaded) setupMode(MODE, COURSE.id); if (wasRunning) toast(T(`Classe ${CLS.name} : choisis une course pour repartir`, `${CLS.name}: pick a course to start again`), 2500); showMenu(view); });
   $('card').querySelectorAll('[data-daily]').forEach(bt => bt.onclick = () => { const cl = bt.dataset.dcls; if (cl && CLS.id !== cl) setClass(cl); startDaily(bt.dataset.daily, bt.dataset.week === '1'); });
   $('card').querySelectorAll('[data-board]').forEach(bt => bt.onclick = () => showBoard(bt.dataset.board, bt.dataset.dcls, bt.dataset.week === '1'));
   bindNetBlock(); bindRecovery();
@@ -5538,9 +5703,21 @@ function showMenu(view = 'home') {
 }
 
 /* ----- Écran de chargement : prépare tout avant le départ (parcours, modèles, météo, routage, côtes, vagues, shaders) ----- */
-let LAUNCHING = false, MENU_CINE = false;
+let LAUNCHING = false, MENU_CINE = false, MENU_KEEP_SC = false;
+// jeu chargé = une course (ou l'entraînement) est en mémoire et tourne ; dans les menus il est déchargé : plus de simulation, de routage ni de rendu 3D
+const GAME = { loaded: false };
+function unloadGame() {
+  if (!GAME.loaded) return;
+  if (running && player && !player.finished) saveGame();
+  running = false; paused = false; finishedShown = false; GAME.loaded = false;
+  try { $('pause').style.display = 'none'; } catch (e) {}
+  if (TUTO.on) tutoStop();
+  cancelAllJobs(); ROUTE.busy = false; ROUTE.follow = false;
+  try { if (AUD.master) AUD.master.gain.setTargetAtTime(0, AUD.ctx.currentTime, 0.15); } catch (e) {}
+  try { renderer.renderLists.dispose(); } catch (e) {}
+}
 // menu principal : interface de course masquée, seule la scène 3D reste en fond
-if (typeof MutationObserver !== 'undefined') new MutationObserver(() => { const o = $('overlay'); document.body.classList.toggle('inmenu', (o.classList.contains('mm') || o.classList.contains('mh')) && !o.classList.contains('hide')); }).observe($('overlay'), { attributes: true, attributeFilter: ['class'] });
+if (typeof MutationObserver !== 'undefined') new MutationObserver(() => { const o = $('overlay'); document.body.classList.toggle('inmenu', (o.classList.contains('mm') || o.classList.contains('mh') || o.classList.contains('mu')) && !o.classList.contains('hide')); }).observe($('overlay'), { attributes: true, attributeFilter: ['class'] });
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => r())), ldSleep = ms => new Promise(r => setTimeout(r, ms));
 const LD_TIPS = [
   ['Lis les isochrones : la route la plus courte est rarement la plus rapide.', 'Read the isochrones: the shortest route is rarely the fastest.'],
@@ -5555,7 +5732,7 @@ const LD_TIPS = [
 ];
 function ldInfo(c, daily) { return { t: (daily === 'week' ? T('Course de la semaine · ', 'Race of the week · ') : daily ? T('Défi du jour · ', 'Daily challenge · ') : '') + cN(c), s: CLS.name + (c.coastal || c.week ? ` · ${cZ(c)} · ${c.nm} nm` : ''), img: c.box ? courseThumb(c, 640, 360) : null }; }
 async function launch(info, prep, msg) {
-  if (LAUNCHING) return; LAUNCHING = true; MENU_CINE = false;
+  if (LAUNCHING) return; LAUNCHING = true; MENU_CINE = false; GAME.loaded = true; document.body.classList.remove('mblur'); $('overlay').classList.remove('mu');
   const tip = LD_TIPS[Math.floor(Math.random() * LD_TIPS.length)], step = (t, p) => { $('ldStep').textContent = t; $('ldBar').style.width = Math.round(p * 100) + '%'; };
   $('ldTitle').textContent = info.t; $('ldSub').textContent = info.s || ''; $('ldBg').style.backgroundImage = info.img ? `url(${info.img})` : ''; $('ldTip').textContent = '💡 ' + T(tip[0], tip[1]);
   $('loader').classList.remove('hide'); $('overlay').classList.add('hide'); step(T('Préparation du parcours…', 'Preparing the course…'), 0.04);
@@ -5711,7 +5888,9 @@ function careerBadge() { const P = loadProfile(), L = levelOf(P.pts); return `<d
 /* ----- En ligne (Vercel + Supabase) : pseudo, fantômes du classement, envoi du journal d'ordres vérifié par rejeu côté serveur ----- */
 let MENU_VIEW = 'home';
 const NET = { base: null, ok: false, checked: false, me: null, day: null };
-try { NET.base = window.GL3D_API !== undefined ? window.GL3D_API : (/^https?:$/.test(location.protocol) ? '' : null); } catch (e) {}
+// API : même origine sur l'hébergement Vercel (ou en local) ; ailleurs (aperçu, autre hébergeur) on vise l'API de production (CORS ouvert)
+const NET_PROD = 'https://offing.vercel.app';
+try { NET.base = window.GL3D_API !== undefined ? window.GL3D_API : !/^https?:$/.test(location.protocol) ? null : /(^|\.)vercel\.app$|^localhost$|^127\.|^\[::1\]$/.test(location.hostname) ? '' : NET_PROD; } catch (e) {}
 try { NET.me = JSON.parse(localStorage.getItem('gl3d_online')); } catch (e) {}
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rj) => setTimeout(() => rj(new Error('délai dépassé')), ms))]);
 async function api(path, body) {
@@ -5719,10 +5898,11 @@ async function api(path, body) {
   let j = null; try { j = await r.json(); } catch (e) {}
   if (!r.ok || !j) throw new Error((j && j.error) || 'HTTP ' + r.status); return j;
 }
-async function netInit() {
+async function netInit(n = 0) {
   if (NET.base === null) { NET.checked = true; return; }
-  try { const h = await withTimeout(api('health'), 5000); NET.ok = !!(h && h.ok && h.engine === ENGINE_VER); NET.day = h.day; NET.why = h.engine !== ENGINE_VER ? 'version' : ''; } catch (e) { NET.ok = false; }
+  try { const h = await withTimeout(api('health'), 12000); NET.ok = !!(h && h.ok && h.engine === ENGINE_VER); NET.day = h.day; NET.why = h.engine !== ENGINE_VER ? 'version' : ''; } catch (e) { NET.ok = false; }
   NET.checked = true;
+  if (!NET.ok && NET.why !== 'version' && n < 4) setTimeout(() => netInit(n + 1), 8000 * (n + 1)); // serveur qui démarre à froid ou réseau coupé : on réessaie
   if (NET.ok) netFlushPending();
   if (MENU_VIEW === 'multi' && !$('overlay').classList.contains('hide') && !running) showMenu('multi');
 }
@@ -5774,7 +5954,7 @@ async function showBoard(id, cls, weekly) {
   MENU_VIEW = 'board'; const c = COURSES[id], cl = cls || CLS.id;
   $('card').innerHTML = `<h1>Off<span>ing</span></h1><div class="go" style="justify-content:flex-start;margin:0 0 6px"><button id="back" class="sec">← ${T('Mode multi', 'Multiplayer')}</button></div><h3>🏆 ${cN(c)} · ${clsName(cl)} · ${weekly ? T('semaine du ', 'week of ') + weekKey() : parisDay()}</h3><div id="lbBody">${T('Chargement…', 'Loading…')}</div>`;
   $('back').onclick = () => showMenu('multi');
-  try { const r = await withTimeout(api(`leaderboard?course=${id}&cls=${cl}${weekly ? '&week=1' : ''}${NET.me ? '&player=' + NET.me.id : ''}`), 8000); if (MENU_VIEW !== 'board') return;
+  try { const r = await withTimeout(api(`leaderboard?course=${id}&cls=${cl}${weekly ? '&week=1' : ''}${NET.me ? '&player=' + NET.me.id : ''}`), 15000); if (MENU_VIEW !== 'board') return;
     $('lbBody').innerHTML = `<p>${weekly ? T(`${r.total} skipper${r.total > 1 ? 's' : ''} classé${r.total > 1 ? 's' : ''} cette semaine`, `${r.total} skipper${r.total > 1 ? 's' : ''} ranked this week`) : T(`${r.total} skipper${r.total > 1 ? 's' : ''} classé${r.total > 1 ? 's' : ''} aujourd'hui`, `${r.total} skipper${r.total > 1 ? 's' : ''} ranked today`)}${r.me ? ` · ${T('toi', 'you')} : <b>${ord(r.me.rank)}</b> ${T('en', 'in')} ${fmtDur(r.me.T)}` : ''}.</p>${boardTable(r.top)}`; }
   catch (e) { if ($('lbBody')) $('lbBody').innerHTML = `<p style="color:#ff8fab">${T('Classement indisponible', 'Leaderboard unavailable')} : ${esc(e.message)}</p>`; }
 }
@@ -5830,7 +6010,7 @@ async function startDailyPrep(id, weekly) {
   DAILY.on = true; DAILY.week = weekly ? weekKey() : null; DAILY.step = weekly ? WSTEP : DSTEP; DAILY.day = DAILY.week || parisDay(); DAILY.seed = weekly ? hash32('W|' + DAILY.week + '|' + id) : hash32(DAILY.day + '|' + id); DAILY.net = null; dailyCleanup();
   initAudio();
   if (NET.ok) { const m = $('card').querySelector(`[data-daily="${id}"]`); if (m) { m.disabled = true; m.textContent = 'Chargement des fantômes…'; }
-    try { DAILY.net = await withTimeout(api(`ghosts?course=${id}&cls=${CLS.id}${weekly ? '&week=1' : ''}${NET.me ? '&player=' + NET.me.id : ''}`), 6000); } catch (e) { toast(T('Fantômes en ligne indisponibles : ', 'Online ghosts unavailable: ') + e.message, 3000); } }
+    try { DAILY.net = await withTimeout(api(`ghosts?course=${id}&cls=${CLS.id}${weekly ? '&week=1' : ''}${NET.me ? '&player=' + NET.me.id : ''}`), 12000); } catch (e) { toast(T('Fantômes en ligne indisponibles : ', 'Online ghosts unavailable: ') + e.message, 3000); } }
   setupMode('race', id);
   const withGhosts = GHOST.list.length > 0;
   if (withGhosts) { active = [player]; boats.forEach(b => { if (!b.isPlayer) Object.values(b.visSet).forEach(v => { v.root.visible = false; v.wake.visible = false; }); }); }
@@ -5963,7 +6143,7 @@ async function showAnalysis() {
   const myT = player.finished ? (player.daily ? player.daily.T : player.finishT) : (me.length ? me[me.length - 1][0] : 0);
   /* référence : le 1er de la course, ou le 2e si tu as gagné (fantômes des autres joueurs, sinon bots) ; à défaut ton meilleur essai / record */
   let ref = null, refName = '', refT = null, refRank = 0, comp = [];
-  if (DAILY.on && NET.ok) { try { const r = await withTimeout(api(`ghosts?course=${COURSE.id}&cls=${CLS.id}&mode=top${DAILY.week ? '&week=1' : ''}`), 6000);
+  if (DAILY.on && NET.ok) { try { const r = await withTimeout(api(`ghosts?course=${COURSE.id}&cls=${CLS.id}&mode=top${DAILY.week ? '&week=1' : ''}`), 12000);
     comp = (r.ghosts || []).filter(g => g.trace && g.trace.length > 2 && !(NET.me && g.name === NET.me.name)).map(g => ({ name: g.name, T: g.T, pts: g.trace })); } catch (e) {} }
   if (!comp.length && DAILY.on) comp = GHOST.list.filter(g => !/^(Toi|Essai)/.test(g.label)).map(g => ({ name: g.label.replace(/^\d+\. /, ''), T: g.T, pts: g.pts }));
   if (!comp.length) comp = active.filter(b => b !== player && !b.isGhost && b.gRec && b.gRec.length > 1).map(b => ({ name: b.name, T: b.finished ? b.finishT : null, pts: b.finished ? b.gRec.concat([fin(b)]) : b.gRec.slice(), b }));
@@ -6362,6 +6542,7 @@ function updateGuide() {
   guideArrow.position.set(ax, waveH(ax, az) + 1.1, az); guideArrow.rotation.y = -h; guideArrow.visible = true;
 }
 function updateParticles(rdt, bx, bz) {
+  pLines.visible = !cabOn(); if (!pLines.visible) return; // traînées de vent : pas dans la cabine
   const w = curWind(), a = (w.twd + 180) * D2R, vx = Math.sin(a), vz = -Math.cos(a), sp_ = w.tws * KN * 3.2, len = 5 + w.tws * 0.7;
   for (let i = 0; i < NP; i++) {
     const p = parts[i]; p.x += (vx * sp_ - bx) * rdt; p.z += (vz * sp_ - bz) * rdt; p.life += rdt / p.span;
@@ -6580,7 +6761,7 @@ for (let i = 0; i < RN_N; i++) { rnD[i * 3] = (Math.random() * 2 - 1) * RN_R; rn
 rnGeo.setAttribute('position', new THREE.BufferAttribute(rnPos, 3));
 const rainLines = new THREE.LineSegments(rnGeo, new THREE.LineBasicMaterial({ color: 0xb8c8d6, transparent: true, opacity: 0, depthWrite: false })); rainLines.frustumCulled = false; rainLines.visible = false; scene.add(rainLines);
 function updateRain(rdt, rn) {
-  rainLines.visible = rn > 0.02 && !PORT.on; if (!rainLines.visible) return;
+  rainLines.visible = rn > 0.02 && !PORT.on && !cabOn(); if (!rainLines.visible) return; // pas de pluie à l'intérieur de la cabine (les gouttes sont sur les vitres)
   rainLines.material.opacity = 0.12 + 0.4 * rn; rainLines.material.color.setScalar(0.25 + 0.6 * UL.value).multiply(tc.setRGB(0.85, 0.9, 1));
   const wa = ((player.twd || 0) + 180) * D2R, ws = (player.tws || 10) * KN * 0.55, h = player.dispHdg * D2R, bs = (player.dspd || player.spd) * KN * VF;
   const vx = Math.sin(wa) * ws - Math.sin(h) * bs, vz = -Math.cos(wa) * ws + Math.cos(h) * bs, vy = -11, cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
@@ -6609,6 +6790,7 @@ flGeo.setAttribute('position', new THREE.BufferAttribute(flPos, 3)); flGeo.setAt
 const flPoints = new THREE.Points(flGeo, spMat); flPoints.frustumCulled = false; flPoints.renderOrder = 1; scene.add(flPoints);
 for (let i = 0; i < FL_N; i++) { const r = 10 + Math.random() * 190, an = Math.random() * Math.PI * 2; fl.x[i] = Math.cos(an) * r; fl.z[i] = Math.sin(an) * r; fl.life[i] = Math.random(); fl.span[i] = 3 + Math.random() * 5; fl.size[i] = 0.2 + Math.random() * 0.5; }
 function updateFlecks(rdt, svx, svz) {
+  flPoints.visible = !cabOn(); if (!flPoints.visible) return; // paillettes d'écume en l'air : pas dans la cabine
   const h = player.dispHdg * D2R, fx = Math.sin(h), fz = -Math.cos(h), amt = clamp(0.35 + seaAmp * 0.35 + player.spd / 40, 0, 1.2);
   for (let i = 0; i < FL_N; i++) {
     fl.x[i] -= svx * rdt; fl.z[i] -= svz * rdt; fl.life[i] += rdt / fl.span[i];
@@ -6713,7 +6895,7 @@ function buildPort() {
 function setPort(on) {
   if (on && !PORT.g) buildPort();
   if (!PORT.g) return;
-  PORT.on = on; PORT.g.visible = on; ocean.visible = !on; sky.visible = !on; rainLines.visible = rainLines.visible && !on;
+  PORT.on = on; PORT.g.visible = on; ocean.visible = !on; sky.visible = !on; pLines.visible = spPoints.visible = flPoints.visible = !on; rainLines.visible = rainLines.visible && !on;
   scene.background = on ? PORT_SKY : null; scene.fog.color.set(on ? PORT_SKY : HORIZON);
   boats.forEach(b => { if (b.vis && b.vis.root) b.vis.root.visible = !on; });
   if (!on) { PORT.sel = null; PORT.hi.intensity = 0; PORT.lbl.style.display = 'none'; }
@@ -6793,7 +6975,7 @@ function frame(now) {
   const dd = now - FCAP.last; FCAP.last = now; if (dd > 2 && dd < 50) FCAP.ref += (dd - FCAP.ref) * 0.05;
   const tgt = SETTINGS.fps === 'max' ? 0 : SETTINGS.fps === '30' ? 30 : 60, nSkip = tgt ? Math.max(1, Math.round(1000 / tgt / FCAP.ref)) : 1;
   if (++FCAP.k < nSkip && !document.hidden) { requestAnimationFrame(frame); return; } FCAP.k = 0;
-  const stat = menuStatic(), need = stat && MENU_SNAP !== menuSnapKey();
+  const unl = !GAME.loaded && !LAUNCHING, stat = menuStatic() || unl, need = menuStatic() && MENU_SNAP !== menuSnapKey();
   renderer.domElement.style.visibility = stat ? 'hidden' : ''; MENU_BG.style.display = stat ? 'block' : 'none';
   if (stat && !need) { last = now; requestAnimationFrame(frame); return; }
   perfAdapt((now - last) * (tgt === 30 ? 0.5 : 1)); const rdt = Math.min(0.1, (now - last) / 1000); last = now; realT += rdt;
@@ -6836,7 +7018,7 @@ function frame(now) {
   if (JOBS.length) { const idle = !running || paused || MENU_CINE, used = performance.now() - now; runJobs(idle ? 12 : clamp(11 - used, 2.5, 8), idle ? 12 : 3); }
   requestAnimationFrame(frame);
 }
-resize(); { let c0 = 'imoca'; try { c0 = localStorage.getItem('gl3d_cls') || 'imoca'; } catch (e) {} if (c0 === 'mini' || !CLASSES[c0]) c0 = 'proto'; setClass(c0); } setupMode('race', 'transat');
+resize(); { let c0 = 'imoca'; try { c0 = localStorage.getItem('gl3d_cls') || 'imoca'; } catch (e) {} if (c0 === 'mini' || !CLASSES[c0]) c0 = 'proto'; setClass(c0); } setupMode('race', 'transat'); cancelAllJobs(); ROUTE.busy = false; // état initial seulement : le jeu se charge au départ d'une course
 { let pref = null; try { pref = localStorage.getItem('gl3d_mobile'); } catch (e) {} const auto = matchMedia('(pointer: coarse)').matches && Math.min(innerWidth, innerHeight) < 620; if (pref === '1' || (pref === null && auto)) setMobile(true, true); }
 MODELS_P = loadImocaModels() || Promise.resolve(); applyGfx(SETTINGS.gfx); applyStaticLang(); sailLabels(); document.documentElement.lang = LANG; showMenu(); netInit(); computeProjection(); updateHUD(); drawMap(); drawPolar();
 requestAnimationFrame(frame);
