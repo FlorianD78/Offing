@@ -349,6 +349,8 @@ body.mobile #tr.mid .fc{display:none}
 .pzWrap{max-width:420px;margin:0 auto;text-align:left}.pzWrap h1{font-size:30px;margin:0}.pzWrap .rxSub{color:#9fc4dc;margin:2px 0 14px}.pzWrap .mmnav button{background:rgba(255,255,255,.04)!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:10px;margin:0 0 6px}.pzWrap .mmnav button:hover{border-color:rgba(127,209,255,.4)!important}
 @media (max-width:900px){.card.rx{height:auto;max-height:calc(100dvh - 32px);overflow:auto;display:block}.rxBody{display:flex;flex-direction:column}.rxList{max-height:none;overflow:visible}.rxDet{overflow:visible}.clsPick.rxCls{grid-template-columns:1fr 1fr}.rxStats{grid-template-columns:1fr 1fr}.rxRow{grid-template-columns:96px minmax(0,1fr) auto}.rxRow img,.rxRow .rxIco{width:96px;height:54px}}
 body.mobile .card.rx{height:auto;max-height:calc(100dvh - 32px);overflow:auto;display:block}body.mobile .rxBody{display:flex;flex-direction:column}body.mobile .rxList,body.mobile .rxDet{overflow:visible}body.mobile .clsPick.rxCls{grid-template-columns:1fr 1fr}body.mobile .rxStats{grid-template-columns:1fr 1fr}
+.spin{width:36px;height:36px;border:3px solid rgba(127,209,255,.22);border-top-color:#7fe0ff;border-radius:50%;animation:glSpin .8s linear infinite;will-change:transform;margin:4px auto 10px}.spin.sm{width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:-2px;margin:0 8px 0 0}@keyframes glSpin{to{transform:rotate(360deg)}}
+.nsend{text-align:center;padding:10px 6px}.nsend h3{margin:4px 0 6px}.nsend p{margin:0;color:#a9c3d6}
 </style>
 </head>
 <body>
@@ -4859,7 +4861,7 @@ addEventListener('keydown', e => {
   if (e.repeat) return;
   if (AUD.on) initAudio();
   if (!$('overlay').classList.contains('hide')) { if (k === 'enter') { const b = $('card').querySelector('[data-default]'); if (b) b.click(); }
-    else if (k === 'escape' && running && GAME.loaded) { if (MENU_VIEW === 'pause') { $('overlay').classList.add('hide'); paused = false; } else if (MENU_VIEW === 'settings') showMenu('pause'); } return; }
+    else if (k === 'escape' && running && GAME.loaded && !finishedShown) { if (MENU_VIEW === 'pause') { $('overlay').classList.add('hide'); paused = false; } else if (MENU_VIEW === 'settings') showMenu('pause'); } return; }
   switch (k) {
     case ' ': doTack(); break; case 't': toggleMode(); break; case 'v': doVMG(); break;
     case '1': case '2': case '3': setSail(+k - 1); break;
@@ -5989,7 +5991,7 @@ async function netSubmit(log, quiet) {
 async function netFlushPending() { if (!NET.me) return; const L = netPending(); try { localStorage.setItem('gl3d_pending', '[]'); } catch (e) {} for (const x of L) await netSubmit(x.log, true); }
 function netResHtml() {
   const N = player.net; if (!N) return '';
-  if (N.state === 'sending') return `<p>⏳ ${T('Envoi au classement en ligne : le serveur rejoue ta course pour vérifier le chrono…', 'Sending to the online leaderboard: the server replays your race to verify the time…')}</p>`;
+  if (N.state === 'sending') return `<p style="color:#bfe6ff"><span class="spin sm"></span>${T('Envoi au classement en ligne : le serveur rejoue ta course pour vérifier le chrono (quelques secondes)…', 'Sending to the online leaderboard: the server replays your race to verify the time (a few seconds)…')}</p>`;
   if (N.state === 'noname') return `<p style="color:#ffd166">🌐 ${DAILY.week ? T('Choisis un pseudo dans le mode multi pour être classé : ce chrono sera envoyé automatiquement (cette semaine seulement).', 'Pick a nickname in Multiplayer to be ranked: this time will be sent automatically (this week only).') : T('Choisis un pseudo dans le mode multi pour être classé : ce chrono sera envoyé automatiquement (aujourd\'hui seulement).', 'Pick a nickname in Multiplayer to be ranked: this time will be sent automatically (today only).')}</p>`;
   if (N.state === 'off') return `<p style="color:#a9c3d6">📴 ${DAILY.week ? T('Hors ligne : chrono gardé localement, envoyé à la prochaine connexion cette semaine.', 'Offline: time kept locally, sent on the next connection this week.') : T('Hors ligne : chrono gardé localement, envoyé à la prochaine connexion aujourd\'hui.', 'Offline: time kept locally, sent on the next connection today.')}</p>`;
   if (N.state === 'err') return `<p style="color:#ff8fab">⚠️ ${T('Envoi impossible', 'Sending failed')} : ${esc(N.msg)} <button id="netRetry" class="sec">${T('Réessayer', 'Retry')}</button></p>`;
@@ -6143,7 +6145,9 @@ function dailyFinish(rank, N) {
 }
 function onPlayerFinish() {
   if (DAILY.on) { sfxChime(); const gl = GHOST.list, N = gl.length ? gl.length + 1 : active.length, r = gl.length ? 1 + gl.filter(g => g.T < player.finishT).length : standings().indexOf(player) + 1;
-    dailyFinish(r, N); toast(T(`Arrivée ! ${fmtDur(player.daily.T)}`, `Finished! ${fmtDur(player.daily.T)}`) + (player.award.total ? ' · +' + player.award.total + ' pts' : ''), 6000); finishedShown = true; renderResults(); $('overlay').classList.remove('hide'); saveGame(); return; }
+    // le rejeu de vérification bloque le jeu quelques secondes : on affiche d'abord un écran « vérification et envoi » (roue animée par le compositeur, elle tourne même pendant le calcul)
+    finishedShown = 'verif'; $('card').classList.remove('rx', 'help'); $('card').innerHTML = `<div class="nsend"><div class="spin"></div><h3>🏁 ${T('Arrivée ! Vérification du chrono…', 'Finished! Checking your time…')}</h3><p>${NET.base !== null ? T('Le jeu rejoue ta course pour valider le temps, puis l’envoie au classement en ligne. Ça prend quelques secondes.', 'The game replays your race to validate the time, then sends it to the online leaderboard. This takes a few seconds.') : T('Le jeu rejoue ta course pour valider le temps. Ça prend quelques secondes.', 'The game replays your race to validate the time. This takes a few seconds.')}</p></div>`; $('overlay').classList.remove('hide');
+    requestAnimationFrame(() => setTimeout(() => { dailyFinish(r, N); finishedShown = true; toast(T(`Arrivée ! ${fmtDur(player.daily.T)}`, `Finished! ${fmtDur(player.daily.T)}`) + (player.award.total ? ' · +' + player.award.total + ' pts' : ''), 6000); renderResults(); $('overlay').classList.remove('hide'); saveGame(); }, 30)); return; }
   const r = standings().indexOf(player) + 1; let rec = false; sfxChime(); const prevBest = getBest(); awardPoints(r, prevBest); tourRecord();
   try { const best = getBest(); if (!best || player.finishT < best) { localStorage.setItem(bestKey(), String(player.finishT)); rec = true; } } catch (e) {}
   if (rec && !DAILY.on) try { const pts = player.gRec.slice(); pts.push([Math.round(player.finishT), +player.lat.toFixed(4), +player.lon.toFixed(4), Math.round(player.hdg), +player.spd.toFixed(1), svi(player), player.mi]);
