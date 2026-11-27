@@ -4142,7 +4142,8 @@ function setupMode(mode, courseId, restoring) {
   ISLANDS = mkIslands(mode === 'race' ? RACE_ISLANDS : TRAIN_ISLANDS);
   buildLandGrid(); buildMarkVis();
   if (!restoring) { if (DAILY.on && (COURSE.coastal || DAILY.week) && mode === 'race') { const sd = DAILY.seed; WX_OFF = (sd % 90) * 86400 + ((sd >>> 8) % 24) * 3600; START_H = 9.5 + ((sd >>> 16) % 500) / 100 - COURSE.start.lon / 15; }
-    else { WX_OFF = (COURSE.coastal || COURSE.tour) && mode === 'race' ? Math.floor(Math.random() * 90) * 86400 + Math.floor(Math.random() * 24) * 3600 : 0; START_H = (COURSE.coastal || COURSE.tour) && mode === 'race' ? 9.5 + Math.random() * 5 - COURSE.start.lon / 15 : 13; } }
+    // course solo (côtier, étape de tour ou grand large) : situation météo et heure de départ tirées au sort à chaque départ ; entraînement : météo fixe
+    else { WX_OFF = mode === 'race' ? Math.floor(Math.random() * 90) * 86400 + Math.floor(Math.random() * 24) * 3600 : 0; START_H = mode === 'race' ? 9.5 + Math.random() * 5 - COURSE.start.lon / 15 : 13; } }
   if (mode === 'race') { active = boats.slice(); const mi = CLS.id !== 'imoca' && CLS.id !== 'o50';
     if (COURSE.coastal) { ACCELS = COAST_ACCELS; accel = coastalAccel(COURSE); }
     else { ACCELS = mi ? COURSE.accelsMini : COURSE.accels; accel = mi ? COURSE.defAccelMini : COURSE.defAccel; } boats.forEach((b, i) => resetBoat(b, COURSE.start.lat + (i % 2) * 0.01, COURSE.start.lon - 0.05 + i * 0.02, 235)); }
