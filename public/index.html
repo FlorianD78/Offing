@@ -349,6 +349,8 @@ body.mobile #tr.mid .fc{display:none}
 .pzWrap{max-width:420px;margin:0 auto;text-align:left}.pzWrap h1{font-size:30px;margin:0}.pzWrap .rxSub{color:#9fc4dc;margin:2px 0 14px}.pzWrap .mmnav button{background:rgba(255,255,255,.04)!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:10px;margin:0 0 6px}.pzWrap .mmnav button:hover{border-color:rgba(127,209,255,.4)!important}
 @media (max-width:900px){.card.rx{height:auto;max-height:calc(100dvh - 32px);overflow:auto;display:block}.rxBody{display:flex;flex-direction:column}.rxList{max-height:none;overflow:visible}.rxDet{overflow:visible}.clsPick.rxCls{grid-template-columns:1fr 1fr}.rxStats{grid-template-columns:1fr 1fr}.rxRow{grid-template-columns:96px minmax(0,1fr) auto}.rxRow img,.rxRow .rxIco{width:96px;height:54px}}
 body.mobile .card.rx{height:auto;max-height:calc(100dvh - 32px);overflow:auto;display:block}body.mobile .rxBody{display:flex;flex-direction:column}body.mobile .rxList,body.mobile .rxDet{overflow:visible}body.mobile .clsPick.rxCls{grid-template-columns:1fr 1fr}body.mobile .rxStats{grid-template-columns:1fr 1fr}
+.spin{width:36px;height:36px;border:3px solid rgba(127,209,255,.22);border-top-color:#7fe0ff;border-radius:50%;animation:glSpin .8s linear infinite;will-change:transform;margin:4px auto 10px}.spin.sm{width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:-2px;margin:0 8px 0 0}@keyframes glSpin{to{transform:rotate(360deg)}}
+.nsend{text-align:center;padding:10px 6px}.nsend h3{margin:4px 0 6px}.nsend p{margin:0;color:#a9c3d6}
 </style>
 </head>
 <body>
@@ -701,7 +703,7 @@ const CLD = [0, 0, 0, 0];
 function cloudAt(lat, lon, t) {
   const o = CLD;
   if (MODE !== 'race') { const dx = (lon - TC.lon) * 60 * Math.cos(TC.lat * D2R), dy = (lat - TC.lat) * 60, sq = TW.auto ? smooth(0.55, 0.82, squallN(dx / 4 + t / 3600 * 1.5, dy / 4)) * 0.75 : 0;
-    o[0] = 0.12 + 0.2 * sq; o[1] = 0.25; o[2] = 0.3; o[3] = sq * 0.85; return o; }
+    o[0] = 0.04 + 0.28 * sq; o[1] = 0.1 + 0.15 * sq; o[2] = 0.07 + 0.3 * sq; o[3] = sq * 0.85; return o; }
   const S = wxSystems(t), cl = Math.cos(lat * D2R), p = pressure(lat, lon, t), hs = lat >= 0 ? 1 : -1, al = Math.abs(lat), S0 = SOUTH(), dk = S0 ? 33 : 24, h = (t + WX_OFF) / 3600;
   let st = 0.5 * smooth(1017, 1000, p), as = 0, ci = 0.1 + 0.15 * smooth(1018, 1006, p), cu = 0.17 + 0.28 * smooth(8, 14, al) * smooth(30, 21, al), cb = 0, rn = 0;
   const itcz = S0 ? 0 : Math.exp(-(((lat - 5) / 4.5) ** 2)); cb = 0.55 * itcz; as += 0.45 * itcz; ci += 0.5 * itcz;
@@ -712,13 +714,16 @@ function cloudAt(lat, lon, t) {
     else { cb += 0.85 * k * Math.exp(-((w / 50) ** 2)); as += 0.45 * k * smooth(-50, 0, w) * smooth(170, 40, w); st += 0.4 * k * smooth(10, 70, w) * smooth(430, 240, w);
       cu += 0.45 * k * smooth(-40, -110, w) * smooth(-480, -220, w); rn += 0.5 * k * Math.exp(-((w / 40) ** 2)); } }
   for (const Rg of S.ridges) { const g = Math.min(1, Rg.amp / 8 * gqAx(lat, lon, cl, Rg)), f = 1 - 0.85 * g; st *= f; as *= f; ci *= 1 - 0.6 * g; cb *= f; rn *= f; cu *= 1 - 0.35 * g; }
-  { const hc = S.hc, g = gq(lat, lon, cl, hc[0], hc[1], 430, 720) * smooth(1014, 1024, p); st *= 1 - 0.75 * g; as *= 1 - 0.85 * g; ci *= 1 - 0.6 * g; cb *= 1 - 0.9 * g; rn *= 1 - 0.9 * g; cu = Math.max(cu * (1 - 0.3 * g), 0.16); } // petits cumulus de beau temps
+  { const hc = S.hc, g = gq(lat, lon, cl, hc[0], hc[1], 430, 720) * smooth(1014, 1024, p); st *= 1 - 0.75 * g; as *= 1 - 0.85 * g; ci *= 1 - 0.6 * g; cb *= 1 - 0.9 * g; rn *= 1 - 0.9 * g; cu *= 1 - 0.3 * g; }
   if (S.cut) { const g = gq(lat, lon, cl, S.cut.lat, S.cut.lon, 190, 230) * S.cut.amp / 10; as += 0.7 * g; cb += 0.45 * g; rn += 0.3 * g; }
   for (const W of S.waves) if (W.amp > 0.3) { const g = W.amp / 2.8 * gqAx(lat, lon, cl, W); cb += 0.5 * g; as += 0.3 * g; ci += 0.3 * g; }
   // grains : même champ que le vent (mêmes zones, même bruit)
   const zone = Math.max(smooth(6, 13, lat) * smooth(28, 20, lat), smooth(S0 ? 990 : 1008, S0 ? 970 : 994, p) * 0.9, wxConv(lat, lon, t), S0 ? 0.3 : 0.12);
   cb = Math.max(cb, smooth(0.55, 0.82, squallN((lon + h * 0.25) * 4, lat * 4 + h * 0.03)) * zone * 0.95);
   if (COURSE.coastal && COURSE.clim) { const f = 1 - 0.45 * COURSE.clim.k; st *= f; as *= f; }
+  // beau temps : quand rien n'annonce de mauvais temps (pas de couche, de front, de pluie ni de grain), cumulus et cirrus s'estompent
+  // progressivement jusqu'à quelques petits cumulus épars ; le champ est continu, donc le ciel se dégage (ou se charge) en douceur
+  { const bad = Math.max(st, as, rn * 1.5, cb), fair = smooth(0.42, 0.08, bad); cu = Math.max(cu * (1 - 0.55 * fair), 0.07 * fair); ci *= 1 - 0.5 * fair; }
   o[0] = clamp(1 - (1 - clamp(st, 0, 1)) * (1 - clamp(as, 0, 1)), 0, 1); o[1] = clamp(ci, 0, 1); o[2] = clamp(cu, 0, 1); o[3] = clamp(Math.max(cb, rn), 0, 1); return o;
 }
 // carte de nébulosité : 4 lignes par image, puis fondu avec la carte précédente
@@ -1167,7 +1172,8 @@ const SKY_CLOUDS = `uniform vec2 uCloudOff; uniform vec2 uBoatOff; uniform float
       if (dd < -0.35) return 0.0;
       float den = smoothstep(0.0, 0.3, dd) * smoothstep(0.0, 0.06, yf);
       if (det) { vec3 P3 = vec3(p.x + uBoatOff.x + uCloudOff.x * 1.3, y * 1.15, p.y + uBoatOff.y + uCloudOff.y * 1.3); float w = smoothstep(0.3, 0.68, texture(uN3, P3 / 3200.0).r * 0.68 + texture(uN3, P3 / 1150.0 + 0.37).r * 0.32);
-        den = clamp((smoothstep(-0.4, 0.3, dd) * smoothstep(0.0, 0.06, yf) - (1.0 - w) * (0.55 + 0.3 * yf)) / 0.3, 0.0, 1.0); }
+        // bourgeons autour des tours seulement : sans empreinte au sol (x = 0), plus de nuage (avant, une nappe basse couvrait tout le ciel dès 2 % de couverture)
+        den = clamp((smoothstep(-0.4, 0.3, dd) * smoothstep(0.0, 0.06, yf) * smoothstep(0.0, 0.12, x) - (1.0 - w) * (0.55 + 0.3 * yf)) / 0.3, 0.0, 1.0); }
       return den; }
     vec4 clouds(vec3 d){
       vec3 acc = vec3(0.0); float T = 1.0;
@@ -2029,7 +2035,7 @@ function planReg(key, geo, mode) { if (PLAN[key] || !geo || !geo.attributes) ret
   const I = geo.index ? geo.index.array : null, nt = I ? I.length : P.count, id = t => I ? I[t] : t;
   for (let t = 0; t + 2 < nt; t += 3) for (let e = 0; e < 3; e++) { const a = id(t + e), c = id(t + (e + 1) % 3), ua = U(a), va = Vv(a), uc = U(c), vc = Vv(c), n = Math.ceil(Math.abs(uc - ua) * N * 2) + 1;
     for (let q = 0; q <= n; q++) { const f = q / n; put(ua + (uc - ua) * f, va + (vc - va) * f); } } // échantillonnage le long des arêtes : enveloppe continue
-  PLAN[key] = { lo, hi }; }
+  PLAN[key] = { lo, hi, min: b.min.toArray(), sz: sz.toArray() }; }
 function liveryHullMat(cls) { // matériau de coque avec la livrée (la couleur passe dans la texture)
   if (!LHM[cls]) LHM[cls] = new THREE.MeshStandardMaterial({ map: liveryTex(cls), color: 0xffffff, roughness: 0.3, metalness: 0.2, side: THREE.DoubleSide });
   return LHM[cls];
@@ -3222,7 +3228,7 @@ function makeTri(hull, accent, name, isPlayer) {
   const liv = m => new THREE.MeshStandardMaterial({ map: hullTexture(hull, accent, num, m, isPlayer ? 1024 : 512, (isPlayer || PORT_BUILD) ? 'o50' : null), roughness: 0.25, metalness: 0.18, side: THREE.DoubleSide });
   const livS = liv(false), livP = liv(true), param = [];
   const add = (geo, mat, x = 0, y = 0, z = 0, par = root) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); par.add(m); param.push(m); return m; };
-  const H = K.HM; const DKL = (isPlayer || PORT_BUILD) && (LIV.o50_deck || []).length > 0; add(DKL ? deckGeo(H.deck) : H.deck, DKL ? liveryDeckMat('o50') : hullMat); add(H.topS, livS); add(H.topP, livP); add(H.strS, accMat); add(H.strP, accMat); planReg('o50_deck', H.deck, 'top'); planReg('o50_bot', H.bottom, 'top'); const BLo = (isPlayer || PORT_BUILD) && botOn('o50'); add(BLo ? deckGeo(H.bottom) : H.bottom, BLo ? liveryBotMat('o50') : MAT.bottom); add(H.ends, hullMat);
+  const H = K.HM; const DKL = (isPlayer || PORT_BUILD) && (LIV.o50_deck || []).length > 0; add(DKL ? deckGeo(H.deck) : H.deck, DKL ? liveryDeckMat('o50') : hullMat); add(H.topS, livS); add(H.topP, livP); add(H.strS, accMat); add(H.strP, accMat); planReg('o50', H.topS, 'side'); planReg('o50_deck', H.deck, 'top'); planReg('o50_bot', H.bottom, 'top'); const BLo = (isPlayer || PORT_BUILD) && botOn('o50'); add(BLo ? deckGeo(H.bottom) : H.bottom, BLo ? liveryBotMat('o50') : MAT.bottom); add(H.ends, hullMat);
   if (!O50_DOME.map) { O50_DOME.map = K.domeTex; O50_DOME.needsUpdate = true; } add(K.dome, O50_DOME);
   // flotteurs, bras et trampolines : groupe à part (exclu de l'empreinte de flottaison et du masque d'eau de la coque centrale)
   const tri = new THREE.Group(); root.add(tri);
@@ -4138,7 +4144,8 @@ function setupMode(mode, courseId, restoring) {
   ISLANDS = mkIslands(mode === 'race' ? RACE_ISLANDS : TRAIN_ISLANDS);
   buildLandGrid(); buildMarkVis();
   if (!restoring) { if (DAILY.on && (COURSE.coastal || DAILY.week) && mode === 'race') { const sd = DAILY.seed; WX_OFF = (sd % 90) * 86400 + ((sd >>> 8) % 24) * 3600; START_H = 9.5 + ((sd >>> 16) % 500) / 100 - COURSE.start.lon / 15; }
-    else { WX_OFF = (COURSE.coastal || COURSE.tour) && mode === 'race' ? Math.floor(Math.random() * 90) * 86400 + Math.floor(Math.random() * 24) * 3600 : 0; START_H = (COURSE.coastal || COURSE.tour) && mode === 'race' ? 9.5 + Math.random() * 5 - COURSE.start.lon / 15 : 13; } }
+    // course solo (côtier, étape de tour ou grand large) : situation météo et heure de départ tirées au sort à chaque départ ; entraînement : météo fixe
+    else { WX_OFF = mode === 'race' ? Math.floor(Math.random() * 90) * 86400 + Math.floor(Math.random() * 24) * 3600 : 0; START_H = mode === 'race' ? 9.5 + Math.random() * 5 - COURSE.start.lon / 15 : 13; } }
   if (mode === 'race') { active = boats.slice(); const mi = CLS.id !== 'imoca' && CLS.id !== 'o50';
     if (COURSE.coastal) { ACCELS = COAST_ACCELS; accel = coastalAccel(COURSE); }
     else { ACCELS = mi ? COURSE.accelsMini : COURSE.accels; accel = mi ? COURSE.defAccelMini : COURSE.defAccel; } boats.forEach((b, i) => resetBoat(b, COURSE.start.lat + (i % 2) * 0.01, COURSE.start.lon - 0.05 + i * 0.02, 235)); }
@@ -4854,7 +4861,7 @@ addEventListener('keydown', e => {
   if (e.repeat) return;
   if (AUD.on) initAudio();
   if (!$('overlay').classList.contains('hide')) { if (k === 'enter') { const b = $('card').querySelector('[data-default]'); if (b) b.click(); }
-    else if (k === 'escape' && running && GAME.loaded) { if (MENU_VIEW === 'pause') { $('overlay').classList.add('hide'); paused = false; } else if (MENU_VIEW === 'settings') showMenu('pause'); } return; }
+    else if (k === 'escape' && running && GAME.loaded && !finishedShown) { if (MENU_VIEW === 'pause') { $('overlay').classList.add('hide'); paused = false; } else if (MENU_VIEW === 'settings') showMenu('pause'); } return; }
   switch (k) {
     case ' ': doTack(); break; case 't': toggleMode(); break; case 'v': doVMG(); break;
     case '1': case '2': case '3': setSail(+k - 1); break;
@@ -5439,94 +5446,138 @@ let SOLO_TAB = 'ocean', REG_F = 'all';
 const sailLabels = () => { try { [msailBtns, sailBtns].forEach(L => L.forEach((b, i) => { b.firstChild.nodeValue = sailNm(i); b.title = `${sailNm(i)} (${i + 1}) — ${T(SAILS[i].d, SAILS[i].de)}`; b.style.borderBottomColor = SAILS[i].ui; })); } catch (e) {} };
 function refreshSailBtns() { sailLabels(); }
 function setLang(l) { LANG = l === 'en' ? 'en' : 'fr'; SETTINGS.lang = LANG; saveSettings(); applyStaticLang(); sailLabels(); if (MODE === 'race') buildMarkVis(); document.documentElement.lang = LANG; }
-/* ===== Éditeur de livrée (menu « Livrée ») ===== */
-let LIV_SEL = 'imoca', LIV_COL = '#ffffff', LIV_BRUSH = 0.04, LIV_MODE = 'hull', LIV_GUIDE = true; const LIV_REDO = {};
+/* ===== Éditeur de livrée (menu « Livrée ») : patron complet du bateau, déplié à plat =====
+   Côté tribord (rabattu, quille en haut) · pont vu de dessus · côté bâbord (quille en bas) · dessous (carène).
+   Tous alignés sur la longueur (étrave à gauche) : un trait qui passe d'une pièce à l'autre continue sur le bateau.
+   Les deux côtés partagent la même image (symétrie) ; chaque pièce garde son propre calque (classe, classe_deck, classe_bot). */
+let LIV_SEL = 'imoca', LIV_COL = '#ffffff', LIV_BW = 0.008, LIV_TOOL = 'pen', LIV_GUIDE = true; const LIV_HIST = {}, LIV_FUT = {};
 const LIV_PAL = ['#ffffff', '#111418', '#d62839', '#f4a261', '#ffd60a', '#2a9d8f', '#1d3557', '#4ea8de', '#8ac926', '#8e44ad'];
-const LIV_BRUSHES = [['XS', 0.015], ['S', 0.04], ['M', 0.09], ['L', 0.16]];
-const edKey = () => LIV_MODE === 'deck' ? LIV_SEL + '_deck' : LIV_MODE === 'bot' ? LIV_SEL + '_bot' : LIV_SEL;
+const LIV_BRUSHES = [['XS', 0.0035], ['S', 0.008], ['M', 0.018], ['L', 0.035]]; // fraction de la largeur du patron
 const edRefresh = () => { liveryRefresh(LIV_SEL); liveryDeckRefresh(LIV_SEL); liveryBotRefresh(LIV_SEL); };
-const edPaint = g => LIV_MODE === 'deck' ? liveryDeckPaint(g, LIV_SEL) : LIV_MODE === 'bot' ? liveryBotPaint(g, LIV_SEL) : liveryPaint(g, LIV_SEL);
 function livSave() {
   try { localStorage.setItem(LIV_KEY, JSON.stringify(LIV)); } catch (e) { /* stockage plein : le dessin reste pour la session */ }
   PORT_DIRTY.add(LIV_SEL); if (CLS.id === LIV_SEL) PORT_DIRTY.add('player'); MENU_VER++;
 }
+// dimensions réelles (m) de chaque pièce : relevées sur la géométrie quand le bateau a été construit, sinon valeurs types
+const LIV_DIM = { imoca: [18.3, 2.4, 5.6], o50: [15.2, 2.0, 2.6], c40: [12.2, 1.9, 4.4], mini: [6.5, 1.3, 2.9] };
+// contours des pièces relevés directement sur le modèle chargé (le bateau n'a pas forcément été construit avant d'ouvrir l'éditeur)
+function livPlans(cls) { const S = cls === 'imoca' ? IMOCA_MODEL : SMALL_MODEL[cls], M = S && (S.hi || S.lo); if (!M) { if (SMALL_MODEL[cls]) loadSmallModels(cls); return; }
+  M.parts.forEach(p => { if (p.grp === 'keel' || p.grp === 'foil') return; if (p.mat === 'hull') planReg(cls, p.geo, 'side'); else if (p.mat === 'Deck_Grip') planReg(cls + '_deck', p.geo, 'top'); else if (p.mat === 'Bottom_Teal') planReg(cls + '_bot', p.geo, 'top'); }); }
+function patLayout(cls) {
+  livPlans(cls);
+  const W = 1800, ok = [cls, cls + '_deck', cls + '_bot'].every(k => PLAN[k] && PLAN[k].sz), ps = ok && PLAN[cls], pd = ok && PLAN[cls + '_deck'], pb = ok && PLAN[cls + '_bot'], D = LIV_DIM[cls] || [15, 2, 4]; // relevés complets, sinon proportions types (jamais un mélange)
+  const L = ps && ps.sz ? ps.sz[2] : D[0], hS = ps && ps.sz ? ps.sz[1] : D[1], wD = pd && pd.sz ? pd.sz[0] : D[2], wB = pb && pb.sz ? pb.sz[0] : wD;
+  const xr = p => p && p.sz && ps && ps.sz ? [(p.min[2] - ps.min[2]) / L, (p.min[2] + p.sz[2] - ps.min[2]) / L] : [0, 1];
+  const k = W / L, gap = Math.max(0.5, hS * 0.25), f = Math.min(1, W * 0.66 / ((2 * hS + wD + gap + wB) * k)), h = v => v * k * f; // hauteur bornée (même échelle verticale partout)
+  const R = {}; let y = 0;
+  R.sideS = { key: cls, y0: y, h: h(hS), x: [0, 1], flip: true }; y += R.sideS.h;
+  R.deck = { key: cls + '_deck', y0: y, h: h(wD), x: xr(pd) }; y += R.deck.h;
+  R.sideP = { key: cls, y0: y, h: h(hS), x: [0, 1] }; y += R.sideP.h + h(gap);
+  R.bot = { key: cls + '_bot', y0: y, h: h(wB), x: xr(pb) }; y += R.bot.h;
+  return { W, H: Math.ceil(y), R };
+}
+// point du patron (px) → coordonnées du calque de la pièce (fractions de son image). Les côtés se « replient » autour du pont :
+// au-dessus du milieu du pont on lit le côté tribord rabattu, en dessous le côté bâbord (continu au milieu, hors de l'image)
+function patToKey(Lo, key, x, y) {
+  const R = Lo.R;
+  if (key === LIV_SEL) { const u = x / Lo.W; return y < R.deck.y0 + R.deck.h / 2 ? [u, 1 - (y - R.sideS.y0) / R.sideS.h] : [u, (y - R.sideP.y0) / R.sideP.h]; }
+  const r = key.endsWith('_deck') ? R.deck : R.bot; return [(x / Lo.W - r.x[0]) / (r.x[1] - r.x[0]), (y - r.y0) / r.h];
+}
+const keyRects = (Lo, key) => key === LIV_SEL ? [Lo.R.sideS, Lo.R.sideP] : [key.endsWith('_deck') ? Lo.R.deck : Lo.R.bot];
+const keyH = (Lo, key) => keyRects(Lo, key)[0].h;
+const liveryKeys = () => [LIV_SEL, LIV_SEL + '_deck', LIV_SEL + '_bot'];
+const texOf = key => key === LIV_SEL ? LTEX[LIV_SEL] : key.endsWith('_deck') ? DTEX[LIV_SEL] : BTEX[LIV_SEL];
+function patCompose(cv, Lo) { // le patron affiche les images réelles des pièces (celles posées sur le bateau)
+  const g = cv.getContext('2d'), R = Lo.R; g.clearRect(0, 0, cv.width, cv.height);
+  const side = LTEX[LIV_SEL].c, put = (c, r) => g.drawImage(c, r.x[0] * Lo.W, r.y0, (r.x[1] - r.x[0]) * Lo.W, r.h);
+  g.save(); g.translate(0, R.sideS.y0 + R.sideS.h); g.scale(1, -1); g.drawImage(side, 0, 0, Lo.W, R.sideS.h); g.restore();
+  put(side, R.sideP); put(DTEX[LIV_SEL].c, R.deck); put(BTEX[LIV_SEL].c, R.bot);
+}
+function patGuide(gc, Lo) { // contours réels, grisé hors du bateau, plis et noms des pièces (calque d'aide, jamais dans la livrée)
+  const g = gc.getContext('2d'), W = gc.width, H = gc.height, R = Lo.R; g.clearRect(0, 0, W, H);
+  const shape = (r, P, mode) => { if (!P) { g.rect(r.x[0] * W, r.y0, (r.x[1] - r.x[0]) * W, r.h); return; } const N = P.lo.length, pts = [];
+    for (let k = 0; k < N; k++) if (P.hi[k] >= P.lo[k]) pts.push([(k + 0.5) / N, P.lo[k], P.hi[k]]); if (pts.length < 3) return; pts[0][0] = 0; pts[pts.length - 1][0] = 1;
+    const X = u => (r.x[0] + u * (r.x[1] - r.x[0])) * W, Y = v => mode === 'flip' ? r.y0 + v * r.h : r.y0 + (1 - v) * r.h;
+    pts.forEach(([u, , hi], i) => i ? g.lineTo(X(u), Y(hi)) : g.moveTo(X(u), Y(hi))); for (let i = pts.length - 1; i >= 0; i--) g.lineTo(X(pts[i][0]), Y(pts[i][1])); g.closePath(); };
+  const pieces = [[R.sideS, PLAN[LIV_SEL], 'flip'], [R.deck, PLAN[LIV_SEL + '_deck']], [R.sideP, PLAN[LIV_SEL]], [R.bot, PLAN[LIV_SEL + '_bot']]];
+  g.fillStyle = 'rgba(4,12,20,.62)'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'destination-out'; pieces.forEach(([r, P, m]) => { g.beginPath(); shape(r, P, m); g.fill(); }); g.globalCompositeOperation = 'source-over';
+  g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 2.5; g.setLineDash([12, 8]); pieces.forEach(([r, P, m]) => { g.beginPath(); shape(r, P, m); g.stroke(); });
+  g.strokeStyle = 'rgba(127,224,255,.55)'; g.lineWidth = 2; g.setLineDash([4, 6]); [R.deck.y0, R.deck.y0 + R.deck.h].forEach(y => { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }); g.setLineDash([]); // plis côté / pont
+  g.strokeStyle = 'rgba(127,224,255,.25)'; g.beginPath(); g.moveTo(0, R.deck.y0 + R.deck.h / 2); g.lineTo(W, R.deck.y0 + R.deck.h / 2); g.moveTo(0, R.bot.y0 + R.bot.h / 2); g.lineTo(W, R.bot.y0 + R.bot.h / 2); g.stroke(); // axes
+  g.font = 'bold 26px system-ui, sans-serif'; g.textBaseline = 'top'; g.lineWidth = 5; g.strokeStyle = 'rgba(3,10,18,.85)'; g.fillStyle = 'rgba(200,232,255,.95)';
+  [[R.sideS, T('CÔTÉ TRIBORD (rabattu)', 'STARBOARD SIDE (folded)')], [R.deck, T('PONT', 'DECK')], [R.sideP, T('CÔTÉ BÂBORD', 'PORT SIDE')], [R.bot, T('DESSOUS (carène)', 'BOTTOM (hull)')]].forEach(([r, t]) => { g.strokeText(t, W - 14 - g.measureText(t).width, r.y0 + 8); g.fillText(t, W - 14 - g.measureText(t).width, r.y0 + 8); });
+}
 function livartView() {
-  const T_ = (fr, en) => T(fr, en), M = LIV_MODE, side = M === 'hull', SC = SAILC[LIV_SEL] || {};
+  const T_ = (fr, en) => T(fr, en), SC = SAILC[LIV_SEL] || {}, Lo = patLayout(LIV_SEL);
   const sec = (t, body) => `<div style="margin:10px 0 0;padding:8px 10px;border:1px solid #23415a;border-radius:10px;background:rgba(10,30,48,.45)"><div style="font-size:12px;letter-spacing:.06em;color:#7fb4d6;font-weight:bold;margin-bottom:6px">${t}</div>${body}</div>`;
   const pick = (attr, k, l, v) => `<label style="font-size:13px;margin:0 12px 4px 0;display:inline-flex;align-items:center;gap:6px">${l}<input type="color" ${attr}="${k}" value="${v}" style="width:30px;height:24px;border:none;background:none;padding:0"></label>`;
-  const surf = [['hull', T_('Coque (côtés)', 'Hull (sides)'), '⛵'], ['deck', T_('Pont (dessus)', 'Deck (top)'), '🔲'], ['bot', T_('Dessous (carène)', 'Underside (bottom)'), '🌊']];
   const lab = 'font-size:12px;color:#a9c3d6;font-weight:bold';
   return `<h3>🎨 ${T_('Livrée', 'Livery')}</h3>
-    <p style="margin:4px 0 8px">${T_('Dessine à main levée sur chaque surface du bateau (pas d’import d’image). Le contour pointillé montre la forme réelle de la surface ; la zone grisée ne se voit pas sur le bateau. Tout est enregistré au fil du dessin.', 'Draw freehand on each surface of the boat (no image import). The dotted outline shows the real shape of the surface; the greyed area does not show on the boat. Everything is saved as you draw.')}</p>
+    <p style="margin:4px 0 8px">${T_('Le patron complet du bateau, déplié à plat : côtés, pont et dessous alignés sur la longueur. Dessine directement dessus ; un trait qui passe d’une pièce à l’autre continue sur le bateau. Les deux côtés sont identiques (symétrie). Tout est enregistré au fil du dessin.', 'The full pattern of the boat, unfolded flat: sides, deck and bottom lined up along the length. Draw straight on it; a stroke crossing from one piece to another carries on on the boat. Both sides are identical (symmetry). Everything is saved as you draw.')}</p>
     <div class="chips" style="margin:6px 0">${LIV_CLASSES.map(id => `<button class="chip ${LIV_SEL === id ? 'on' : ''}" data-lcls="${id}">${CLASSES[id].name}</button>`).join('')}</div>
-    <div class="chips" style="margin:4px 0 8px">${surf.map(([k, l, ic]) => `<button class="chip ${M === k ? 'on' : ''}" data-lmode="${k}">${ic} ${l}</button>`).join('')}</div>
-    <div style="display:flex;justify-content:space-between;${lab};margin:2px 2px 3px"><span>◀ ${T_('AVANT (étrave)', 'BOW')}</span>${side ? `<span>${T_('pont en haut · quille en bas', 'deck at top · keel at bottom')}</span>` : `<span>${T_('TRIBORD', 'STARBOARD')} ▲</span>`}<span>${T_('ARRIÈRE (tableau)', 'STERN')} ▶</span></div>
+    <div style="position:sticky;top:-18px;z-index:2;background:rgba(7,20,33,.96);padding:6px 0;border-bottom:1px solid #1d3a52">
+      <div class="chips" style="align-items:center;margin:0;gap:5px">${LIV_PAL.map(c => `<button data-lcol="${c}" title="${c}" style="width:26px;height:26px;padding:0;border-radius:50%;background:${c};border:3px solid ${c === LIV_COL ? '#7fe0ff' : '#33506a'}"></button>`).join('')}
+        <input type="color" id="livCustom" value="${LIV_COL}" title="${T_('Couleur libre', 'Custom colour')}" style="width:32px;height:26px;border:none;background:none;padding:0">
+        <span style="margin-left:6px">${LIV_BRUSHES.map(([l, w]) => `<button class="chip ${LIV_TOOL === 'pen' && LIV_BW === w ? 'on' : ''}" data-lw="${w}">${l}</button>`).join(' ')}</span>
+        <button class="chip ${LIV_TOOL === 'fill' ? 'on' : ''}" id="livFill" title="${T_('Clique sur une pièce du patron pour la peindre entièrement', 'Click a piece of the pattern to paint it entirely')}">🪣 ${T_('Remplir une pièce', 'Fill a piece')}</button>
+        <button class="chip ${LIV_GUIDE ? 'on' : ''}" id="livGuide">${T_('Contours', 'Outlines')}</button>
+        <button id="livUndo" class="sec" style="padding:5px 10px">↶</button><button id="livRedo" class="sec" style="padding:5px 10px">↷</button>
+        <span id="livSaved" style="font-size:12px;color:#a9c3d6"></span></div></div>
+    <div style="display:flex;justify-content:space-between;${lab};margin:6px 2px 3px"><span>◀ ${T_('AVANT (étrave)', 'BOW')}</span><span>${T_('patron déplié · vue de dessus', 'unfolded pattern · top view')}</span><span>${T_('ARRIÈRE (tableau)', 'STERN')} ▶</span></div>
     <div style="position:relative">
-      <canvas id="livCv" width="${side ? LIV_W : 1024}" height="${side ? LIV_H : 512}" style="width:100%;height:auto;display:block;border-radius:10px;border:1px solid #2b4a63;touch-action:none;cursor:crosshair"></canvas>
-      <canvas id="livGd" width="${side ? LIV_W : 1024}" height="${side ? LIV_H : 512}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:10px;${LIV_GUIDE ? '' : 'display:none'}"></canvas></div>
-    ${side ? '' : `<div style="text-align:center;${lab};margin:3px 0 0">${T_('BÂBORD', 'PORT')} ▼${M === 'bot' ? ` · <span style="font-weight:normal">${T_('vue en plan, comme le pont', 'plan view, same as the deck')}</span>` : ''}</div>`}
-    ${sec(T_('PINCEAU', 'BRUSH'), `<div class="chips" style="align-items:center;margin:0">${LIV_PAL.map(c => `<button data-lcol="${c}" title="${c}" style="width:28px;height:28px;padding:0;border-radius:50%;background:${c};border:3px solid ${c === LIV_COL ? '#7fe0ff' : '#33506a'}"></button>`).join('')}
-      <input type="color" id="livCustom" value="${LIV_COL}" title="${T_('Couleur libre', 'Custom colour')}" style="width:34px;height:28px;border:none;background:none;padding:0">
-      <span style="margin-left:8px">${LIV_BRUSHES.map(([l, w]) => `<button class="chip ${LIV_BRUSH === w ? 'on' : ''}" data-lw="${w}">${l}</button>`).join(' ')}</span>
-      <button class="chip" id="livFill" title="${T_('Peint toute la surface avec la couleur choisie', 'Paints the whole surface with the chosen colour')}">🪣 ${T_('Remplir', 'Fill')}</button>
-      <button class="chip ${LIV_GUIDE ? 'on' : ''}" id="livGuide">${T_('Contour', 'Outline')}</button></div>
-      <div class="go" style="justify-content:flex-start;margin:8px 0 0;gap:6px">
-        <button id="livUndo" class="sec">↶ ${T_('Annuler', 'Undo')}</button><button id="livRedo" class="sec">↷ ${T_('Rétablir', 'Redo')}</button>
-        <button id="livClear" class="sec">${T_('Effacer cette surface', 'Clear this surface')}</button>
-        <span id="livSaved" style="font-size:12.5px;color:#a9c3d6;align-self:center"></span></div>`)}
-    ${M === 'bot' ? sec(T_('CARÈNE', 'BOTTOM'), `${pick('data-scol', 'bot', T_('Couleur de fond (antifouling)', 'Base colour (antifouling)'), botBase(LIV_SEL))}<span style="font-size:12px;color:#7fa3bd">${T_('sous la flottaison ; se voit à la gîte et quand le bateau vole', 'below the waterline; shows when heeling and foiling')}</span>`) : ''}
+      <canvas id="livCv" width="${Lo.W}" height="${Lo.H}" style="width:100%;height:auto;display:block;border-radius:10px;border:1px solid #2b4a63;touch-action:none;cursor:${LIV_TOOL === 'fill' ? 'cell' : 'crosshair'};background:#0a1826"></canvas>
+      <canvas id="livGd" width="${Lo.W}" height="${Lo.H}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:10px;${LIV_GUIDE ? '' : 'display:none'}"></canvas></div>
+    <div class="go" style="justify-content:flex-start;margin:8px 0 0;gap:6px"><button id="livClear" class="sec">${T_('Effacer le patron', 'Clear the pattern')}</button></div>
+    ${sec(T_('CARÈNE', 'BOTTOM'), `${pick('data-scol', 'bot', T_('Couleur de fond (antifouling)', 'Base colour (antifouling)'), botBase(LIV_SEL))}<span style="font-size:12px;color:#7fa3bd">${T_('sous la flottaison ; se voit à la gîte et quand le bateau vole', 'below the waterline; shows when heeling and foiling')}</span>`)}
     ${sec(T_('VOILES', 'SAILS'), `${pick('data-scol', 'main', T_('Grand-voile', 'Mainsail'), SC.main || '#3d434a')}${pick('data-scol', 'jib', T_('Foc', 'Jib'), SC.jib || '#eeeeee')}${pick('data-scol', 'spi', T_('Spi', 'Spinnaker'), SC.spi || '#ffffff')}
       <label style="font-size:13px;margin:0 12px 4px 0">${T_('Motif', 'Pattern')} <select data-spat style="font-size:13px">${[['none', T_('Uni', 'Plain')], ['bands', T_('Bandes', 'Bands')], ['diag', T_('Diagonales', 'Diagonal')], ['check', T_('Damier', 'Check')], ['chevron', T_('Chevrons', 'Chevrons')]].map(([k, l]) => `<option value="${k}" ${(SC.pat || 'none') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>${pick('data-spatc', '1', T_('Couleur du motif', 'Pattern colour'), SC.patc || '#ffd23f')}`)}
     ${sec(T_('ACCESSOIRES', 'FITTINGS'), `${pick('data-scol', 'acc', T_('Foils / accents', 'Foils / accents'), SC.acc || accOverride(LIV_SEL) || '#e0242b')}<button class="chip" data-sreset="1">${T_('Couleurs par défaut', 'Default colours')}</button>`)}
     <div class="go" style="justify-content:flex-start;margin:10px 0 0"><button id="livReset" class="sec">⟲ ${T_('Tout réinitialiser pour', 'Reset everything for')} ${CLASSES[LIV_SEL].name}</button></div>`;
 }
-function livGuideDraw() { // contour de la surface (relevé sur la géométrie) + grisé hors du bateau ; calque d'aide, jamais dans la livrée
-  const gc = $('livGd'); if (!gc) return; const g = gc.getContext('2d'), W = gc.width, H = gc.height; g.clearRect(0, 0, W, H);
-  const P = PLAN[edKey()]; if (!P) return; const N = P.lo.length, pts = [];
-  for (let k = 0; k < N; k++) if (P.hi[k] >= P.lo[k]) pts.push([(k + 0.5) / N, P.lo[k], P.hi[k]]); if (pts.length < 3) return;
-  pts[0][0] = 0; pts[pts.length - 1][0] = 1;
-  const path = () => { g.beginPath(); pts.forEach(([u, , h], i) => i ? g.lineTo(u * W, (1 - h) * H) : g.moveTo(u * W, (1 - h) * H)); for (let i = pts.length - 1; i >= 0; i--) g.lineTo(pts[i][0] * W, (1 - pts[i][1]) * H); g.closePath(); };
-  g.fillStyle = 'rgba(4,12,20,.55)'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'destination-out'; path(); g.fill(); g.globalCompositeOperation = 'source-over';
-  g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = Math.max(2, H / 160); g.setLineDash([H / 40, H / 60]); path(); g.stroke(); g.setLineDash([]);
-  if (LIV_MODE !== 'hull') { g.strokeStyle = 'rgba(127,224,255,.35)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke(); } // axe du bateau
-}
 function initLivery() {
-  const cv = $('livCv'); if (!cv) return; const g = cv.getContext('2d');
-  edPaint(g); livGuideDraw();
+  const cv = $('livCv'); if (!cv) return; liveryTex(LIV_SEL); liveryDeckMat(LIV_SEL); liveryBotMat(LIV_SEL);
+  const Lo = patLayout(LIV_SEL), draw = () => patCompose(cv, Lo); draw(); if ($('livGd')) patGuide($('livGd'), Lo);
   $('card').querySelectorAll('[data-lcls]').forEach(b => b.onclick = () => { LIV_SEL = b.dataset.lcls; showMenu('livery'); });
-  $('card').querySelectorAll('[data-lcol]').forEach(b => b.onclick = () => { LIV_COL = b.dataset.lcol; showMenu('livery'); });
-  $('card').querySelectorAll('[data-lw]').forEach(b => b.onclick = () => { LIV_BRUSH = +b.dataset.lw; showMenu('livery'); });
+  $('card').querySelectorAll('[data-lcol]').forEach(b => b.onclick = () => { LIV_COL = b.dataset.lcol; if (LIV_TOOL !== 'fill') LIV_TOOL = 'pen'; showMenu('livery'); });
+  $('card').querySelectorAll('[data-lw]').forEach(b => b.onclick = () => { LIV_BW = +b.dataset.lw; LIV_TOOL = 'pen'; showMenu('livery'); });
   $('livCustom').oninput = e => { LIV_COL = e.target.value; };
-  $('card').querySelectorAll('[data-lmode]').forEach(b => b.onclick = () => { LIV_MODE = b.dataset.lmode; showMenu('livery'); });
-  $('card').querySelectorAll('[data-scol]').forEach(i => i.onchange = e => { (SAILC[LIV_SEL] ||= {})[i.dataset.scol] = e.target.value; sailSave(); if (i.dataset.scol === 'bot') { liveryBotRefresh(LIV_SEL); edPaint(g); } });
+  $('card').querySelectorAll('[data-scol]').forEach(i => i.onchange = e => { (SAILC[LIV_SEL] ||= {})[i.dataset.scol] = e.target.value; sailSave(); if (i.dataset.scol === 'bot') { liveryBotRefresh(LIV_SEL); draw(); } });
   $('card').querySelectorAll('[data-spat]').forEach(i => i.onchange = e => { (SAILC[LIV_SEL] ||= {}).pat = e.target.value; sailSave(); });
   $('card').querySelectorAll('[data-spatc]').forEach(i => i.onchange = e => { (SAILC[LIV_SEL] ||= {}).patc = e.target.value; sailSave(); });
   $('card').querySelectorAll('[data-sreset]').forEach(b => b.onclick = () => { delete SAILC[LIV_SEL]; sailSave(); edRefresh(); showMenu('livery'); });
   const note = () => { $('livSaved').textContent = T('Enregistré ✓', 'Saved ✓'); };
-  const redo = () => LIV_REDO[edKey()] ||= [];
-  const commit = () => { livSave(); edRefresh(); note(); };
-  const pt = e => { const r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * 1e4) / 1e4, Math.round((e.clientY - r.top) / r.height * 1e4) / 1e4]; };
-  let cur = null;
-  cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); cur = { c: LIV_COL, w: LIV_BRUSH, p: [pt(e)] }; (LIV[edKey()] ||= []).push(cur); redo().length = 0; liveryStroke(g, cur); };
-  cv.onpointermove = e => {
-    if (!cur) return;
-    // tous les points intermédiaires du pointeur (pas seulement ceux de l'image) : trait plus fidèle
-    const co = e.getCoalescedEvents ? e.getCoalescedEvents() : [], evs = co.length ? co : [e];
-    for (const ev of evs) {
-      const q = pt(ev), l = cur.p[cur.p.length - 1];
-      if (Math.abs(q[0] - l[0]) + Math.abs(q[1] - l[1]) < 0.0004) continue;
-      cur.p.push(q); liveryStroke(g, { c: cur.c, w: cur.w, p: [l, q] });
-    }
+  // historique par bateau : chaque action garde l'état des calques touchés juste avant (annuler = remettre cet état)
+  const snap = keys => { const o = {}; keys.forEach(k => o[k] = (LIV[k] || []).slice()); return o; };
+  const record = keys => { (LIV_HIST[LIV_SEL] ||= []).push(snap(keys)); LIV_FUT[LIV_SEL] = []; };
+  const swap = (from, to) => { const e = (from[LIV_SEL] || []).pop(); if (!e) return; (to[LIV_SEL] ||= []).push(snap(Object.keys(e))); Object.assign(LIV, e); edRefresh(); draw(); livSave(); note(); };
+  const commit = () => { livSave(); edRefresh(); draw(); note(); };
+  const pt = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * Lo.W, (e.clientY - r.top) / r.height * Lo.H]; };
+  const r4 = v => Math.round(v * 1e4) / 1e4, bwPx = () => LIV_BW * Lo.W;
+  const inKey = (key, x, y) => keyRects(Lo, key).some(r => { const m = bwPx() / 2; return x >= r.x[0] * Lo.W - m && x <= r.x[1] * Lo.W + m && y >= r.y0 - m && y <= r.y0 + r.h + m; });
+  let cur = null; // trait en cours : un calque par pièce touchée, créé au premier passage du pinceau sur la pièce
+  const addPt = (x, y) => {
+    liveryKeys().forEach(key => {
+      let s = cur.s[key]; const q = patToKey(Lo, key, x, y).map(r4);
+      if (!s) { if (!inKey(key, x, y)) return; s = cur.s[key] = { c: cur.c, w: r4(bwPx() / keyH(Lo, key)), p: cur.pts.map(([a, b]) => patToKey(Lo, key, a, b).map(r4)).concat([q]) }; (LIV[key] ||= []).push(s); liveryStroke(texOf(key).c.getContext('2d'), s); return; }
+      const l = s.p[s.p.length - 1]; if (Math.abs(q[0] - l[0]) + Math.abs(q[1] - l[1]) < 0.0004) return;
+      s.p.push(q); liveryStroke(texOf(key).c.getContext('2d'), { c: s.c, w: s.w, p: [l, q] });
+    });
+    cur.pts.push([x, y]); draw();
   };
-  const end = () => { if (!cur) return; cur = null; commit(); };
+  cv.onpointerdown = e => { const [x, y] = pt(e);
+    if (LIV_TOOL === 'fill') { const key = liveryKeys().find(k => keyRects(Lo, k).some(r => x >= r.x[0] * Lo.W && x <= r.x[1] * Lo.W && y >= r.y0 && y <= r.y0 + r.h)); if (!key) return;
+      record([key]); (LIV[key] ||= []).push({ c: LIV_COL, f: 1 }); commit(); return; }
+    cv.setPointerCapture(e.pointerId); record(liveryKeys()); cur = { c: LIV_COL, s: {}, pts: [] }; addPt(x, y); };
+  cv.onpointermove = e => { if (!cur) return; const co = e.getCoalescedEvents ? e.getCoalescedEvents() : [], evs = co.length ? co : [e]; for (const ev of evs) { const [x, y] = pt(ev); addPt(x, y); } };
+  const end = () => { if (!cur) return; if (!Object.keys(cur.s).length) (LIV_HIST[LIV_SEL] || []).pop(); cur = null; commit(); };
   cv.onpointerup = end; cv.onpointercancel = end;
-  $('livFill').onclick = () => { (LIV[edKey()] ||= []).push({ c: LIV_COL, f: 1 }); redo().length = 0; edPaint(g); commit(); };
+  $('livFill').onclick = () => { LIV_TOOL = LIV_TOOL === 'fill' ? 'pen' : 'fill'; showMenu('livery'); };
   $('livGuide').onclick = () => { LIV_GUIDE = !LIV_GUIDE; showMenu('livery'); };
-  $('livUndo').onclick = () => { const L = LIV[edKey()] || []; if (L.length) redo().push(L.pop()); edPaint(g); commit(); };
-  $('livRedo').onclick = () => { const R = redo(); if (R.length) (LIV[edKey()] ||= []).push(R.pop()); edPaint(g); commit(); };
-  $('livClear').onclick = () => { const L = LIV[edKey()] || []; if (L.length) redo().push(...L.slice().reverse()); LIV[edKey()] = []; edPaint(g); commit(); };
+  $('livUndo').onclick = () => swap(LIV_HIST, LIV_FUT);
+  $('livRedo').onclick = () => swap(LIV_FUT, LIV_HIST);
+  $('livClear').onclick = () => { record(liveryKeys()); liveryKeys().forEach(k => LIV[k] = []); commit(); };
   $('livReset').onclick = () => { if (!confirm(T(`Effacer toute la livrée et les couleurs du ${CLASSES[LIV_SEL].name} ?`, `Erase the whole livery and colours of the ${CLASSES[LIV_SEL].name}?`))) return;
-    ['', '_deck', '_bot'].forEach(x => { delete LIV[LIV_SEL + x]; delete LIV_REDO[LIV_SEL + x]; }); delete SAILC[LIV_SEL]; livSave(); sailSave(); edRefresh(); showMenu('livery'); };
+    liveryKeys().forEach(k => delete LIV[k]); delete LIV_HIST[LIV_SEL]; delete LIV_FUT[LIV_SEL]; delete SAILC[LIV_SEL]; livSave(); sailSave(); edRefresh(); showMenu('livery'); };
 }
 
 /* ===== Menus de course (solo et multi) : liste des courses à gauche, fiche de la course choisie à droite ===== */
@@ -5623,7 +5674,7 @@ function showMenu(view) {
   if (GAME.loaded && !LAUNCHING && !(running && (view === 'pause' || view === 'settings'))) unloadGame();
   MENU_VIEW = view;
   if (view === 'home' && PORT.g) { PORT_DIRTY.forEach(id => { if (id !== 'player') portRebuild(id); }); PORT_DIRTY.forEach(id => { if (id !== 'player') PORT_DIRTY.delete(id); }); }
-  if (view !== 'livery' && PORT_DIRTY.has('player') && !running) { PORT_DIRTY.delete('player'); setClass(CLS.id); } // visuel du joueur refait avec sa livrée
+  if (view !== 'livery' && PORT_DIRTY.has('player') && !running) { PORT_DIRTY.delete('player'); const v = player && player.visSet[CLS.id]; if (v) { freeVis(v); delete player.visSet[CLS.id]; } setClass(CLS.id); } // visuel du joueur refait avec sa livrée (setClass garde sinon l'ancien visuel de la même classe)
   if (running) { paused = true; saveGame(); }
   const sv = loadSave(), svCourse = sv ? (sv.mode === 'race' ? cN(COURSES[sv.course]) : T('Navigation libre', 'Free sailing')) + ' · ' + CLASSES[sv.cls || 'imoca'].name : '';
   const HEAD = `<div class="mhead"><div><h1>Off<span>ing</span></h1><p class="tag">Same wind. Your race.</p></div><div class="mtools"><button data-lang="fr" class="${LANG === 'fr' ? 'on' : ''}">FR</button><button data-lang="en" class="${LANG === 'en' ? 'on' : ''}">EN</button><button id="goSet" title="${T('Réglages', 'Settings')}">⚙</button></div></div>`;
@@ -5940,7 +5991,7 @@ async function netSubmit(log, quiet) {
 async function netFlushPending() { if (!NET.me) return; const L = netPending(); try { localStorage.setItem('gl3d_pending', '[]'); } catch (e) {} for (const x of L) await netSubmit(x.log, true); }
 function netResHtml() {
   const N = player.net; if (!N) return '';
-  if (N.state === 'sending') return `<p>⏳ ${T('Envoi au classement en ligne : le serveur rejoue ta course pour vérifier le chrono…', 'Sending to the online leaderboard: the server replays your race to verify the time…')}</p>`;
+  if (N.state === 'sending') return `<p style="color:#bfe6ff"><span class="spin sm"></span>${T('Envoi au classement en ligne : le serveur rejoue ta course pour vérifier le chrono (quelques secondes)…', 'Sending to the online leaderboard: the server replays your race to verify the time (a few seconds)…')}</p>`;
   if (N.state === 'noname') return `<p style="color:#ffd166">🌐 ${DAILY.week ? T('Choisis un pseudo dans le mode multi pour être classé : ce chrono sera envoyé automatiquement (cette semaine seulement).', 'Pick a nickname in Multiplayer to be ranked: this time will be sent automatically (this week only).') : T('Choisis un pseudo dans le mode multi pour être classé : ce chrono sera envoyé automatiquement (aujourd\'hui seulement).', 'Pick a nickname in Multiplayer to be ranked: this time will be sent automatically (today only).')}</p>`;
   if (N.state === 'off') return `<p style="color:#a9c3d6">📴 ${DAILY.week ? T('Hors ligne : chrono gardé localement, envoyé à la prochaine connexion cette semaine.', 'Offline: time kept locally, sent on the next connection this week.') : T('Hors ligne : chrono gardé localement, envoyé à la prochaine connexion aujourd\'hui.', 'Offline: time kept locally, sent on the next connection today.')}</p>`;
   if (N.state === 'err') return `<p style="color:#ff8fab">⚠️ ${T('Envoi impossible', 'Sending failed')} : ${esc(N.msg)} <button id="netRetry" class="sec">${T('Réessayer', 'Retry')}</button></p>`;
@@ -6094,7 +6145,9 @@ function dailyFinish(rank, N) {
 }
 function onPlayerFinish() {
   if (DAILY.on) { sfxChime(); const gl = GHOST.list, N = gl.length ? gl.length + 1 : active.length, r = gl.length ? 1 + gl.filter(g => g.T < player.finishT).length : standings().indexOf(player) + 1;
-    dailyFinish(r, N); toast(T(`Arrivée ! ${fmtDur(player.daily.T)}`, `Finished! ${fmtDur(player.daily.T)}`) + (player.award.total ? ' · +' + player.award.total + ' pts' : ''), 6000); finishedShown = true; renderResults(); $('overlay').classList.remove('hide'); saveGame(); return; }
+    // le rejeu de vérification bloque le jeu quelques secondes : on affiche d'abord un écran « vérification et envoi » (roue animée par le compositeur, elle tourne même pendant le calcul)
+    finishedShown = 'verif'; $('card').classList.remove('rx', 'help'); $('card').innerHTML = `<div class="nsend"><div class="spin"></div><h3>🏁 ${T('Arrivée ! Vérification du chrono…', 'Finished! Checking your time…')}</h3><p>${NET.base !== null ? T('Le jeu rejoue ta course pour valider le temps, puis l’envoie au classement en ligne. Ça prend quelques secondes.', 'The game replays your race to validate the time, then sends it to the online leaderboard. This takes a few seconds.') : T('Le jeu rejoue ta course pour valider le temps. Ça prend quelques secondes.', 'The game replays your race to validate the time. This takes a few seconds.')}</p></div>`; $('overlay').classList.remove('hide');
+    requestAnimationFrame(() => setTimeout(() => { dailyFinish(r, N); finishedShown = true; toast(T(`Arrivée ! ${fmtDur(player.daily.T)}`, `Finished! ${fmtDur(player.daily.T)}`) + (player.award.total ? ' · +' + player.award.total + ' pts' : ''), 6000); renderResults(); $('overlay').classList.remove('hide'); saveGame(); }, 30)); return; }
   const r = standings().indexOf(player) + 1; let rec = false; sfxChime(); const prevBest = getBest(); awardPoints(r, prevBest); tourRecord();
   try { const best = getBest(); if (!best || player.finishT < best) { localStorage.setItem(bestKey(), String(player.finishT)); rec = true; } } catch (e) {}
   if (rec && !DAILY.on) try { const pts = player.gRec.slice(); pts.push([Math.round(player.finishT), +player.lat.toFixed(4), +player.lon.toFixed(4), Math.round(player.hdg), +player.spd.toFixed(1), svi(player), player.mi]);
